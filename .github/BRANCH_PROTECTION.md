@@ -60,8 +60,19 @@ Configura los siguientes entornos en: **Settings → Environments**
 Ve a: **Settings → Pages**
 
 1. **Source**: Deploy from a branch
-2. **Branch**: `gh-pages` / `root` (se creará automáticamente)
+2. **Branch**: `gh-pages` / `/ (root)`
+   - Nota: La branch `gh-pages` se creará automáticamente en el primer deploy desde `main`
+   - Si ves un error inicial, espera a que el workflow cree la branch
 3. **Custom domain** (opcional): Configura tu dominio personalizado si lo tienes
+
+### Solución de Problemas Comunes
+
+Si ves el error "Not Found" en el workflow:
+1. Ve a **Settings → Pages**
+2. Asegúrate de que la opción esté habilitada
+3. Selecciona **Source: Deploy from a branch**
+4. Deja la configuración de branch vacía hasta que el workflow cree `gh-pages`
+5. Una vez creada, selecciona `gh-pages` / `/ (root)`
 
 ## Notas Importantes
 

@@ -111,7 +111,8 @@ Se ejecuta automáticamente en:
 1. Ve a **Settings → Pages** en tu repositorio
 2. Selecciona:
    - **Source**: Deploy from a branch
-   - **Branch**: `gh-pages` / `root`
+   - **Branch**: `gh-pages` / `/ (root)`
+3. El workflow creará automáticamente la branch `gh-pages` en el primer deploy
 
 ### 2. Configurar Protección de Branches
 
