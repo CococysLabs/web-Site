@@ -98,6 +98,38 @@ function App() {
         </div>
 
         <div className="hero-content">
+          {/* Logos Section */}
+          <div className="hero-logos">
+            <div className="logo-container">
+              <img
+                src="/images/logos/logo-principal.png"
+                alt="COCOCYS Logo"
+                className="logo logo-principal"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextElementSibling.style.display = 'flex'
+                }}
+              />
+              <div className="logo-placeholder logo-placeholder-principal">
+                <span>COCOCYS</span>
+              </div>
+            </div>
+            <div className="logo-container">
+              <img
+                src="/images/logos/logo-secundario.png"
+                alt="Partner Logo"
+                className="logo logo-secundario"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextElementSibling.style.display = 'flex'
+                }}
+              />
+              <div className="logo-placeholder logo-placeholder-secundario">
+                <span>Partner</span>
+              </div>
+            </div>
+          </div>
+
           <div className="hero-badge">
             <span className="badge-dot"></span>
             <span>Biblioteca Digital</span>
@@ -125,6 +157,49 @@ function App() {
           </div>
         </div>
       </header>
+
+      {/* Featured Images Section */}
+      <section className="featured-section">
+        <div className="container">
+          <div className="featured-images">
+            <div className="featured-image-container">
+              <img
+                src="/images/featured/imagen-1.jpg"
+                alt="Imagen destacada 1"
+                className="featured-image"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextElementSibling.style.display = 'flex'
+                }}
+              />
+              <div className="featured-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>Imagen Destacada 1</span>
+              </div>
+            </div>
+
+            <div className="featured-image-container">
+              <img
+                src="/images/featured/imagen-2.jpg"
+                alt="Imagen destacada 2"
+                className="featured-image"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextElementSibling.style.display = 'flex'
+                }}
+              />
+              <div className="featured-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>Imagen Destacada 2</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Main Content */}
       <main className="main-content">
