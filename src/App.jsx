@@ -164,7 +164,7 @@ function App() {
           <div className="featured-images">
             <div className="featured-image-container">
               <img
-                src="/images/featured/imagen-1.jpg"
+                src="/images/featured/imagen-1.png"
                 alt="Imagen destacada 1"
                 className="featured-image"
                 onError={(e) => {
@@ -182,7 +182,7 @@ function App() {
 
             <div className="featured-image-container">
               <img
-                src="/images/featured/imagen-2.jpg"
+                src="/images/featured/imagen-2.png"
                 alt="Imagen destacada 2"
                 className="featured-image"
                 onError={(e) => {
