@@ -504,6 +504,12 @@
   border: 1px solid rgba(138, 77, 255, 0.3);
 }
 
+.resource-badge.youtube {
+  background: rgba(255, 0, 0, 0.15);
+  color: #ff0000;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
 .category-tag {
   padding: 0.375rem 0.875rem;
   background: rgba(20, 184, 166, 0.1);
