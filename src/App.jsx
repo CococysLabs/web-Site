@@ -102,7 +102,7 @@ function App() {
           <div className="hero-logos">
             <div className="logo-container">
               <img
-                src="/images/logos/logo-principal.png"
+                src={`${import.meta.env.BASE_URL}images/logos/logo-principal.png`}
                 alt="COCOCYS Logo"
                 className="logo logo-principal"
                 onError={(e) => {
@@ -116,7 +116,7 @@ function App() {
             </div>
             <div className="logo-container">
               <img
-                src="/images/logos/logo-secundario.png"
+                src={`${import.meta.env.BASE_URL}images/logos/logo-secundario.png`}
                 alt="Partner Logo"
                 className="logo logo-secundario"
                 onError={(e) => {
@@ -164,7 +164,7 @@ function App() {
           <div className="featured-images">
             <div className="featured-image-container">
               <img
-                src="/images/featured/imagen-1.png"
+                src={`${import.meta.env.BASE_URL}images/featured/imagen-1.png`}
                 alt="Imagen destacada 1"
                 className="featured-image"
                 onError={(e) => {
@@ -182,7 +182,7 @@ function App() {
 
             <div className="featured-image-container">
               <img
-                src="/images/featured/imagen-2.png"
+                src={`${import.meta.env.BASE_URL}images/featured/imagen-2.png`}
                 alt="Imagen destacada 2"
                 className="featured-image"
                 onError={(e) => {
