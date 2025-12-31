@@ -144,6 +144,42 @@ function App() {
 
   return (
     <div className="app">
+      {/* Navigation Bar */}
+      <nav className="navbar">
+        <div className="navbar-container">
+          <div className="navbar-brand">
+            <img 
+              src={`${import.meta.env.BASE_URL}images/logos/logo-principal.png`}
+              alt="COCOCYS Logo"
+              className="navbar-logo"
+              onError={(e) => {
+                e.target.style.display = 'none'
+                e.target.nextElementSibling.style.display = 'flex'
+              }}
+            />
+            <div className="navbar-logo-placeholder">
+              <span>COCOCYS</span>
+            </div>
+            <span className="navbar-title">COCOCYS</span>
+          </div>
+
+          <div className="navbar-actions">
+            <div className="navbar-button-wrapper">
+              <button className="navbar-btn navbar-btn-secondary" disabled>
+                Iniciar Sesión
+              </button>
+              <span className="navbar-tooltip">Próximamente disponible</span>
+            </div>
+            <div className="navbar-button-wrapper">
+              <button className="navbar-btn navbar-btn-primary" disabled>
+                Registrarse
+              </button>
+              <span className="navbar-tooltip">Próximamente disponible</span>
+            </div>
+          </div>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <header className="hero">
         <div className="hero-background">
@@ -368,6 +404,9 @@ function App() {
 
           <div className="footer-bottom">
             <p>&copy; {new Date().getFullYear()} COCOCYS. Todos los derechos reservados.</p>
+            <p className="footer-creators">
+              Desarrollado con ❤️ por <strong>RivaldoTJ</strong> y el equipo de COCOCYS
+            </p>
           </div>
         </div>
       </footer>
