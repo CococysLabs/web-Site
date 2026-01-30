@@ -1,53 +1,171 @@
-# COCOCYS - Web Oficial
+# COCOCYS - Sistema de Análisis de Documentos con IA
 
-Sitio web oficial de COCOCYS, una biblioteca digital con enlaces a recursos en Drive y GitHub.
+Plataforma web para análisis automático de documentos académicos utilizando inteligencia artificial (Google Gemini) y criterios de evaluación personalizados.
 
-## Tecnologías
+## 🏗️ Arquitectura del Proyecto
 
-- **Framework**: React 19
-- **Build Tool**: Vite 7
-- **Hosting**: GitHub Pages
-- **CI/CD**: GitHub Actions
-- **Gestión de Branches**: GitFlow
+```
+web-Site/
+├── frontend/          # React + Vite
+│   ├── src/          # Componentes React
+│   ├── public/       # Assets estáticos
+│   └── package.json
+├── backend/          # FastAPI + Python
+│   ├── app/         # Aplicación FastAPI
+│   └── requirements.txt
+├── database/        # Schemas SQL y documentación
+│   ├── schema.sql
+│   └── migrations/
+└── README.md        # Este archivo
+```
 
-## Entornos
+## 🚀 Stack Tecnológico
 
-### Producción
-- **URL**: https://[tu-usuario].github.io/web-Site
-- **Branch**: `main`
-- **Deploy**: Automático al hacer push a `main`
+### Frontend
+- **React 19** - Framework UI
+- **Vite 7** - Build tool
+- **React Router** - Navegación
+- **Axios** - HTTP client
 
-### Staging
-- **URL**: https://[tu-usuario].github.io/web-Site/staging
-- **Branch**: `develop`
-- **Deploy**: Automático al hacer push a `develop`
+### Backend
+- **Python 3.10+** - Lenguaje
+- **FastAPI** - Framework web
+- **SQLAlchemy** - ORM
+- **Google Gemini** - IA generativa
+- **JWT** - Autenticación
 
-## Inicio Rápido
+### Database
+- **PostgreSQL (Neon)** - Base de datos serverless
+- **Alembic** - Migraciones
 
-### Instalación
+### Procesamiento de Documentos
+- **python-docx** - Microsoft Word
+- **PyPDF2** - PDF
+- **python-pptx** - PowerPoint
+- **openpyxl/pandas** - Excel
+
+## 📋 Características
+
+- ✅ **Autenticación completa**: Registro, login, JWT
+- 📄 **Multi-formato**: Soporta Word, PDF, PowerPoint
+- 📊 **Criterios Excel**: Define criterios de evaluación en Excel
+- 🤖 **Análisis con IA**: Google Gemini analiza documentos
+- 📈 **Retroalimentación**: Informes detallados automáticos
+- 🎨 **UI moderna**: Diseño responsive y profesional
+
+## 🛠️ Instalación
+
+### Prerrequisitos
+
+- Node.js 18+ y npm
+- Python 3.10+
+- Cuenta en [Neon](https://neon.tech)
+- API Key de [Google Gemini](https://makersuite.google.com/app/apikey)
+
+### 1. Clonar repositorio
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/[tu-usuario]/web-Site.git
+git clone https://github.com/[usuario]/web-Site.git
 cd web-Site
+```
 
-# Instalar dependencias
+### 2. Configurar Frontend
+
+```bash
+cd frontend
 npm install
-
-# Iniciar servidor de desarrollo
+cp .env.example .env
+# Editar .env si es necesario
 npm run dev
 ```
 
-### Comandos Disponibles
+Frontend: http://localhost:5173
+
+### 3. Configurar Backend
 
 ```bash
-npm run dev        # Servidor de desarrollo (http://localhost:5173)
-npm run build      # Build para producción
-npm run preview    # Preview del build
-npm run lint       # Ejecutar ESLint
+cd backend
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+# Editar .env con tus credenciales
+python -m app.main
 ```
 
-## Flujo de Trabajo (GitFlow)
+Backend: http://localhost:8000  
+Docs: http://localhost:8000/docs
+
+### 4. Configurar Base de Datos
+
+1. Crear proyecto en [Neon](https://neon.tech)
+2. Copiar connection string
+3. Ejecutar `database/schema.sql` en Neon SQL Editor
+4. Agregar `DATABASE_URL` en `backend/.env`
+
+## 📖 Uso
+
+1. **Registro/Login**: Crear cuenta o iniciar sesión
+2. **Subir criterios**: Cargar archivo Excel con criterios de evaluación
+3. **Subir documento**: Cargar Word/PDF/PowerPoint a analizar
+4. **Análisis**: El sistema procesa con Gemini
+5. **Resultados**: Ver informe de retroalimentación detallado
+
+## 🔗 API Endpoints
+
+### Autenticación
+- `POST /api/auth/register` - Registrar usuario
+- `POST /api/auth/login` - Iniciar sesión
+- `GET /api/auth/me` - Usuario actual
+
+### Documentos
+- `POST /api/documents/upload` - Subir documento
+- `POST /api/documents/analyze` - Analizar documento
+- `GET /api/documents/` - Listar documentos
+- `GET /api/documents/{id}` - Obtener documento
+
+## 📁 Documentación Detallada
+
+- [Frontend README](frontend/README.md)
+- [Backend README](backend/README.md)
+- [Database README](database/README.md)
+
+## 🧪 Testing
+
+```bash
+# Frontend
+cd frontend
+npm run test
+
+# Backend
+cd backend
+pytest
+```
+
+## 🚀 Deployment
+
+### Frontend (GitHub Pages)
+```bash
+cd frontend
+npm run build
+npm run deploy
+```
+
+### Backend (Railway, Render, etc.)
+```bash
+cd backend
+# Configurar según plataforma
+```
+
+## 🤝 Contribuir
+
+1. Fork el proyecto
+2. Crear feature branch (`git checkout -b feature/amazing`)
+3. Commit cambios (`git commit -m 'Add amazing feature'`)
+4. Push branch (`git push origin feature/amazing`)
+5. Abrir Pull Request
+
+## 📝 Flujo de Trabajo (GitFlow)
 
 Este proyecto utiliza GitFlow. Lee la documentación completa en [.github/GITFLOW.md](.github/GITFLOW.md).
 
