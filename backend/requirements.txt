@@ -11,6 +11,7 @@ alembic==1.14.0
 # Autenticación
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.1.3
 python-dotenv==1.0.1
 
 # Procesamiento de documentos
@@ -22,6 +23,12 @@ pandas==2.2.3
 
 # IA y NLP
 google-generativeai==0.8.3
+
+# Google Drive
+google-api-python-client==2.154.0
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
 
 # Utilidades
 pydantic==2.10.3

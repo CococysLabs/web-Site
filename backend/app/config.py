@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     
     # Google Gemini API
     GEMINI_API_KEY: str
+    GOOGLE_API_KEY: Optional[str] = None  # Alias para Gemini
+    
+    # Google Drive API
+    GOOGLE_CREDENTIALS_FILE: Optional[str] = None
+    GOOGLE_DRIVE_FOLDER_ID: Optional[str] = None
     
     # Servidor
     HOST: str = "0.0.0.0"

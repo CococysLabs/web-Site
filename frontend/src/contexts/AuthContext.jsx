@@ -31,16 +31,21 @@ export const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     try {
       setError(null);
-      await authAPI.register(userData);
-      // Después del registro, hacer login automático
-      await authAPI.login({
+      // Enviar datos en el formato que espera el backend
+      const backendData = {
+        nombre: userData.nombre,
+        apellidos: userData.apellidos,
         correo: userData.correo,
         password: userData.password,
-      });
-      const currentUser = await authAPI.getCurrentUser();
-      setUser(currentUser);
-      localStorage.setItem('user', JSON.stringify(currentUser));
-      return { success: true, user: currentUser };
+        confirm_password: userData.confirm_password
+      };
+      await authAPI.register(backendData);
+      // Registro exitoso - estudiante debe esperar aprobación
+      return { 
+        success: true, 
+        message: 'Registro exitoso. Tu cuenta está pendiente de aprobación por un administrador.',
+        needsApproval: true 
+      };
     } catch (err) {
       const errorMessage = err.response?.data?.detail || 'Error al registrar usuario';
       setError(errorMessage);
@@ -51,7 +56,12 @@ export const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     try {
       setError(null);
-      await authAPI.login(credentials);
+      // Convertir email a correo si viene con ese campo
+      const loginData = {
+        correo: credentials.email || credentials.correo,
+        password: credentials.password
+      };
+      await authAPI.login(loginData);
       const userData = await authAPI.getCurrentUser();
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));

@@ -4,6 +4,7 @@ import './App.css';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/Dashboard';
+import AdminDashboard from './components/admin/AdminDashboard';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
@@ -437,6 +438,16 @@ function HomePage() {
   )
 }
 
+function RoleDashboard() {
+  const { user } = useAuth();
+  
+  if (user?.role === 'admin') {
+    return <AdminDashboard />;
+  }
+  
+  return <Dashboard />;
+}
+
 function App() {
   return (
     <BrowserRouter basename="/web-Site">
@@ -450,7 +461,7 @@ function App() {
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <RoleDashboard />
                 </ProtectedRoute>
               }
             />

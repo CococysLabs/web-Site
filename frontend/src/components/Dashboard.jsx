@@ -1,17 +1,33 @@
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import api from '../services/api';
 import './Dashboard.css';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    loadDocuments();
     return () => clearInterval(timer);
   }, []);
+
+  const loadDocuments = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/api/documents/');
+      setDocuments(response.data);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -35,87 +51,86 @@ const Dashboard = () => {
     });
   };
 
-  // Estadísticas simuladas (después se conectarán con el backend)
   const stats = [
     { 
       id: 1, 
-      label: 'Documentos', 
-      value: '0', 
+      label: 'Documentos Disponibles', 
+      value: documents.length.toString(), 
       icon: '📄',
       color: '#6366f1',
-      trend: '+0%'
+      trend: `${documents.length} total`
     },
     { 
       id: 2, 
-      label: 'Análisis Realizados', 
-      value: '0', 
-      icon: '🔍',
-      color: '#ec4899',
-      trend: '+0%'
+      label: 'Documentos Válidos', 
+      value: documents.filter(d => d.is_valid).length.toString(), 
+      icon: '✅',
+      color: '#22c55e',
+      trend: 'Aprobados'
     },
     { 
       id: 3, 
-      label: 'Criterios Activos', 
-      value: '0', 
-      icon: '📋',
-      color: '#8b5cf6',
-      trend: '+0%'
+      label: 'En Análisis', 
+      value: documents.filter(d => d.status === 'analyzing').length.toString(), 
+      icon: '🔍',
+      color: '#f59e0b',
+      trend: 'Procesando'
     },
     { 
       id: 4, 
-      label: 'Promedio Calificación', 
-      value: '-', 
-      icon: '⭐',
-      color: '#f59e0b',
-      trend: '-'
-    },
+      label: 'Mi Estado', 
+      value: user?.is_approved ? 'Aprobado' : 'Pendiente', 
+      icon: user?.is_approved ? '✓' : '⏳',
+      color: user?.is_approved ? '#22c55e' : '#f59e0b',
+      trend: user?.role === 'student' ? 'Estudiante' : 'Usuario'
+    }
   ];
 
-  // Actividad reciente simulada
   const recentActivity = [
     {
       id: 1,
       type: 'welcome',
-      title: '¡Bienvenido a COCOCYS!',
-      description: 'Tu cuenta ha sido creada exitosamente',
-      time: 'Hace unos momentos',
-      icon: '👋',
+      title: user?.is_approved ? '¡Cuenta Aprobada!' : 'Cuenta Pendiente de Aprobación',
+      description: user?.is_approved 
+        ? 'Tu cuenta ha sido aprobada. Puedes acceder a todos los documentos disponibles.'
+        : 'Un administrador está revisando tu solicitud. Te notificaremos cuando sea aprobada.',
+      time: 'Hoy',
+      icon: user?.is_approved ? '✅' : '⏳',
     },
+    ...documents.slice(0, 3).map((doc, idx) => ({
+      id: idx + 2,
+      type: 'document',
+      title: doc.name,
+      description: doc.is_valid ? 'Documento validado' : 'Pendiente de validación',
+      time: new Date(doc.created_at).toLocaleDateString(),
+      icon: doc.is_valid ? '✓' : '📄',
+    }))
   ];
 
-  // Acciones rápidas
   const quickActions = [
     {
       id: 1,
-      title: 'Subir Documento',
-      description: 'Cargar nuevo archivo',
-      icon: '📤',
-      color: '#6366f1',
-      action: () => console.log('Subir documento'),
-    },
-    {
-      id: 2,
-      title: 'Nuevo Análisis',
-      description: 'Analizar documento',
-      icon: '🔬',
-      color: '#ec4899',
-      action: () => console.log('Nuevo análisis'),
-    },
-    {
-      id: 3,
       title: 'Ver Documentos',
-      description: 'Gestionar archivos',
-      icon: '📁',
-      color: '#8b5cf6',
+      description: 'Explorar materiales',
+      icon: '📚',
+      color: '#6366f1',
       action: () => console.log('Ver documentos'),
     },
     {
-      id: 4,
-      title: 'Criterios',
-      description: 'Configurar evaluación',
-      icon: '⚙️',
-      color: '#10b981',
-      action: () => console.log('Criterios'),
+      id: 2,
+      title: 'Mi Perfil',
+      description: 'Editar información',
+      icon: '👤',
+      color: '#8b5cf6',
+      action: () => console.log('Mi perfil'),
+    },
+    {
+      id: 3,
+      title: 'Ayuda',
+      description: 'Soporte y guías',
+      icon: '❓',
+      color: '#ec4899',
+      action: () => console.log('Ayuda'),
     },
   ];
 

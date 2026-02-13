@@ -19,6 +19,11 @@ pip-delete-this-directory.txt
 .env
 .env.local
 
+# Google Drive credentials
+credentials.json
+client_secret.json
+token.json
+
 # IDEs
 .vscode/
 .idea/

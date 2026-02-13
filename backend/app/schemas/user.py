@@ -4,7 +4,14 @@ Schemas de Usuario
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
+from enum import Enum
 import uuid
+
+
+class UserRole(str, Enum):
+    """Roles de usuario"""
+    ADMIN = "admin"
+    STUDENT = "student"
 
 
 class UserBase(BaseModel):
@@ -51,7 +58,10 @@ class UserResponse(UserBase):
     id: uuid.UUID
     nombre: str
     apellidos: str
+    role: UserRole
     is_active: bool
+    is_approved: bool
+    approved_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

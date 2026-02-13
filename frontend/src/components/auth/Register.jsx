@@ -13,6 +13,7 @@ const Register = () => {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -84,7 +85,15 @@ const Register = () => {
     const result = await register(formData);
 
     if (result.success) {
-      navigate('/dashboard');
+      if (result.needsApproval) {
+        // Mostrar modal de éxito
+        setShowSuccessModal(true);
+        setTimeout(() => {
+          navigate('/login');
+        }, 5000);
+      } else {
+        navigate('/dashboard');
+      }
     } else {
       setErrors({ general: result.error });
     }
@@ -95,13 +104,21 @@ const Register = () => {
   return (
     <div className="auth-container">
       <div className="auth-card">
+        <div className="auth-back-link">
+          <Link to="/" className="back-button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Volver a inicio
+          </Link>
+        </div>
         <div className="auth-header">
           <h1 className="gradient-text">Crear Cuenta</h1>
           <p>Únete a la comunidad COCOCYS</p>
         </div>
 
         {errors.general && (
-          <div className="error-message">
+          <div className={errors.general.startsWith('✅') ? 'success-message' : 'error-message'}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -208,6 +225,46 @@ const Register = () => {
           </p>
         </div>
       </div>
+
+      {/* Modal de Éxito */}
+      {showSuccessModal && (
+        <div className="modal-overlay">
+          <div className="success-modal">
+            <div className="success-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2>¡Registro Exitoso!</h2>
+            <p className="success-description">
+              Tu cuenta ha sido creada correctamente y está <strong>pendiente de aprobación</strong> por un administrador.
+            </p>
+            <div className="success-details">
+              <div className="detail-item">
+                <span className="detail-icon">📧</span>
+                <span>Te notificaremos por correo cuando tu cuenta sea aprobada</span>
+              </div>
+              <div className="detail-item">
+                <span className="detail-icon">⏱️</span>
+                <span>El proceso suele tomar menos de 24 horas</span>
+              </div>
+              <div className="detail-item">
+                <span className="detail-icon">🔒</span>
+                <span>No podrás iniciar sesión hasta que un admin apruebe tu cuenta</span>
+              </div>
+            </div>
+            <p className="redirect-message">
+              Serás redirigido al inicio de sesión en unos segundos...
+            </p>
+            <button 
+              onClick={() => navigate('/login')}
+              className="modal-button"
+            >
+              Ir al inicio de sesión ahora
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

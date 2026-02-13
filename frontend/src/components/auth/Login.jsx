@@ -5,7 +5,7 @@ import './Auth.css';
 
 const Login = () => {
   const [formData, setFormData] = useState({
-    correo: '',
+    email: '',
     password: '',
   });
   const [error, setError] = useState('');
@@ -41,6 +41,14 @@ const Login = () => {
   return (
     <div className="auth-container">
       <div className="auth-card">
+        <div className="auth-back-link">
+          <Link to="/" className="back-button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Volver a inicio
+          </Link>
+        </div>
         <div className="auth-header">
           <h1 className="gradient-text">Iniciar Sesión</h1>
           <p>Accede a tu cuenta de COCOCYS</p>
@@ -57,12 +65,12 @@ const Login = () => {
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label htmlFor="correo">Correo Electrónico</label>
+            <label htmlFor="email">Correo Electrónico</label>
             <input
               type="email"
-              id="correo"
-              name="correo"
-              value={formData.correo}
+              id="email"
+              name="email"
+              value={formData.email}
               onChange={handleChange}
               required
               autoComplete="email"

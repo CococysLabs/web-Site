@@ -4,7 +4,8 @@ Rutas de autenticación
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, datetime
+import uuid
 
 from app.database import get_db
 from app.models.user import User
@@ -69,10 +70,17 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
             detail="Usuario inactivo"
         )
     
+    # Verificar aprobación solo para estudiantes
+    if user.role.value == "student" and not user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu cuenta está pendiente de aprobación por un administrador. Por favor, espera a que tu cuenta sea activada."
+        )
+    
     # Crear token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": str(user.id), "correo": user.correo},
+        data={"sub": str(user.id), "correo": user.correo, "role": user.role.value},
         expires_delta=access_token_expires
     )
     
@@ -117,3 +125,106 @@ async def get_me(current_user: User = Depends(get_current_active_user)):
     Obtener información del usuario actual
     """
     return current_user
+
+
+@router.get("/pending-users", response_model=list[UserResponse])
+async def get_pending_users(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener lista de usuarios pendientes de aprobación (solo admin)
+    """
+    if current_user.role.value != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para realizar esta acción"
+        )
+    
+    pending_users = db.query(User).filter(
+        User.is_approved == False,
+        User.role == "student"
+    ).order_by(User.created_at.desc()).all()
+    
+    return pending_users
+
+
+@router.post("/approve-user/{user_id}")
+async def approve_user(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Aprobar un usuario (solo admin)
+    """
+    if current_user.role.value != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para realizar esta acción"
+        )
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+    
+    if user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este usuario ya está aprobado"
+        )
+    
+    user.is_approved = True
+    user.approved_by = current_user.id
+    user.approved_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "message": "Usuario aprobado exitosamente",
+        "user": {
+            "id": str(user.id),
+            "nombre": user.nombre,
+            "apellidos": user.apellidos,
+            "correo": user.correo
+        }
+    }
+
+
+@router.delete("/reject-user/{user_id}")
+async def reject_user(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Rechazar/eliminar un usuario (solo admin)
+    """
+    if current_user.role.value != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para realizar esta acción"
+        )
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+    
+    if user.role.value == "admin":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede eliminar un administrador"
+        )
+    
+    db.delete(user)
+    db.commit()
+    
+    return {"message": "Usuario rechazado y eliminado exitosamente"}
