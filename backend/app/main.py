@@ -16,14 +16,18 @@ app = FastAPI(
 )
 
 # Configurar CORS
+allow_origins = [
+    settings.FRONTEND_URL,
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost",
+    "http://localhost:80",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.FRONTEND_URL,
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://localhost:5175"
-    ],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,10 +52,44 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Endpoint de salud para monitoreo"""
+    """Endpoint de salud para monitoreo (liveness probe)"""
     return {
         "status": "healthy",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "service": "cococys-backend"
+    }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Endpoint de readiness para verificar que el servicio está listo"""
+    from app.database import engine
+    try:
+        # Verificar conexión a la base de datos
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        return {
+            "status": "ready",
+            "database": "connected",
+            "version": "1.0.0"
+        }
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
+
+
+@app.get("/metrics")
+async def metrics():
+    """Endpoint de métricas básicas para monitoreo"""
+    import psutil
+    import os
+    
+    return {
+        "cpu_percent": psutil.cpu_percent(interval=1),
+        "memory_percent": psutil.virtual_memory().percent,
+        "disk_percent": psutil.disk_usage('/').percent,
+        "process_memory_mb": psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024,
+        "uptime_seconds": int(psutil.time.time() - psutil.boot_time()),
     }
 
 

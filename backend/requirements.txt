@@ -33,3 +33,4 @@ google-auth-httplib2==0.2.0
 # Utilidades
 pydantic==2.10.3
 pydantic-settings==2.6.1
+psutil==6.1.0

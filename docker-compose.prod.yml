@@ -1,0 +1,126 @@
+# ==================================
+# Docker Compose - COCOCYS System
+# Production Configuration
+# ==================================
+version: '3.8'
+
+services:
+  # ============ Backend Service ============
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: cococys/backend:${VERSION:-latest}
+    container_name: cococys-backend-prod
+    hostname: backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=warning
+    volumes:
+      # Credenciales de Google Drive (solo lectura)
+      - ./backend/cococys-driv-105652f59c31.json:/app/cococys-driv-105652f59c31.json:ro
+      # Logs persistentes
+      - backend-logs:/app/logs
+      # NO incluir hot-reload en producción
+    networks:
+      - cococys-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    # Resource limits para producción
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+      replicas: 1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+        compress: "true"
+    labels:
+      - "com.cococys.service=backend"
+      - "com.cococys.environment=production"
+    # Comando con múltiples workers para producción
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 4
+      --proxy-headers
+      --forwarded-allow-ips='*'
+
+  # ============ Frontend Service ============
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+        - VITE_API_URL=${VITE_API_URL:-https://api.cococys.com}
+    image: cococys/frontend:${VERSION:-latest}
+    container_name: cococys-frontend-prod
+    hostname: frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_SSL_PORT:-443}:443"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - cococys-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      replicas: 1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+        compress: "true"
+    labels:
+      - "com.cococys.service=frontend"
+      - "com.cococys.environment=production"
+
+# ============ Networks ============
+networks:
+  cococys-network:
+    driver: bridge
+    name: cococys-network-prod
+    ipam:
+      config:
+        - subnet: 172.26.0.0/16
+
+# ============ Volumes ============
+volumes:
+  backend-logs:
+    driver: local
+    name: cococys-backend-logs-prod
