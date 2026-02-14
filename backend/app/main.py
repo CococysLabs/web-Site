@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
-from app.routes import auth, drive, documents
+from app.routes import auth, drive, documents, analysis, validation
 
 app = FastAPI(
     title="COCOCYS API",
@@ -97,6 +97,8 @@ async def metrics():
 app.include_router(auth.router, prefix="/api/auth", tags=["Autenticación"])
 app.include_router(drive.router, tags=["Google Drive"])
 app.include_router(documents.router, tags=["Documentos"])
+app.include_router(analysis.router, tags=["Análisis"])
+app.include_router(validation.router, tags=["Validación"])
 
 
 if __name__ == "__main__":

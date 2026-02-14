@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
+import DocumentAnalyzer from './DocumentAnalyzer';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -17,6 +18,7 @@ const AdminDashboard = () => {
   });
   
   const [driveFolders, setDriveFolders] = useState([]);
+  const [selectedFolder, setSelectedFolder] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,6 +26,13 @@ const AdminDashboard = () => {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  useEffect(() => {
+    // Cargar carpetas de Drive solo cuando se abre la tab
+    if (activeTab === 'drive' && driveFolders.length === 0) {
+      loadDriveFolders();
+    }
+  }, [activeTab]);
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -54,7 +63,8 @@ const AdminDashboard = () => {
   const loadDriveFolders = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/api/drive/folders');
+      // Usar endpoint de carpetas principales (BD, Computación, Sistemas, Software)
+      const response = await api.get('/api/drive/main-folders');
       setDriveFolders(response.data);
     } catch (error) {
       console.error('Error loading Drive folders:', error);
@@ -235,53 +245,202 @@ const AdminDashboard = () => {
         {/* Drive Tab */}
         {activeTab === 'drive' && (
           <div className="drive-tab">
-            <h1>Google Drive</h1>
-            <p className="subtitle">Carpetas disponibles en tu Drive</p>
-            
-            {loading ? (
-              <div className="loading-state">
-                <div className="spinner"></div>
-                <p>Cargando carpetas...</p>
-              </div>
-            ) : driveFolders.length === 0 ? (
-              <div className="empty-state">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                <h3>No se encontraron carpetas</h3>
-                <p>Verifica que hayas compartido carpetas con la cuenta de servicio</p>
-              </div>
-            ) : (
-              <div className="folders-grid">
-                {driveFolders.map((folder) => (
-                  <div key={folder.id} className="folder-card">
-                    <div className="folder-icon">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                      </svg>
-                    </div>
-                    <div className="folder-info">
-                      <h3>{folder.name}</h3>
-                      <p className="folder-date">
-                        {folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('es-ES') : 'Sin fecha'}
-                      </p>
-                    </div>
-                    <div className="folder-actions">
-                      <a 
-                        href={folder.webViewLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="btn-secondary"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                        Abrir en Drive
-                      </a>
-                    </div>
+            {!selectedFolder ? (
+              <>
+                <div style={{ marginBottom: '2rem' }}>
+                  <h1>📚 Recursos Educativos COCOCYS</h1>
+                  <p className="subtitle">
+                    📁 2025 - Segundo Semestre
+                  </p>
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '8px', 
+                    alignItems: 'center',
+                    marginTop: '12px',
+                    padding: '12px',
+                    background: 'var(--cococys-orange-subtle, rgba(255, 140, 66, 0.08))',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    color: 'var(--text-secondary, #6b7280)'
+                  }}>
+                    <svg style={{ width: '20px', height: '20px', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Selecciona una materia para explorar y analizar sus documentos</span>
                   </div>
-                ))}
-              </div>
+                </div>
+                
+                {loading ? (
+                  <div className="loading-state">
+                    <div className="spinner"></div>
+                    <p>Cargando carpetas principales...</p>
+                  </div>
+                ) : driveFolders.length === 0 ? (
+                  <div className="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                    <h3>No se encontraron carpetas</h3>
+                    <p>Verifica la configuración de GOOGLE_DRIVE_FOLDER_ID</p>
+                  </div>
+                ) : (
+                  <div className="folders-grid"  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                    {driveFolders.map((folder) => (
+                      <div 
+                        key={folder.id} 
+                        className="folder-card"
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(255, 140, 66, 0.03) 0%, rgba(255, 140, 66, 0.08) 100%)',
+                          border: '2px solid var(--border-light, #e5e7eb)',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => setSelectedFolder(folder)}
+                      >
+                        <div className="folder-icon" style={{
+                          width: '64px',
+                          height: '64px',
+                          background: 'linear-gradient(135deg, var(--cococys-orange, #ff8c42), var(--cococys-orange-dark, #e57a32))',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginBottom: '16px'
+                        }}>
+                          <svg style={{ width: '40px', height: '40px' }} viewBox="0 0 24 24" fill="white">
+                            <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                          </svg>
+                        </div>
+                        <div className="folder-info">
+                          <h3 style={{ 
+                            fontSize: '1.125rem', 
+                            fontWeight: '600',
+                            color: 'var(--text-primary, #1a1a1a)',
+                            marginBottom: '8px'
+                          }}>
+                            {folder.name}
+                          </h3>
+                          <p className="folder-date" style={{
+                            fontSize: '0.875rem',
+                            color: 'var(--text-secondary, #6b7280)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            📅 {folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('es-ES', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            }) : 'Sin fecha'}
+                          </p>
+                        </div>
+                        <div className="folder-actions" style={{ marginTop: '16px' }}>
+                          <button
+                            className="btn-primary"
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              background: 'linear-gradient(135deg, var(--cococys-orange, #ff8c42), var(--cococys-orange-dark, #e57a32))',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              transition: 'all 0.2s'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFolder(folder);
+                            }}
+                          >
+                            <svg style={{ width: '18px', height: '18px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                            </svg>
+                            Explorar Contenido
+                          </button>
+                          {folder.webViewLink && (
+                            <a 
+                              href={folder.webViewLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{
+                                marginTop: '8px',
+                                padding: '10px',
+                                background: 'transparent',
+                                color: 'var(--cococys-orange, #ff8c42)',
+                                border: '2px solid var(--cococys-orange, #ff8c42)',
+                                borderRadius: '8px',
+                                fontWeight: '600',
+                                fontSize: '0.875rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                textDecoration: 'none',
+                                transition: 'all 0.2s'
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              Abrir en Drive
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <button 
+                  onClick={() => setSelectedFolder(null)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 20px',
+                    marginBottom: '24px',
+                    background: 'white',
+                    color: 'var(--cococys-orange, #ff8c42)',
+                    border: '2px solid var(--cococys-orange, #ff8c42)',
+                    borderRadius: '10px',
+                    fontWeight: '600',
+                    fontSize: '0.95rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'var(--cococys-orange, #ff8c42)';
+                    e.currentTarget.style.color = 'white';
+                    e.currentTarget.style.transform = 'translateX(-4px)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'white';
+                    e.currentTarget.style.color = 'var(--cococys-orange, #ff8c42)';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                    e.currentTarget.style.boxShadow = '0 1px 2px 0 rgba(0, 0, 0, 0.05)';
+                  }}
+                >
+                  <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Volver a Materias
+                </button>
+                <DocumentAnalyzer 
+                  folderId={selectedFolder.id}
+                  folderName={selectedFolder.name}
+                />
+              </>
             )}
           </div>
         )}

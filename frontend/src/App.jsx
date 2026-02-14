@@ -450,7 +450,7 @@ function RoleDashboard() {
 
 function App() {
   return (
-    <BrowserRouter basename="/web-Site">
+    <BrowserRouter>
       <AuthProvider>
         <div className="App">
           <Routes>

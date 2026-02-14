@@ -43,6 +43,34 @@ class SyncFolderRequest(BaseModel):
     auto_sync: bool = False
 
 
+@router.get("/main-folders", response_model=List[FolderResponse])
+async def list_main_folders(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Listar carpetas principales configuradas en GOOGLE_DRIVE_FOLDER_ID
+    Retorna: BD, Computación, Sistemas, Software
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden acceder"
+        )
+    
+    from app.config import settings
+    folder_id = settings.GOOGLE_DRIVE_FOLDER_ID
+    
+    if not folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GOOGLE_DRIVE_FOLDER_ID no configurado"
+        )
+    
+    folders = drive_service.list_folders(folder_id)
+    return folders
+
+
 @router.get("/folders", response_model=List[FolderResponse])
 async def list_folders(
     parent_folder_id: Optional[str] = None,
@@ -86,6 +114,37 @@ async def list_files(
     
     files = drive_service.list_files(folder_id, types_list)
     return files
+
+
+@router.get("/contents/{folder_id}")
+async def list_contents(
+    folder_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Listar carpetas y archivos en una carpeta de Drive (navegación jerárquica)
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden acceder"
+        )
+    
+    # Obtener carpetas y archivos
+    folders = drive_service.list_folders(folder_id)
+    files = drive_service.list_files(folder_id)
+    
+    # Filtrar archivos no deseados (como el Excel de observaciones)
+    filtered_files = [
+        f for f in files 
+        if not f.get('name', '').startswith('Matriz observaciones')
+    ]
+    
+    return {
+        'folders': folders,
+        'files': filtered_files
+    }
 
 
 @router.post("/sync-folder")
