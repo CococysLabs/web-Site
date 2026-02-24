@@ -5,7 +5,7 @@ import os
 from typing import List, Optional, Dict
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 import io
 
 from app.config import settings
@@ -16,7 +16,7 @@ class GoogleDriveService:
     
     def __init__(self):
         """Inicializar servicio de Drive"""
-        self.scopes = ['https://www.googleapis.com/auth/drive.readonly']
+        self.scopes = ['https://www.googleapis.com/auth/drive']
         self.service = None
         self._initialize_service()
     
@@ -152,6 +152,25 @@ class GoogleDriveService:
             print(f"Error searching files: {e}")
             return []
     
+    def upload_file(self, file_bytes: bytes, mime_type: str, existing_file_id: str) -> bool:
+        """
+        Actualiza el contenido de un archivo existente en Drive.
+        Preserva el file ID, permisos y historial de versiones.
+        """
+        if not self.service:
+            return False
+        try:
+            media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type)
+            self.service.files().update(
+                fileId=existing_file_id,
+                media_body=media
+            ).execute()
+            print(f"✅ Archivo actualizado en Drive: {existing_file_id}")
+            return True
+        except Exception as e:
+            print(f"Error actualizando archivo en Drive: {e}")
+            return False
+
     def get_folder_structure(self, folder_id: str, depth: int = 2) -> Dict:
         """Obtener estructura de carpetas recursivamente"""
         if not self.service or depth <= 0:

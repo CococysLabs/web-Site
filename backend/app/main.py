@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
-from app.routes import auth, drive, documents, analysis, validation
+from app.routes import auth, drive, documents, analysis, validation, admin_settings
 
 app = FastAPI(
     title="COCOCYS API",
@@ -38,6 +38,14 @@ app.add_middleware(
 async def startup_event():
     """Inicializar base de datos al iniciar"""
     init_db()
+    # Inicializar defaults de configuración del sistema
+    from app.database import SessionLocal
+    from app.services.settings_service import settings_service as svc
+    db = SessionLocal()
+    try:
+        svc.initialize_defaults(db)
+    finally:
+        db.close()
 
 
 @app.get("/")
@@ -99,6 +107,7 @@ app.include_router(drive.router, tags=["Google Drive"])
 app.include_router(documents.router, tags=["Documentos"])
 app.include_router(analysis.router, tags=["Análisis"])
 app.include_router(validation.router, tags=["Validación"])
+app.include_router(admin_settings.router, tags=["Configuración"])
 
 
 if __name__ == "__main__":

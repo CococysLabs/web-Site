@@ -34,12 +34,17 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail="El correo ya está registrado"
         )
     
+    # Verificar si auto-aprobación está activa
+    from app.services.settings_service import settings_service
+    auto_approve = settings_service.get_bool("auto_approve_users", db)
+
     # Crear usuario
     new_user = User(
         nombre=user_data.nombre,
         apellidos=user_data.apellidos,
         correo=user_data.correo,
-        password_hash=get_password_hash(user_data.password)
+        password_hash=get_password_hash(user_data.password),
+        is_approved=auto_approve,
     )
     
     db.add(new_user)
@@ -77,13 +82,16 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
             detail="Tu cuenta está pendiente de aprobación por un administrador. Por favor, espera a que tu cuenta sea activada."
         )
     
-    # Crear token
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Crear token — duración desde BD o env
+    from app.services.settings_service import settings_service
+    session_minutes = settings_service.get_int("jwt_session_minutes", db,
+                                               default=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=session_minutes)
     access_token = create_access_token(
         data={"sub": str(user.id), "correo": user.correo, "role": user.role.value},
         expires_delta=access_token_expires
     )
-    
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 

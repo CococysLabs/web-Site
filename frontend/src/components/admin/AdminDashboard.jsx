@@ -22,6 +22,18 @@ const AdminDashboard = () => {
   const [documents, setDocuments] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState(null); // { type: 'success'|'error', message }
+  const [confirmModal, setConfirmModal] = useState(null); // { message, onConfirm }
+
+  // Settings state
+  const [systemSettings, setSystemSettings] = useState(null);
+  const [settingsForm, setSettingsForm]     = useState({});
+  const [savingSettings, setSavingSettings] = useState(null); // categoría que se está guardando
+
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
+  };
 
   useEffect(() => {
     loadDashboardData();
@@ -63,12 +75,11 @@ const AdminDashboard = () => {
   const loadDriveFolders = async () => {
     setLoading(true);
     try {
-      // Usar endpoint de carpetas principales (BD, Computación, Sistemas, Software)
       const response = await api.get('/api/drive/main-folders');
       setDriveFolders(response.data);
     } catch (error) {
       console.error('Error loading Drive folders:', error);
-      alert('Error al cargar carpetas de Drive');
+      showToast('error', 'Error al cargar carpetas de Drive');
     }
     setLoading(false);
   };
@@ -77,22 +88,26 @@ const AdminDashboard = () => {
     try {
       await api.post(`/api/auth/approve-user/${userId}`);
       loadDashboardData();
-      alert('Usuario aprobado exitosamente');
+      showToast('success', 'Usuario aprobado exitosamente');
     } catch (error) {
-      alert('Error al aprobar usuario');
+      showToast('error', 'Error al aprobar usuario');
     }
   };
 
-  const handleRejectUser = async (userId) => {
-    if (!confirm('¿Estás seguro de rechazar este usuario?')) return;
-    
-    try {
-      await api.delete(`/api/auth/reject-user/${userId}`);
-      loadDashboardData();
-      alert('Usuario rechazado');
-    } catch (error) {
-      alert('Error al rechazar usuario');
-    }
+  const handleRejectUser = (userId) => {
+    setConfirmModal({
+      message: '¿Estás seguro de rechazar este usuario? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          await api.delete(`/api/auth/reject-user/${userId}`);
+          loadDashboardData();
+          showToast('success', 'Usuario rechazado');
+        } catch (error) {
+          showToast('error', 'Error al rechazar usuario');
+        }
+      }
+    });
   };
 
   const handleLogout = () => {
@@ -100,8 +115,80 @@ const AdminDashboard = () => {
     navigate('/login');
   };
 
+  // ── Settings handlers ────────────────────────────────────────────────────
+  const loadSettings = async () => {
+    try {
+      const res = await api.get('/api/admin/settings');
+      setSystemSettings(res.data.data);
+      // Aplanar en form
+      const flat = {};
+      Object.values(res.data.data).forEach(cat => {
+        Object.entries(cat.settings).forEach(([k, s]) => {
+          flat[k] = s.value;
+        });
+      });
+      setSettingsForm(flat);
+    } catch (err) {
+      showToast('error', 'Error al cargar configuración');
+    }
+  };
+
+  const handleSettingChange = (key, value) => {
+    setSettingsForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const saveSettings = async (category) => {
+    if (!systemSettings) return;
+    setSavingSettings(category);
+    const keysInCategory = Object.keys(systemSettings[category]?.settings || {});
+    const payload = {};
+    keysInCategory.forEach(k => { payload[k] = String(settingsForm[k] ?? ''); });
+    try {
+      await api.post('/api/admin/settings/bulk', { settings: payload });
+      showToast('success', 'Configuración guardada correctamente');
+      await loadSettings();
+    } catch (err) {
+      showToast('error', err.response?.data?.detail || 'Error al guardar configuración');
+    } finally {
+      setSavingSettings(null);
+    }
+  };
+
   return (
     <div className="admin-dashboard">
+      {/* Toast notification */}
+      {toast && (
+        <div className={`admin-toast admin-toast-${toast.type}`}>
+          {toast.type === 'success' ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Confirm modal */}
+      {confirmModal && (
+        <div className="admin-modal-overlay" onClick={() => setConfirmModal(null)}>
+          <div className="admin-confirm-modal" onClick={e => e.stopPropagation()}>
+            <div className="confirm-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <p>{confirmModal.message}</p>
+            <div className="confirm-actions">
+              <button className="confirm-cancel" onClick={() => setConfirmModal(null)}>Cancelar</button>
+              <button className="confirm-ok" onClick={confirmModal.onConfirm}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Sidebar */}
       <aside className="admin-sidebar">
         <div className="sidebar-header">
@@ -140,7 +227,7 @@ const AdminDashboard = () => {
             Documentos
           </button>
           
-          <button 
+          <button
             className={activeTab === 'users' ? 'active' : ''}
             onClick={() => setActiveTab('users')}
           >
@@ -151,6 +238,17 @@ const AdminDashboard = () => {
             {stats.pendingUsers > 0 && (
               <span className="badge">{stats.pendingUsers}</span>
             )}
+          </button>
+
+          <button
+            className={activeTab === 'settings' ? 'active' : ''}
+            onClick={() => { setActiveTab('settings'); if (!systemSettings) loadSettings(); }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Configuración
           </button>
         </nav>
         
@@ -408,7 +506,7 @@ const AdminDashboard = () => {
                     gap: '8px',
                     padding: '12px 20px',
                     marginBottom: '24px',
-                    background: 'white',
+                    background: 'transparent',
                     color: 'var(--cococys-orange, #ff8c42)',
                     border: '2px solid var(--cococys-orange, #ff8c42)',
                     borderRadius: '10px',
@@ -416,19 +514,19 @@ const AdminDashboard = () => {
                     fontSize: '0.95rem',
                     cursor: 'pointer',
                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)'
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.2)'
                   }}
                   onMouseOver={(e) => {
                     e.currentTarget.style.background = 'var(--cococys-orange, #ff8c42)';
                     e.currentTarget.style.color = 'white';
                     e.currentTarget.style.transform = 'translateX(-4px)';
-                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.3)';
                   }}
                   onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'white';
+                    e.currentTarget.style.background = 'transparent';
                     e.currentTarget.style.color = 'var(--cococys-orange, #ff8c42)';
                     e.currentTarget.style.transform = 'translateX(0)';
-                    e.currentTarget.style.boxShadow = '0 1px 2px 0 rgba(0, 0, 0, 0.05)';
+                    e.currentTarget.style.boxShadow = '0 1px 2px 0 rgba(0, 0, 0, 0.2)';
                   }}
                 >
                   <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -473,6 +571,238 @@ const AdminDashboard = () => {
                 ))
               )}
             </div>
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="settings-tab">
+            <div style={{ marginBottom: '2rem' }}>
+              <h1>Configuración del Sistema</h1>
+              <p className="subtitle">Ajusta los parámetros del sistema sin necesidad de reiniciar el servidor.</p>
+            </div>
+
+            {!systemSettings ? (
+              <div className="loading-state"><div className="spinner"></div><p>Cargando configuración...</p></div>
+            ) : (
+              <div className="settings-grid">
+
+                {/* ── Google Drive ── */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#4285F4,#34A853)' }}>
+                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Google Drive</h3>
+                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Carpeta raíz del sistema</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Carpeta raíz de Google Drive</label>
+                    <p className="settings-hint">ID de la carpeta principal que contiene los cursos</p>
+                    <input
+                      className="settings-input"
+                      type="text"
+                      value={settingsForm.drive_root_folder_id || ''}
+                      onChange={e => handleSettingChange('drive_root_folder_id', e.target.value)}
+                      placeholder="Ej: 1ABC...xyz"
+                    />
+                  </div>
+
+                  <button
+                    className="btn-primary"
+                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='drive'?0.7:1 }}
+                    onClick={() => saveSettings('drive')}
+                    disabled={savingSettings === 'drive'}
+                  >
+                    {savingSettings === 'drive' ? '⏳ Guardando...' : '💾 Guardar Drive'}
+                  </button>
+                </div>
+
+                {/* ── Gemini AI ── */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)' }}>
+                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Gemini AI</h3>
+                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Motor de análisis de contenido</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Modelo de Gemini</label>
+                    <p className="settings-hint">Modelo a usar para la validación de contenido con IA</p>
+                    <select
+                      className="settings-input"
+                      value={settingsForm.gemini_model || 'gemini-2.0-flash'}
+                      onChange={e => handleSettingChange('gemini_model', e.target.value)}
+                    >
+                      <option value="gemini-2.0-flash">gemini-2.0-flash (Recomendado)</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash (Más potente)</option>
+                      <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Más rápido)</option>
+                    </select>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Habilitar análisis con IA</label>
+                    <p className="settings-hint">Si está desactivado, se usa coincidencia de palabras clave</p>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.gemini_enabled === 'true'}
+                        onChange={e => handleSettingChange('gemini_enabled', e.target.checked ? 'true' : 'false')}
+                      />
+                      <span className="toggle-track"><span className="toggle-thumb"></span></span>
+                      <span style={{ fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                        {settingsForm.gemini_enabled === 'true' ? 'Habilitado' : 'Deshabilitado'}
+                      </span>
+                    </label>
+                  </div>
+
+                  <button
+                    className="btn-primary"
+                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='ai'?0.7:1 }}
+                    onClick={() => saveSettings('ai')}
+                    disabled={savingSettings === 'ai'}
+                  >
+                    {savingSettings === 'ai' ? '⏳ Guardando...' : '💾 Guardar IA'}
+                  </button>
+                </div>
+
+                {/* ── Usuarios ── */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
+                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Gestión de Usuarios</h3>
+                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Registro y sesiones</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Auto-aprobar usuarios nuevos</label>
+                    <p className="settings-hint">Si está activo, los estudiantes se aprueban automáticamente al registrarse</p>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.auto_approve_users === 'true'}
+                        onChange={e => handleSettingChange('auto_approve_users', e.target.checked ? 'true' : 'false')}
+                      />
+                      <span className="toggle-track"><span className="toggle-thumb"></span></span>
+                      <span style={{ fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                        {settingsForm.auto_approve_users === 'true' ? 'Automático' : 'Requiere aprobación manual'}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Duración de sesión: <strong>{settingsForm.jwt_session_minutes || 30} min</strong></label>
+                    <p className="settings-hint">Tiempo antes de que el token JWT expire (5–480 minutos)</p>
+                    <input
+                      className="settings-range"
+                      type="range" min="5" max="480" step="5"
+                      value={settingsForm.jwt_session_minutes || 30}
+                      onChange={e => handleSettingChange('jwt_session_minutes', e.target.value)}
+                    />
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'var(--text-muted)', marginTop:4 }}>
+                      <span>5 min</span><span>480 min (8h)</span>
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn-primary"
+                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='users'?0.7:1 }}
+                    onClick={() => saveSettings('users')}
+                    disabled={savingSettings === 'users'}
+                  >
+                    {savingSettings === 'users' ? '⏳ Guardando...' : '💾 Guardar Usuarios'}
+                  </button>
+                </div>
+
+                {/* ── Validación ── */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))' }}>
+                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Criterios de Validación</h3>
+                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Umbrales y tipos de archivo</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Umbral mínimo de cumplimiento: <strong>{settingsForm.compliance_threshold || 70}%</strong></label>
+                    <p className="settings-hint">Porcentaje mínimo de requisitos cubiertos para aprobar</p>
+                    <input
+                      className="settings-range"
+                      type="range" min="0" max="100" step="5"
+                      value={settingsForm.compliance_threshold || 70}
+                      onChange={e => handleSettingChange('compliance_threshold', e.target.value)}
+                    />
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'var(--text-muted)', marginTop:4 }}>
+                      <span>0%</span><span>100%</span>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Extensiones de archivo permitidas</label>
+                    <p className="settings-hint">Tipos de documento aceptados para análisis</p>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginTop:8 }}>
+                      {['.pdf', '.docx', '.pptx', '.xlsx'].map(ext => {
+                        let currentExts = [];
+                        try { currentExts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch {}
+                        const checked = currentExts.includes(ext);
+                        return (
+                          <label key={ext} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:'0.875rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              style={{ accentColor:'var(--cococys-orange)', width:16, height:16 }}
+                              onChange={e => {
+                                let exts = [];
+                                try { exts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch {}
+                                if (e.target.checked) {
+                                  if (!exts.includes(ext)) exts.push(ext);
+                                } else {
+                                  exts = exts.filter(x => x !== ext);
+                                }
+                                handleSettingChange('allowed_file_extensions', JSON.stringify(exts));
+                              }}
+                            />
+                            <code style={{ background:'var(--bg-secondary)', padding:'2px 8px', borderRadius:4 }}>{ext}</code>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn-primary"
+                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='validation'?0.7:1 }}
+                    onClick={() => saveSettings('validation')}
+                    disabled={savingSettings === 'validation'}
+                  >
+                    {savingSettings === 'validation' ? '⏳ Guardando...' : '💾 Guardar Validación'}
+                  </button>
+                </div>
+
+              </div>
+            )}
           </div>
         )}
 

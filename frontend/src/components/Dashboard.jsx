@@ -10,6 +10,7 @@ const Dashboard = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -110,34 +111,40 @@ const Dashboard = () => {
   const quickActions = [
     {
       id: 1,
-      title: 'Ver Documentos',
+      title: 'Ver Recursos',
       description: 'Explorar materiales',
       icon: '📚',
-      color: '#6366f1',
-      action: () => console.log('Ver documentos'),
+      color: '#f97316',
+      action: () => navigate('/'),
     },
     {
       id: 2,
-      title: 'Mi Perfil',
-      description: 'Editar información',
-      icon: '👤',
-      color: '#8b5cf6',
-      action: () => console.log('Mi perfil'),
+      title: 'Canal YouTube',
+      description: 'Videos y tutoriales',
+      icon: '▶️',
+      color: '#f59e0b',
+      action: () => window.open('https://www.youtube.com/@COCOCYSECYS', '_blank'),
     },
     {
       id: 3,
-      title: 'Ayuda',
-      description: 'Soporte y guías',
-      icon: '❓',
-      color: '#ec4899',
-      action: () => console.log('Ayuda'),
+      title: 'GitHub COCOCYS',
+      description: 'Código fuente',
+      icon: '💻',
+      color: '#fbbf24',
+      action: () => window.open('https://github.com/CococysLabs', '_blank'),
     },
   ];
 
   return (
     <div className="dashboard-container">
+      {/* Mobile overlay */}
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Sidebar */}
-      <aside className="dashboard-sidebar">
+      <aside className={`dashboard-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <h1 className="gradient-text">COCOCYS</h1>
           <p className="sidebar-subtitle">Sistema de Análisis IA</p>
@@ -193,9 +200,20 @@ const Dashboard = () => {
       <main className="dashboard-main">
         <div className="dashboard-header">
           <div className="header-content">
-            <div>
-              <h2>Bienvenido de nuevo, {user?.nombre}! 👋</h2>
-              <p className="header-subtitle">{formatDate(currentTime)}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <button
+                className="hamburger-btn"
+                onClick={() => setSidebarOpen(o => !o)}
+                aria-label="Abrir menú"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+              <div>
+                <h2>Bienvenido, {user?.nombre}! 👋</h2>
+                <p className="header-subtitle">{formatDate(currentTime)}</p>
+              </div>
             </div>
             <div className="header-time">
               <div className="time-display">{formatTime(currentTime)}</div>

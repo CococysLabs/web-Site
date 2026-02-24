@@ -72,6 +72,64 @@ async def validate_folder_structure(
         )
 
 
+# ─── Validación de CONTENIDO ──────────────────────────────────────────────────
+
+class ValidateContentRequest(BaseModel):
+    semana_folder_id: str          # ID de la carpeta Semana_X a analizar
+    semana_folder_name: str        # Nombre de la carpeta (para derivar la sección)
+    matrix_folder_id: str          # ID principal candidato (padre de Semana)
+    candidate_folder_ids: Optional[list] = []  # Todos los IDs de la jerarquía a probar
+
+
+@router.post("/validate-content")
+async def validate_document_content(
+    request: ValidateContentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Validar el CONTENIDO de los documentos en una carpeta Semana_X.
+
+    Flujo:
+    1. Deriva la sección desde semana_folder_name (ej. "Semana_2" → "Semana 2")
+    2. Lee la 2da hoja ("Matriz observaciones") del Excel en matrix_folder_id
+    3. Filtra requisitos de esa sección donde Aplica == "Si"
+    4. Descarga y extrae texto de todos los PDF/DOCX/PPTX de semana_folder_id
+    5. Usa Gemini AI para verificar si cada sub-sección está implícitamente cubierta
+    6. Escribe resultados ("Presente", "Observaciones") de vuelta al Excel en Drive
+    7. Retorna reporte consolidado
+
+    Solo accesible por administradores. Puede tardar 30-120 segundos según
+    el número de documentos y requisitos.
+    """
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden validar contenido"
+        )
+
+    try:
+        from app.services.document_content_validation_service import document_content_validation_service
+        # Construir lista de candidatos: primero el principal, luego los adicionales
+        candidates = [request.matrix_folder_id]
+        for fid in (request.candidate_folder_ids or []):
+            if fid not in candidates:
+                candidates.append(fid)
+        result = document_content_validation_service.validate_folder_content(
+            semana_folder_id=request.semana_folder_id,
+            semana_folder_name=request.semana_folder_name,
+            candidate_folder_ids=candidates,
+            db=db
+        )
+        return result
+    except Exception as e:
+        print(f"❌ Error validando contenido: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al validar contenido: {str(e)}"
+        )
+
+
 @router.get("/health-check")
 async def validation_health_check():
     """Verificar estado del servicio de validación"""

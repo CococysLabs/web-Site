@@ -59,12 +59,14 @@ async def list_main_folders(
         )
     
     from app.config import settings
-    folder_id = settings.GOOGLE_DRIVE_FOLDER_ID
-    
+    from app.services.settings_service import settings_service
+    # Preferir el valor guardado en BD; fallback al env
+    folder_id = settings_service.get("drive_root_folder_id", db) or settings.GOOGLE_DRIVE_FOLDER_ID
+
     if not folder_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="GOOGLE_DRIVE_FOLDER_ID no configurado"
+            detail="Carpeta raíz de Drive no configurada. Configúrala en Ajustes del Sistema."
         )
     
     folders = drive_service.list_folders(folder_id)
@@ -134,16 +136,10 @@ async def list_contents(
     # Obtener carpetas y archivos
     folders = drive_service.list_folders(folder_id)
     files = drive_service.list_files(folder_id)
-    
-    # Filtrar archivos no deseados (como el Excel de observaciones)
-    filtered_files = [
-        f for f in files 
-        if not f.get('name', '').startswith('Matriz observaciones')
-    ]
-    
+
     return {
         'folders': folders,
-        'files': filtered_files
+        'files': files
     }
 
 

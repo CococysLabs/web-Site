@@ -13,6 +13,10 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
   // Validación de estructura
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
+
+  // Validación de contenido con IA
+  const [validatingContent, setValidatingContent] = useState(false);
+  const [contentValidationResult, setContentValidationResult] = useState(null);
   
   // Navegación jerárquica
   const [currentFolderId, setCurrentFolderId] = useState(folderId);
@@ -65,6 +69,33 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       alert(`Error al analizar: ${error.response?.data?.detail || error.message}`);
     } finally {
       setAnalyzing(null);
+    }
+  };
+
+  // Helpers para detección de carpeta Semana y localización de la carpeta con el Excel
+  const isSemanaFolder = (name) => /semana[_\s]\d+/i.test(name || '');
+  const getMatrixFolderId = () =>
+    breadcrumbs.length >= 2 ? breadcrumbs[breadcrumbs.length - 2].id : breadcrumbs[0]?.id;
+
+  const handleValidateContent = async () => {
+    setValidatingContent(true);
+    setContentValidationResult(null);
+    const currentCrumb = breadcrumbs[breadcrumbs.length - 1];
+    // Todos los IDs de la jerarquía excepto la carpeta Semana actual (del más cercano al más lejano)
+    const candidateFolderIds = breadcrumbs.slice(0, -1).map(c => c.id).reverse();
+    try {
+      const response = await api.post('/api/validation/validate-content', {
+        semana_folder_id: currentFolderId,
+        semana_folder_name: currentCrumb.name,
+        matrix_folder_id: getMatrixFolderId(),
+        candidate_folder_ids: candidateFolderIds
+      });
+      setContentValidationResult(response.data);
+    } catch (error) {
+      console.error('Error validating content:', error);
+      alert(`Error al validar contenido: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setValidatingContent(false);
     }
   };
 
@@ -293,37 +324,33 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
             ) : (
               <>
                 {/* Resumen de cumplimiento */}
-                <div className="analysis-section" style={{
-                  background: compliance_percentage === 100 
-                    ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05))' 
-                    : 'linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05))',
-                  borderLeftColor: compliance_percentage === 100 ? '#22c55e' : '#f59e0b'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                    <h3>📊 Resumen de Cumplimiento</h3>
-                    <div style={{
-                      fontSize: '2rem',
-                      fontWeight: '700',
-                      color: compliance_percentage === 100 ? '#22c55e' : compliance_percentage >= 70 ? '#f59e0b' : '#ef4444'
-                    }}>
-                      {compliance_percentage}%
+                {(() => {
+                  const level = compliance_percentage === 100 ? 'compliant' : compliance_percentage >= 70 ? 'partial' : 'low';
+                  return (
+                    <div className={`compliance-summary ${level}`}>
+                      <div className="compliance-header">
+                        <h3>📊 Resumen de Cumplimiento</h3>
+                        <span className={`compliance-percentage ${level}`}>
+                          {compliance_percentage}%
+                        </span>
+                      </div>
+                      <div className="compliance-stats-grid">
+                        <div className="validation-stat-card total">
+                          <div className="validation-stat-value">{total_required}</div>
+                          <div className="validation-stat-label">Requeridos</div>
+                        </div>
+                        <div className="validation-stat-card found">
+                          <div className="validation-stat-value">{total_found}</div>
+                          <div className="validation-stat-label">Encontrados</div>
+                        </div>
+                        <div className="validation-stat-card missing">
+                          <div className="validation-stat-value">{total_missing}</div>
+                          <div className="validation-stat-label">Faltantes</div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
-                    <div style={{ padding: '12px', background: 'white', borderRadius: '8px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.5rem', fontWeight: '600', color: 'var(--text-primary)' }}>{total_required}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Requeridos</div>
-                    </div>
-                    <div style={{ padding: '12px', background: 'white', borderRadius: '8px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#22c55e' }}>{total_found}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Encontrados</div>
-                    </div>
-                    <div style={{ padding: '12px', background: 'white', borderRadius: '8px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#ef4444' }}>{total_missing}</div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Faltantes</div>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* Documentos encontrados */}
                 {found_documents && found_documents.length > 0 && (
@@ -376,6 +403,151 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
     );
   };
 
+  const renderContentValidationModal = () => {
+    if (!contentValidationResult) return null;
+
+    const {
+      success,
+      section,
+      total_requirements,
+      present_count,
+      absent_count,
+      compliance_percentage,
+      results,
+      documents_analyzed,
+      excel_updated,
+      gemini_enabled,
+      error
+    } = contentValidationResult;
+
+    const thStyle = {
+      padding: '10px 14px',
+      textAlign: 'left',
+      fontSize: '0.75rem',
+      textTransform: 'uppercase',
+      letterSpacing: '0.5px',
+      color: 'var(--text-secondary)',
+      fontWeight: 600,
+      background: 'var(--bg-secondary)',
+      position: 'sticky',
+      top: 0,
+    };
+    const tdStyle = {
+      padding: '10px 14px',
+      borderBottom: '1px solid var(--border-light)',
+      verticalAlign: 'top',
+    };
+
+    return (
+      <div className="analysis-modal-overlay" onClick={() => setContentValidationResult(null)}>
+        <div className="analysis-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1100px' }}>
+          {/* Header */}
+          <div className="modal-header">
+            <div className="modal-title-wrapper">
+              <h2 className="modal-title">🧠 Validación de Contenido</h2>
+              <p className="modal-subtitle">
+                {section || breadcrumbs[breadcrumbs.length - 1]?.name}
+                {documents_analyzed?.length > 0 && ` · ${documents_analyzed.length} documento(s) analizados`}
+                {excel_updated && ' · Excel actualizado ✓'}
+                {gemini_enabled === false && ' · Modo básico (sin Gemini)'}
+              </p>
+            </div>
+            <button className="modal-close" onClick={() => setContentValidationResult(null)}>✕</button>
+          </div>
+
+          <div className="modal-content">
+            {!success ? (
+              <div className="analysis-section" style={{ borderLeftColor: '#ef4444' }}>
+                <h3>❌ Error en Validación de Contenido</h3>
+                <p>{error || 'No se pudo completar la validación de contenido.'}</p>
+              </div>
+            ) : (
+              <>
+                {/* Resumen de cumplimiento */}
+                {(() => {
+                  const level = compliance_percentage === 100 ? 'compliant' : compliance_percentage >= 70 ? 'partial' : 'low';
+                  return (
+                    <div className={`compliance-summary ${level}`}>
+                      <div className="compliance-header">
+                        <h3>📊 Cumplimiento de Contenido</h3>
+                        <span className={`compliance-percentage ${level}`}>
+                          {compliance_percentage?.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="compliance-stats-grid">
+                        <div className="validation-stat-card total">
+                          <div className="validation-stat-value">{total_requirements}</div>
+                          <div className="validation-stat-label">Requisitos</div>
+                        </div>
+                        <div className="validation-stat-card found">
+                          <div className="validation-stat-value">{present_count}</div>
+                          <div className="validation-stat-label">Presentes</div>
+                        </div>
+                        <div className="validation-stat-card missing">
+                          <div className="validation-stat-value">{absent_count}</div>
+                          <div className="validation-stat-label">Ausentes</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Tabla detallada por requisito */}
+                {results && results.length > 0 && (
+                  <div className="analysis-section">
+                    <h3>📋 Detalle por Sub-sección</h3>
+                    <div style={{ overflowX: 'auto', maxHeight: '400px', overflowY: 'auto' }}>
+                      <table className="cv-table">
+                        <thead>
+                          <tr>
+                            <th style={thStyle}>Sub-sección / Requisito</th>
+                            <th style={{ ...thStyle, width: '120px' }}>Autor</th>
+                            <th style={{ ...thStyle, width: '90px' }}>Presente</th>
+                            <th style={thStyle}>Observación IA</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {results.map((r, idx) => (
+                            <tr key={idx}>
+                              <td style={tdStyle}>{r.sub_seccion}</td>
+                              <td style={{ ...tdStyle, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                {r.autor || '—'}
+                              </td>
+                              <td style={tdStyle}>
+                                <span className={`status-badge ${r.presente === 'Si' ? 'success' : 'error'}`}>
+                                  {r.presente === 'Si' ? '✓ Si' : '✗ No'}
+                                </span>
+                              </td>
+                              <td style={{ ...tdStyle, color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.875rem' }}>
+                                {r.observacion}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Documentos analizados */}
+                {documents_analyzed && documents_analyzed.length > 0 && (
+                  <div className="analysis-section">
+                    <h3>📄 Documentos Analizados ({documents_analyzed.length})</h3>
+                    <ul className="analysis-list">
+                      {documents_analyzed.map((name, i) => (
+                        <li key={i}>{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading && folders.length === 0 && files.length === 0) {
     return (
       <div className="document-analyzer">
@@ -403,32 +575,40 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
           ))}
         </div>
         
-        {/* Botón Validar Estructura */}
-        <button
-          className="btn-analyze"
-          onClick={handleValidateStructure}
-          disabled={validating}
-          style={{
-            marginLeft: 'var(--spacing-md)',
-            background: validating 
-              ? 'linear-gradient(135deg, #9ca3af, #6b7280)' 
-              : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-            whiteSpace: 'nowrap'
-          }}
-        >
-          {validating ? (
-            <>
-              <svg className="btn-analyze-icon" style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24" fill="white">
-                <path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/>
-              </svg>
-              Validando...
-            </>
-          ) : (
-            <>
-              📋 Validar Estructura
-            </>
+        {/* Botones de validación */}
+        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginLeft: 'var(--spacing-md)' }}>
+          {/* Botón Validar Estructura */}
+          <button
+            className="btn-analyze"
+            onClick={handleValidateStructure}
+            disabled={validating}
+            style={{
+              background: validating
+                ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
+                : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {validating ? '⏳ Validando...' : '📋 Validar Estructura'}
+          </button>
+
+          {/* Botón Validar Contenido — solo visible en carpetas Semana_X */}
+          {isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
+            <button
+              className="btn-analyze"
+              onClick={handleValidateContent}
+              disabled={validatingContent}
+              style={{
+                background: validatingContent
+                  ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
+                  : 'linear-gradient(135deg, #10b981, #059669)',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {validatingContent ? '⏳ Analizando con IA...' : '🧠 Validar Contenido'}
+            </button>
           )}
-        </button>
+        </div>
       </div>
 
       <div className="analyzer-content">
@@ -521,6 +701,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       {/* Modales */}
       {renderAnalysisModal()}
       {renderValidationModal()}
+      {renderContentValidationModal()}
     </div>
   );
 };
