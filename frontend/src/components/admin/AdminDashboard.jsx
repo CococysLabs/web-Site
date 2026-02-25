@@ -35,6 +35,15 @@ const AdminDashboard = () => {
   const [reportHistory, setReportHistory] = useState({ records: [], total: 0 });
   const [reportLoading, setReportLoading] = useState(false);
   const [reportFilter, setReportFilter]   = useState({ type: '', days: 30 });
+  const [historyPage, setHistoryPage]     = useState(0);
+  const HISTORY_PAGE_SIZE = 20;
+
+  // Users state
+  const [allUsers, setAllUsers]         = useState({ users: [], total: 0 });
+  const [userLoading, setUserLoading]   = useState(false);
+  const [userFilter, setUserFilter]     = useState({ search: '', role: '', is_active: '' });
+  const [userPage, setUserPage]         = useState(0);
+  const USER_PAGE_SIZE = 25;
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -46,9 +55,11 @@ const AdminDashboard = () => {
   }, []);
 
   useEffect(() => {
-    // Cargar carpetas de Drive solo cuando se abre la tab
     if (activeTab === 'drive' && driveFolders.length === 0) {
       loadDriveFolders();
+    }
+    if (activeTab === 'users') {
+      loadAllUsers(userFilter, 0);
     }
   }, [activeTab]);
 
@@ -160,13 +171,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const loadReports = async (filter) => {
+  const loadReports = async (filter, page) => {
     const f = filter || reportFilter;
+    const p = page !== undefined ? page : historyPage;
     setReportLoading(true);
     try {
+      const offset = p * HISTORY_PAGE_SIZE;
       const [statsRes, historyRes] = await Promise.all([
         api.get(`/api/validation/stats?days=${f.days}`),
-        api.get(`/api/validation/history?limit=50${f.type ? `&type=${f.type}` : ''}`)
+        api.get(`/api/validation/history?limit=${HISTORY_PAGE_SIZE}&offset=${offset}${f.type ? `&type=${f.type}` : ''}`)
       ]);
       setReportStats(statsRes.data);
       setReportHistory(historyRes.data);
@@ -175,6 +188,55 @@ const AdminDashboard = () => {
     } finally {
       setReportLoading(false);
     }
+  };
+
+  const loadAllUsers = async (filter, page) => {
+    const f = filter || userFilter;
+    const p = page !== undefined ? page : userPage;
+    setUserLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', USER_PAGE_SIZE);
+      params.set('offset', p * USER_PAGE_SIZE);
+      if (f.search) params.set('search', f.search);
+      if (f.role) params.set('role', f.role);
+      if (f.is_active !== '') params.set('is_active', f.is_active);
+      const res = await api.get(`/api/auth/users?${params.toString()}`);
+      setAllUsers(res.data);
+    } catch (err) {
+      showToast('error', 'Error al cargar usuarios');
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  const handleToggleActive = async (userId, currentActive) => {
+    try {
+      const res = await api.patch(`/api/auth/users/${userId}/toggle-active`);
+      showToast('success', res.data.message);
+      loadAllUsers();
+      loadDashboardData();
+    } catch (err) {
+      showToast('error', err.response?.data?.detail || 'Error al cambiar estado');
+    }
+  };
+
+  const handleExportCSV = () => {
+    const params = new URLSearchParams();
+    params.set('days', reportFilter.days);
+    if (reportFilter.type) params.set('type', reportFilter.type);
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    // Open in new tab with auth header via anchor trick via fetch + blob
+    api.get(`/api/validation/export?${params.toString()}`, { responseType: 'blob' })
+      .then(res => {
+        const url = window.URL.createObjectURL(new Blob([res.data]));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `validaciones_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(() => showToast('error', 'Error al exportar CSV'));
   };
 
   return (
@@ -856,7 +918,8 @@ const AdminDashboard = () => {
                   onChange={e => {
                     const f = { ...reportFilter, type: e.target.value };
                     setReportFilter(f);
-                    loadReports(f);
+                    setHistoryPage(0);
+                    loadReports(f, 0);
                   }}
                 >
                   <option value="">Todos los tipos</option>
@@ -870,7 +933,8 @@ const AdminDashboard = () => {
                   onChange={e => {
                     const f = { ...reportFilter, days: parseInt(e.target.value) };
                     setReportFilter(f);
-                    loadReports(f);
+                    setHistoryPage(0);
+                    loadReports(f, 0);
                   }}
                 >
                   <option value="7">Últimos 7 días</option>
@@ -881,10 +945,16 @@ const AdminDashboard = () => {
                 <button
                   className="btn-primary"
                   style={{ padding: '8px 16px', fontSize: '0.875rem' }}
-                  onClick={() => loadReports(reportFilter)}
+                  onClick={() => { setHistoryPage(0); loadReports(reportFilter, 0); }}
                   disabled={reportLoading}
                 >
                   {reportLoading ? '⏳' : '🔄 Actualizar'}
+                </button>
+                <button
+                  style={{ padding: '8px 16px', fontSize: '0.875rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+                  onClick={handleExportCSV}
+                >
+                  ⬇️ Exportar CSV
                 </button>
               </div>
             </div>
@@ -961,9 +1031,23 @@ const AdminDashboard = () => {
 
                 {/* Historial */}
                 <div className="report-table-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <h3 style={{ margin: 0 }}>📋 Historial de Validaciones</h3>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{reportHistory.total} registros en total</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {reportHistory.total} registros — pág. {historyPage + 1} / {Math.max(1, Math.ceil(reportHistory.total / HISTORY_PAGE_SIZE))}
+                      </span>
+                      <button
+                        style={{ padding: '4px 12px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: historyPage === 0 ? 0.4 : 1 }}
+                        disabled={historyPage === 0 || reportLoading}
+                        onClick={() => { const p = historyPage - 1; setHistoryPage(p); loadReports(reportFilter, p); }}
+                      >← Anterior</button>
+                      <button
+                        style={{ padding: '4px 12px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: (historyPage + 1) * HISTORY_PAGE_SIZE >= reportHistory.total ? 0.4 : 1 }}
+                        disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= reportHistory.total || reportLoading}
+                        onClick={() => { const p = historyPage + 1; setHistoryPage(p); loadReports(reportFilter, p); }}
+                      >Siguiente →</button>
+                    </div>
                   </div>
                   {reportHistory.records.length === 0 ? (
                     <div className="empty-state" style={{ padding: '2rem 0' }}>
@@ -1042,39 +1126,168 @@ const AdminDashboard = () => {
         {/* Users Tab */}
         {activeTab === 'users' && (
           <div className="users-tab">
-            <h1>Usuarios Pendientes de Aprobación</h1>
-            {pendingUsers.length === 0 ? (
-              <div className="empty-state">
-                <p>No hay usuarios pendientes</p>
+            {/* Header */}
+            <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h1>Gestión de Usuarios</h1>
+                <p className="subtitle">{allUsers.total} usuarios registrados en el sistema</p>
               </div>
-            ) : (
-              <div className="users-list">
-                {pendingUsers.map(u => (
-                  <div key={u.id} className="user-item">
-                    <div className="user-avatar">{u.nombre[0]}{u.apellidos[0]}</div>
-                    <div className="user-details">
-                      <h3>{u.nombre} {u.apellidos}</h3>
-                      <p>{u.correo}</p>
-                      <span className="user-date">
-                        Registrado: {new Date(u.created_at).toLocaleDateString()}
-                      </span>
+            </div>
+
+            {/* Pending approval section */}
+            {pendingUsers.length > 0 && (
+              <div style={{ marginBottom: '2rem', padding: '1.25rem', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '12px' }}>
+                <h3 style={{ margin: '0 0 1rem', color: '#d97706', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  ⏳ Pendientes de Aprobación ({pendingUsers.length})
+                </h3>
+                <div className="users-list">
+                  {pendingUsers.map(u => (
+                    <div key={u.id} className="user-item">
+                      <div className="user-avatar">{u.nombre[0]}{u.apellidos[0]}</div>
+                      <div className="user-details">
+                        <h3>{u.nombre} {u.apellidos}</h3>
+                        <p>{u.correo}</p>
+                        <span className="user-date">Registrado: {new Date(u.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <div className="user-actions">
+                        <button className="approve-btn" onClick={() => handleApproveUser(u.id)}>✓ Aprobar</button>
+                        <button className="reject-btn" onClick={() => handleRejectUser(u.id)}>✕ Rechazar</button>
+                      </div>
                     </div>
-                    <div className="user-actions">
-                      <button 
-                        className="approve-btn"
-                        onClick={() => handleApproveUser(u.id)}
-                      >
-                        ✓ Aprobar
-                      </button>
-                      <button 
-                        className="reject-btn"
-                        onClick={() => handleRejectUser(u.id)}
-                      >
-                        ✕ Rechazar
-                      </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Filters */}
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text"
+                className="settings-input"
+                style={{ flex: '1', minWidth: '200px', padding: '8px 12px', fontSize: '0.875rem' }}
+                placeholder="Buscar por nombre o correo..."
+                value={userFilter.search}
+                onChange={e => {
+                  const f = { ...userFilter, search: e.target.value };
+                  setUserFilter(f);
+                  setUserPage(0);
+                  loadAllUsers(f, 0);
+                }}
+              />
+              <select
+                className="settings-input"
+                style={{ width: 'auto', padding: '8px 12px', fontSize: '0.875rem' }}
+                value={userFilter.role}
+                onChange={e => {
+                  const f = { ...userFilter, role: e.target.value };
+                  setUserFilter(f);
+                  setUserPage(0);
+                  loadAllUsers(f, 0);
+                }}
+              >
+                <option value="">Todos los roles</option>
+                <option value="admin">Administrador</option>
+                <option value="student">Estudiante</option>
+              </select>
+              <select
+                className="settings-input"
+                style={{ width: 'auto', padding: '8px 12px', fontSize: '0.875rem' }}
+                value={userFilter.is_active}
+                onChange={e => {
+                  const f = { ...userFilter, is_active: e.target.value };
+                  setUserFilter(f);
+                  setUserPage(0);
+                  loadAllUsers(f, 0);
+                }}
+              >
+                <option value="">Todos los estados</option>
+                <option value="true">Activos</option>
+                <option value="false">Inactivos</option>
+              </select>
+            </div>
+
+            {/* All users table */}
+            {userLoading ? (
+              <div className="loading-state"><div className="spinner"></div><p>Cargando usuarios...</p></div>
+            ) : (
+              <div className="report-table-card">
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="report-table">
+                    <thead>
+                      <tr>
+                        {['Usuario', 'Correo', 'Rol', 'Estado', 'Aprobado', 'Registrado', 'Acciones'].map(h => (
+                          <th key={h}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allUsers.users.length === 0 ? (
+                        <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No hay usuarios que coincidan</td></tr>
+                      ) : allUsers.users.map(u => (
+                        <tr key={u.id}>
+                          <td style={{ fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0 }}>
+                                {u.nombre?.[0]}{u.apellidos?.[0]}
+                              </div>
+                              {u.nombre} {u.apellidos}
+                            </div>
+                          </td>
+                          <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{u.correo}</td>
+                          <td>
+                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, background: u.role === 'admin' ? 'rgba(99,102,241,0.2)' : 'rgba(16,185,129,0.2)', color: u.role === 'admin' ? '#818cf8' : '#34d399' }}>
+                              {u.role === 'admin' ? '🛡️ Admin' : '🎓 Estudiante'}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, background: u.is_active ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: u.is_active ? '#10b981' : '#ef4444' }}>
+                              {u.is_active ? '✓ Activo' : '✗ Inactivo'}
+                            </span>
+                          </td>
+                          <td style={{ fontSize: '0.8rem', color: u.is_approved ? '#10b981' : '#f59e0b' }}>
+                            {u.is_approved ? '✓ Sí' : '⏳ Pendiente'}
+                          </td>
+                          <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                            {u.created_at ? new Date(u.created_at).toLocaleDateString('es-ES') : '—'}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, background: u.is_active ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)', color: u.is_active ? '#ef4444' : '#10b981' }}
+                                onClick={() => setConfirmModal({
+                                  message: `¿${u.is_active ? 'Desactivar' : 'Activar'} al usuario ${u.nombre} ${u.apellidos}?`,
+                                  onConfirm: () => { setConfirmModal(null); handleToggleActive(u.id, u.is_active); }
+                                })}
+                              >
+                                {u.is_active ? '🚫 Desactivar' : '✓ Activar'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Pagination */}
+                {allUsers.total > USER_PAGE_SIZE && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', padding: '0.5rem 0' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      Mostrando {userPage * USER_PAGE_SIZE + 1}–{Math.min((userPage + 1) * USER_PAGE_SIZE, allUsers.total)} de {allUsers.total}
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        style={{ padding: '6px 14px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: userPage === 0 ? 0.4 : 1 }}
+                        disabled={userPage === 0}
+                        onClick={() => { const p = userPage - 1; setUserPage(p); loadAllUsers(userFilter, p); }}
+                      >← Anterior</button>
+                      <button
+                        style={{ padding: '6px 14px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: (userPage + 1) * USER_PAGE_SIZE >= allUsers.total ? 0.4 : 1 }}
+                        disabled={(userPage + 1) * USER_PAGE_SIZE >= allUsers.total}
+                        onClick={() => { const p = userPage + 1; setUserPage(p); loadAllUsers(userFilter, p); }}
+                      >Siguiente →</button>
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>

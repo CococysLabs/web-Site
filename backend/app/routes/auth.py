@@ -1,10 +1,11 @@
 """
 Rutas de autenticación
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
+from typing import Optional
 import uuid
 
 from app.database import get_db
@@ -201,6 +202,80 @@ async def approve_user(
             "correo": user.correo
         }
     }
+
+
+@router.get("/users")
+async def get_all_users(
+    role: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener todos los usuarios con filtros opcionales (solo admin)
+    """
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para realizar esta acción")
+
+    query = db.query(User)
+    if role:
+        query = query.filter(User.role == role)
+    if is_active is not None:
+        query = query.filter(User.is_active == is_active)
+    if search:
+        term = f"%{search}%"
+        query = query.filter(
+            User.nombre.ilike(term) | User.apellidos.ilike(term) | User.correo.ilike(term)
+        )
+
+    total = query.count()
+    users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
+
+    return {
+        "users": [
+            {
+                "id": str(u.id),
+                "nombre": u.nombre,
+                "apellidos": u.apellidos,
+                "correo": u.correo,
+                "role": u.role.value,
+                "is_active": u.is_active,
+                "is_approved": u.is_approved,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in users
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.patch("/users/{user_id}/toggle-active")
+async def toggle_user_active(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Activar/desactivar un usuario (solo admin)
+    """
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permisos para realizar esta acción")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No puedes desactivarte a ti mismo")
+
+    user.is_active = not user.is_active
+    db.commit()
+    db.refresh(user)
+    return {"message": f"Usuario {'activado' if user.is_active else 'desactivado'} exitosamente", "is_active": user.is_active}
 
 
 @router.delete("/reject-user/{user_id}")

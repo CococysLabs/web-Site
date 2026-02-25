@@ -548,6 +548,58 @@ async def get_public_validation_summary(
     }
 
 
+# ─── Export CSV ───────────────────────────────────────────────────────────────
+
+@router.get("/export")
+async def export_validations_csv(
+    type: Optional[str] = Query(None),
+    days: int = Query(30, ge=1),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Exportar historial de validaciones como CSV (solo admin)
+    """
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="No tienes permisos")
+
+    import csv
+    from io import StringIO
+    from fastapi.responses import StreamingResponse
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    query = db.query(ValidationRecord).filter(ValidationRecord.created_at >= cutoff)
+    if type:
+        query = query.filter(ValidationRecord.validation_type == type)
+    records = query.order_by(desc(ValidationRecord.created_at)).all()
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'Fecha', 'Carpeta', 'Curso', 'Tipo', 'Cumplimiento (%)',
+        'Estado', 'Items Requeridos', 'Items Presentes', 'Items Faltantes'
+    ])
+    for r in records:
+        writer.writerow([
+            r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '',
+            r.folder_name or '',
+            r.course_name or '',
+            r.validation_type or '',
+            f"{r.compliance_percentage:.1f}" if r.compliance_percentage is not None else '',
+            r.status or '',
+            r.total_items or 0,
+            r.present_items or 0,
+            r.missing_items or 0,
+        ])
+    output.seek(0)
+    filename = f"validaciones_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 # ─── Health ───────────────────────────────────────────────────────────────────
 
 @router.get("/health-check")
