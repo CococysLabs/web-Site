@@ -225,71 +225,79 @@ async def validate_course_batch(
 
         print(f"\n📦 Validación en lote: '{request.course_name}' — {len(semana_folders)} semanas")
 
+        # ── Estructura: se valida UNA VEZ en la carpeta raíz del curso ────────
+        # El Excel "Matriz observaciones estructura.xlsx" vive en el root del
+        # curso, NO en cada Semana_X. Validarlo por semana siempre fallaría.
+        course_structure = None
+        if request.validation_type in ("structure", "both"):
+            print(f"  📋 Validando estructura del curso en carpeta raíz...")
+            struct = structure_validation_service.validate_folder_structure(request.course_folder_id)
+            pct_s = struct.get('compliance_percentage', 0) or 0
+            course_structure = {
+                "success":              struct.get('success', False),
+                "compliance_percentage": pct_s,
+                "status":               _compliance_status(pct_s),
+                "total_required":       struct.get('total_required', 0),
+                "total_found":          struct.get('total_found', 0),
+                "total_missing":        struct.get('total_missing', 0),
+                "missing_documents":    [d.get('name') for d in (struct.get('missing_documents') or [])],
+                "error":                struct.get('error'),
+            }
+            _save_record(
+                db,
+                folder_id    = request.course_folder_id,
+                folder_name  = request.course_name,
+                course_name  = request.course_name,
+                validation_type = "structure",
+                compliance_percentage = pct_s,
+                total_items   = struct.get('total_required', 0) or 0,
+                present_items = struct.get('total_found', 0) or 0,
+                missing_items = struct.get('total_missing', 0) or 0,
+                status        = _compliance_status(pct_s),
+                results_json  = struct,
+                validated_by  = current_user.id,
+            )
+            print(f"  ✅ Estructura del curso: {pct_s}%")
+
+        # ── Contenido: se valida por cada Semana_X ───────────────────────────
         weeks_results = []
-        total_compliance = 0.0
+        total_content_compliance = 0.0
+        content_weeks_count = 0
         failed = 0
 
         for folder in semana_folders:
             week_result = {
-                "folder_id":   folder['id'],
-                "folder_name": folder['name'],
-                "structure":   None,
-                "content":     None,
+                "folder_id":             folder['id'],
+                "folder_name":           folder['name'],
+                "content":               None,
                 "compliance_percentage": 0.0,
-                "status": "unknown",
-                "error": None
+                "status":                "unknown",
+                "error":                 None,
             }
 
             try:
-                compliance_values = []
-
-                # Validar estructura
-                if request.validation_type in ("structure", "both"):
-                    struct = structure_validation_service.validate_folder_structure(folder['id'])
-                    pct_s = struct.get('compliance_percentage', 0) or 0
-                    compliance_values.append(pct_s)
-                    week_result["structure"] = {
-                        "compliance_percentage": pct_s,
-                        "status": _compliance_status(pct_s),
-                        "total_required": struct.get('total_required', 0),
-                        "total_found": struct.get('total_found', 0),
-                        "total_missing": struct.get('total_missing', 0),
-                    }
-                    _save_record(
-                        db,
-                        folder_id    = folder['id'],
-                        folder_name  = folder['name'],
-                        course_name  = request.course_name,
-                        validation_type = "structure",
-                        compliance_percentage = pct_s,
-                        total_items   = struct.get('total_required', 0) or 0,
-                        present_items = struct.get('total_found', 0) or 0,
-                        missing_items = struct.get('total_missing', 0) or 0,
-                        status        = _compliance_status(pct_s),
-                        results_json  = struct,
-                        validated_by  = current_user.id,
-                    )
-
-                # Validar contenido
                 if request.validation_type in ("content", "both"):
-                    # Candidatos: carpeta actual + padre del curso
                     candidates = [request.course_folder_id, folder['id']]
                     content = document_content_validation_service.validate_folder_content(
-                        semana_folder_id   = folder['id'],
-                        semana_folder_name = folder['name'],
+                        semana_folder_id     = folder['id'],
+                        semana_folder_name   = folder['name'],
                         candidate_folder_ids = candidates,
-                        db = db
+                        db                   = db
                     )
                     if content.get('success'):
                         pct_c = content.get('compliance_percentage', 0) or 0
-                        compliance_values.append(pct_c)
                         week_result["content"] = {
                             "compliance_percentage": pct_c,
-                            "status": _compliance_status(pct_c),
-                            "total_requirements": content.get('total_requirements', 0),
-                            "present_count": content.get('present_count', 0),
-                            "absent_count": content.get('absent_count', 0),
+                            "status":               _compliance_status(pct_c),
+                            "total_requirements":   content.get('total_requirements', 0),
+                            "present_count":        content.get('present_count', 0),
+                            "absent_count":         content.get('absent_count', 0),
+                            "results":              content.get('results', []),
                         }
+                        week_result["compliance_percentage"] = round(pct_c, 1)
+                        week_result["status"] = _compliance_status(pct_c)
+                        total_content_compliance += pct_c
+                        content_weeks_count += 1
                         _save_record(
                             db,
                             folder_id    = folder['id'],
@@ -310,22 +318,23 @@ async def validate_course_batch(
                     else:
                         week_result["content"] = {"error": content.get('error', 'Sin datos')}
 
-                # Promedio de compliance de esta semana
-                avg = sum(compliance_values) / len(compliance_values) if compliance_values else 0.0
-                week_result["compliance_percentage"] = round(avg, 1)
-                week_result["status"] = _compliance_status(avg)
-                total_compliance += avg
-
             except Exception as week_err:
                 print(f"  ❌ Error en {folder['name']}: {week_err}")
                 week_result["error"] = str(week_err)
                 failed += 1
 
             weeks_results.append(week_result)
-            print(f"  ✅ {folder['name']}: {week_result['compliance_percentage']}%")
+            print(f"  {'✅' if not week_result['error'] else '⚠️ '} {folder['name']}: {week_result['compliance_percentage']}%")
 
         completed = len(semana_folders) - failed
-        avg_compliance = round(total_compliance / len(semana_folders), 1) if semana_folders else 0.0
+
+        # Promedio global: si hay contenido, usar ese; si solo estructura, usar esa
+        if content_weeks_count > 0:
+            avg_compliance = round(total_content_compliance / content_weeks_count, 1)
+        elif course_structure:
+            avg_compliance = round(course_structure['compliance_percentage'], 1)
+        else:
+            avg_compliance = 0.0
 
         return {
             "success":            True,
@@ -337,6 +346,7 @@ async def validate_course_batch(
             "failed":             failed,
             "average_compliance": avg_compliance,
             "overall_status":     _compliance_status(avg_compliance),
+            "course_structure":   course_structure,
             "weeks":              weeks_results,
         }
 

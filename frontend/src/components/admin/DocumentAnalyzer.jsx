@@ -21,13 +21,20 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
   // Validación de curso completo (lote)
   const [validatingCourse, setValidatingCourse] = useState(false);
   const [courseValidationResult, setCourseValidationResult] = useState(null);
-  
+
+  // Error inline (reemplaza alert())
+  const [error, setError] = useState(null);
+
+  // Historial de validaciones por folder_id → { compliance, status, type }
+  const [folderHistory, setFolderHistory] = useState({});
+
   // Navegación jerárquica
   const [currentFolderId, setCurrentFolderId] = useState(folderId);
   const [breadcrumbs, setBreadcrumbs] = useState([{ id: folderId, name: folderName }]);
 
   useEffect(() => {
     if (currentFolderId) {
+      setError(null);
       loadContents();
     }
   }, [currentFolderId]);
@@ -36,13 +43,36 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
     setLoading(true);
     try {
       const response = await api.get(`/api/drive/contents/${currentFolderId}`);
-      setFolders(response.data.folders || []);
+      const newFolders = response.data.folders || [];
+      setFolders(newFolders);
       setFiles(response.data.files || []);
-    } catch (error) {
-      console.error('Error loading contents:', error);
-      alert('Error al cargar contenido');
+      // Cargar estado de validación de subcarpetas en background
+      if (newFolders.length > 0) loadFolderHistory();
+    } catch (err) {
+      setError('Error al cargar contenido de la carpeta');
     }
     setLoading(false);
+  };
+
+  const loadFolderHistory = async () => {
+    try {
+      const res = await api.get('/api/validation/history?limit=300');
+      const records = res.data.records || [];
+      // Tomar el registro más reciente por folder_id
+      const statuses = {};
+      for (const rec of records) {
+        if (!statuses[rec.folder_id]) {
+          statuses[rec.folder_id] = {
+            compliance: rec.compliance_percentage,
+            status: rec.status,
+            type: rec.validation_type,
+          };
+        }
+      }
+      setFolderHistory(statuses);
+    } catch {
+      // Silencioso — los badges son opcionales
+    }
   };
 
   const navigateToFolder = (folder) => {
@@ -68,9 +98,8 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       });
 
       setAnalysisResult(response.data);
-    } catch (error) {
-      console.error('Error analyzing file:', error);
-      alert(`Error al analizar: ${error.response?.data?.detail || error.message}`);
+    } catch (err) {
+      setError(`Error al analizar documento: ${err.response?.data?.detail || err.message}`);
     } finally {
       setAnalyzing(null);
     }
@@ -95,9 +124,9 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
         candidate_folder_ids: candidateFolderIds
       });
       setContentValidationResult(response.data);
-    } catch (error) {
-      console.error('Error validating content:', error);
-      alert(`Error al validar contenido: ${error.response?.data?.detail || error.message}`);
+      loadFolderHistory();
+    } catch (err) {
+      setError(`Error al validar contenido: ${err.response?.data?.detail || err.message}`);
     } finally {
       setValidatingContent(false);
     }
@@ -106,16 +135,18 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
   const handleValidateStructure = async () => {
     setValidating(true);
     setValidationResult(null);
-
+    setError(null);
     try {
       const response = await api.post('/api/validation/validate-folder', {
-        folder_id: currentFolderId
+        folder_id: currentFolderId,
+        folder_name: breadcrumbs[breadcrumbs.length - 1]?.name,
+        course_name: breadcrumbs[0]?.name,
       });
-
       setValidationResult(response.data);
-    } catch (error) {
-      console.error('Error validating structure:', error);
-      alert(`Error al validar: ${error.response?.data?.detail || error.message}`);
+      // Refrescar badges
+      loadFolderHistory();
+    } catch (err) {
+      setError(`Error al validar estructura: ${err.response?.data?.detail || err.message}`);
     } finally {
       setValidating(false);
     }
@@ -131,9 +162,9 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
         validation_type: 'both'
       });
       setCourseValidationResult(response.data);
-    } catch (error) {
-      console.error('Error en validación de curso:', error);
-      alert(`Error al validar curso: ${error.response?.data?.detail || error.message}`);
+      loadFolderHistory();
+    } catch (err) {
+      setError(`Error al validar curso: ${err.response?.data?.detail || err.message}`);
     } finally {
       setValidatingCourse(false);
     }
@@ -575,7 +606,8 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
 
     const {
       success, course_name, total_weeks, completed, failed,
-      average_compliance, weeks, error
+      average_compliance, course_structure, weeks, validation_type,
+      error: courseError
     } = courseValidationResult;
 
     const pctColor = (pct) =>
@@ -587,6 +619,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       color: 'var(--text-secondary)', fontWeight: 600,
       background: 'var(--bg-secondary)', position: 'sticky', top: 0,
     };
+    const tdStyle = { padding: '10px 14px', borderBottom: '1px solid var(--border-light)' };
 
     return (
       <div className="analysis-modal-overlay" onClick={() => setCourseValidationResult(null)}>
@@ -606,10 +639,11 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
             {!success ? (
               <div className="analysis-section" style={{ borderLeftColor: '#ef4444' }}>
                 <h3>❌ Error en Validación</h3>
-                <p>{error || 'No se pudo completar la validación del curso.'}</p>
+                <p>{courseError || 'No se pudo completar la validación del curso.'}</p>
               </div>
             ) : (
               <>
+                {/* Resumen global */}
                 {(() => {
                   const level = average_compliance >= 70 ? 'compliant' : average_compliance >= 40 ? 'partial' : 'low';
                   return (
@@ -638,53 +672,92 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
                   );
                 })()}
 
-                {weeks && weeks.length > 0 && (
+                {/* Estructura del curso (validada una vez en el root) */}
+                {course_structure && (
+                  <div className="analysis-section" style={{ borderLeftColor: course_structure.success ? (course_structure.compliance_percentage >= 70 ? '#10b981' : course_structure.compliance_percentage >= 40 ? '#f59e0b' : '#ef4444') : '#ef4444' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <h3 style={{ margin: 0 }}>📋 Estructura del Curso</h3>
+                      {course_structure.success && (
+                        <span style={{ fontWeight: 700, fontSize: '1.1rem', color: pctColor(course_structure.compliance_percentage) }}>
+                          {course_structure.compliance_percentage}%
+                        </span>
+                      )}
+                    </div>
+                    {!course_structure.success ? (
+                      <p style={{ color: '#ef4444', margin: 0 }}>
+                        {course_structure.error || 'No se pudo validar la estructura del curso'}
+                      </p>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', gap: '16px', marginBottom: '8px', fontSize: '0.875rem' }}>
+                          <span>✅ <strong>{course_structure.total_found}</strong> encontrados</span>
+                          <span>❌ <strong>{course_structure.total_missing}</strong> faltantes</span>
+                          <span>📄 <strong>{course_structure.total_required}</strong> requeridos</span>
+                        </div>
+                        {course_structure.missing_documents?.length > 0 && (
+                          <div style={{ marginTop: '8px' }}>
+                            <p style={{ margin: '0 0 6px', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Documentos/carpetas faltantes:</p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {course_structure.missing_documents.map((name, i) => (
+                                <span key={i} style={{ padding: '2px 8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', borderRadius: '4px', fontSize: '0.8rem' }}>
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Contenido por semana */}
+                {weeks && weeks.length > 0 && validation_type !== 'structure' && (
                   <div className="analysis-section">
-                    <h3>📋 Resultados por Semana</h3>
-                    <div style={{ overflowX: 'auto', maxHeight: '440px', overflowY: 'auto' }}>
+                    <h3>🧠 Contenido por Semana</h3>
+                    <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
                       <table className="cv-table">
                         <thead>
                           <tr>
                             <th style={thStyle}>Semana</th>
-                            <th style={{ ...thStyle, width: '120px', textAlign: 'center' }}>Estructura</th>
-                            <th style={{ ...thStyle, width: '120px', textAlign: 'center' }}>Contenido</th>
-                            <th style={{ ...thStyle, width: '130px', textAlign: 'center' }}>Promedio</th>
+                            <th style={{ ...thStyle, width: '130px', textAlign: 'center' }}>Cumplimiento</th>
+                            <th style={{ ...thStyle, width: '80px', textAlign: 'center' }}>Presentes</th>
+                            <th style={{ ...thStyle, width: '80px', textAlign: 'center' }}>Faltantes</th>
                             <th style={{ ...thStyle, width: '110px', textAlign: 'center' }}>Estado</th>
                           </tr>
                         </thead>
                         <tbody>
                           {weeks.map((w, idx) => (
                             <tr key={idx}>
-                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)' }}>
+                              <td style={tdStyle}>
                                 <strong>{w.folder_name}</strong>
-                                {w.error && (
-                                  <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '4px' }}>⚠️ {w.error}</div>
-                                )}
+                                {w.error && <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '4px' }}>⚠️ {w.error}</div>}
+                                {w.content?.error && !w.error && <div style={{ fontSize: '0.8rem', color: '#f59e0b', marginTop: '4px' }}>⚠️ {w.content.error}</div>}
                               </td>
-                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', textAlign: 'center' }}>
-                                {w.structure
-                                  ? <span style={{ fontWeight: 600, color: pctColor(w.structure.compliance_percentage) }}>{w.structure.compliance_percentage}%</span>
-                                  : <span style={{ color: 'var(--text-light)' }}>—</span>}
-                              </td>
-                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', textAlign: 'center' }}>
-                                {w.content && !w.content.error
-                                  ? <span style={{ fontWeight: 600, color: pctColor(w.content.compliance_percentage) }}>{w.content.compliance_percentage}%</span>
-                                  : <span style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>{w.content?.error ? '⚠️ Sin datos' : '—'}</span>}
-                              </td>
-                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', textAlign: 'center' }}>
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                  <span style={{ fontWeight: 700, color: pctColor(w.compliance_percentage) }}>
-                                    {w.compliance_percentage}%
-                                  </span>
-                                  <div style={{ width: '80px', height: '6px', background: 'var(--border-light)', borderRadius: '999px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${w.compliance_percentage}%`, height: '100%', background: pctColor(w.compliance_percentage), borderRadius: '999px', transition: 'width 0.5s ease' }} />
+                              <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                {w.content && !w.content.error ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{ fontWeight: 700, color: pctColor(w.content.compliance_percentage) }}>
+                                      {w.content.compliance_percentage}%
+                                    </span>
+                                    <div style={{ width: '80px', height: '5px', background: 'var(--border-light)', borderRadius: '999px', overflow: 'hidden' }}>
+                                      <div style={{ width: `${w.content.compliance_percentage}%`, height: '100%', background: pctColor(w.content.compliance_percentage), borderRadius: '999px' }} />
+                                    </div>
                                   </div>
-                                </div>
+                                ) : <span style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>—</span>}
                               </td>
-                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', textAlign: 'center' }}>
-                                <span className={`status-badge ${w.status === 'compliant' ? 'success' : w.status === 'partial' ? 'warning' : 'error'}`} style={{ fontSize: '0.75rem' }}>
-                                  {w.status === 'compliant' ? '✓ Cumple' : w.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
-                                </span>
+                              <td style={{ ...tdStyle, textAlign: 'center', color: '#10b981', fontWeight: 600 }}>
+                                {w.content?.present_count ?? '—'}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center', color: w.content?.absent_count > 0 ? '#ef4444' : 'var(--text-secondary)', fontWeight: 600 }}>
+                                {w.content?.absent_count ?? '—'}
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'center' }}>
+                                {w.content && !w.content.error ? (
+                                  <span className={`status-badge ${w.status === 'compliant' ? 'success' : w.status === 'partial' ? 'warning' : 'error'}`} style={{ fontSize: '0.75rem' }}>
+                                    {w.status === 'compliant' ? '✓ Cumple' : w.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
+                                  </span>
+                                ) : <span style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>sin datos</span>}
                               </td>
                             </tr>
                           ))}
@@ -714,6 +787,17 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
 
   return (
     <div className="document-analyzer">
+      {/* Error banner inline */}
+      {error && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', marginBottom: '16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '8px', color: '#ef4444' }}>
+          <svg style={{ width: 18, height: 18, flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span style={{ flex: 1, fontSize: '0.875rem' }}>{error}</span>
+          <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '1rem', padding: '0 4px', lineHeight: 1 }}>✕</button>
+        </div>
+      )}
+
       {/* Breadcrumbs y botón de validación */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--spacing-lg)' }}>
         <div className="breadcrumbs" style={{ flex: 1, marginBottom: 0 }}>
@@ -729,23 +813,26 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
         </div>
         
         {/* Botones de validación */}
-        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginLeft: 'var(--spacing-md)' }}>
-          {/* Botón Validar Estructura */}
-          <button
-            className="btn-analyze"
-            onClick={handleValidateStructure}
-            disabled={validating}
-            style={{
-              background: validating
-                ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
-                : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {validating ? '⏳ Validando...' : '📋 Validar Estructura'}
-          </button>
+        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginLeft: 'var(--spacing-md)', flexWrap: 'wrap' }}>
+          {/* Validar Estructura — solo en carpetas que NO sean Semana_X
+              (el Excel de matriz vive en el root del curso, no en cada Semana) */}
+          {!isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
+            <button
+              className="btn-analyze"
+              onClick={handleValidateStructure}
+              disabled={validating}
+              style={{
+                background: validating
+                  ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
+                  : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {validating ? '⏳ Validando...' : '📋 Validar Estructura'}
+            </button>
+          )}
 
-          {/* Botón Validar Contenido — solo visible en carpetas Semana_X */}
+          {/* Validar Contenido — solo dentro de carpetas Semana_X */}
           {isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
             <button
               className="btn-analyze"
@@ -762,7 +849,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
             </button>
           )}
 
-          {/* Botón Validar Curso Completo — solo visible en la raíz del curso */}
+          {/* Validar Curso Completo — solo en la raíz del curso */}
           {breadcrumbs.length === 1 && (
             <button
               className="btn-analyze"
@@ -795,7 +882,19 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
                   role="button"
                   tabIndex={0}
                   onKeyPress={(e) => e.key === 'Enter' && navigateToFolder(folder)}
+                  style={{ position: 'relative' }}
                 >
+                  {/* Badge de última validación */}
+                  {folderHistory[folder.id] && (() => {
+                    const h = folderHistory[folder.id];
+                    const color = h.status === 'compliant' ? '#10b981' : h.status === 'partial' ? '#f59e0b' : '#ef4444';
+                    const bg   = h.status === 'compliant' ? 'rgba(16,185,129,0.15)' : h.status === 'partial' ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)';
+                    return (
+                      <div style={{ position: 'absolute', top: 6, right: 6, padding: '2px 7px', borderRadius: '999px', background: bg, color, fontSize: '0.7rem', fontWeight: 700, pointerEvents: 'none' }}>
+                        {h.compliance?.toFixed(0)}%
+                      </div>
+                    );
+                  })()}
                   <div className="folder-icon-wrapper">
                     <svg className="folder-icon" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
