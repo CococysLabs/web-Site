@@ -11,10 +11,17 @@ const Dashboard = () => {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeView, setActiveView] = useState('overview');
+
+  // Validación pública
+  const [validationSummary, setValidationSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [expandedCourse, setExpandedCourse] = useState(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     loadDocuments();
+    loadValidationSummary();
     return () => clearInterval(timer);
   }, []);
 
@@ -27,6 +34,18 @@ const Dashboard = () => {
       console.error('Error loading documents:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadValidationSummary = async () => {
+    try {
+      setSummaryLoading(true);
+      const response = await api.get('/api/validation/public-summary');
+      setValidationSummary(response.data);
+    } catch (error) {
+      console.error('Error loading validation summary:', error);
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -151,30 +170,34 @@ const Dashboard = () => {
         </div>
 
         <nav className="sidebar-nav">
-          <a href="#" className="nav-item active">
+          <button
+            className={`nav-item ${activeView === 'overview' ? 'active' : ''}`}
+            onClick={() => setActiveView('overview')}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
             <span>Dashboard</span>
-          </a>
-          <a href="#" className="nav-item">
+          </button>
+          <button
+            className={`nav-item ${activeView === 'validations' ? 'active' : ''}`}
+            onClick={() => setActiveView('validations')}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>Documentos</span>
-          </a>
-          <a href="#" className="nav-item">
+            <span>Validaciones</span>
+            {validationSummary?.total_validations > 0 && (
+              <span className="nav-badge">{validationSummary.total_validations}</span>
+            )}
+          </button>
+          <button className="nav-item" onClick={() => window.open('https://www.youtube.com/@COCOCYSECYS', '_blank')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span>Criterios</span>
-          </a>
-          <a href="#" className="nav-item">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <span>Análisis</span>
-          </a>
+            <span>YouTube</span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -222,6 +245,124 @@ const Dashboard = () => {
         </div>
 
         <div className="dashboard-content">
+          {/* ── Vista Validaciones ── */}
+          {activeView === 'validations' && (
+            <div className="validations-view">
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Estado de Validaciones</h2>
+                <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                  Cumplimiento del material académico validado por el equipo COCOCYS
+                </p>
+              </div>
+
+              {summaryLoading ? (
+                <div className="loading-spinner" style={{ padding: '3rem 0', textAlign: 'center' }}>
+                  <div className="spinner" style={{ margin: '0 auto 1rem' }}></div>
+                  <p>Cargando validaciones...</p>
+                </div>
+              ) : !validationSummary || validationSummary.courses.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
+                  <p>Aún no hay validaciones registradas</p>
+                </div>
+              ) : (
+                <div>
+                  {/* Summary cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px', marginBottom: '1.5rem' }}>
+                    {[
+                      { label: 'Total Validaciones', value: validationSummary.total_validations, color: '#6366f1' },
+                      { label: 'Cursos', value: validationSummary.courses.length, color: '#f59e0b' },
+                      { label: 'Cumplimiento Avg', value: `${Math.round(validationSummary.courses.reduce((s, c) => s + c.avg_compliance, 0) / (validationSummary.courses.length || 1))}%`, color: '#10b981' },
+                      { label: 'Cursos Compliant', value: validationSummary.courses.filter(c => c.status === 'compliant').length, color: '#22c55e' },
+                    ].map((card, i) => (
+                      <div key={i} style={{ background: 'var(--bg-card, #1e293b)', border: '1px solid var(--border-color, #334155)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: card.color }}>{card.value}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{card.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Course accordion */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {validationSummary.courses.map((course, idx) => (
+                      <div key={idx} style={{ background: 'var(--bg-card, #1e293b)', border: '1px solid var(--border-color, #334155)', borderRadius: '12px', overflow: 'hidden' }}>
+                        {/* Course header */}
+                        <button
+                          onClick={() => setExpandedCourse(expandedCourse === idx ? null : idx)}
+                          style={{ width: '100%', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                              📚 {course.course_name}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                              {course.total_weeks} semana(s) · {course.total_validations} validaciones
+                              {course.last_validated && ` · Última: ${new Date(course.last_validated).toLocaleDateString('es-ES')}`}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{ width: '100px', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '999px', overflow: 'hidden' }}>
+                              <div style={{
+                                width: `${course.avg_compliance}%`, height: '100%', borderRadius: '999px',
+                                background: course.avg_compliance >= 70 ? '#10b981' : course.avg_compliance >= 40 ? '#f59e0b' : '#ef4444'
+                              }} />
+                            </div>
+                            <span style={{
+                              fontWeight: 700, minWidth: '42px',
+                              color: course.avg_compliance >= 70 ? '#10b981' : course.avg_compliance >= 40 ? '#f59e0b' : '#ef4444'
+                            }}>
+                              {course.avg_compliance}%
+                            </span>
+                            <svg style={{ width: 18, height: 18, color: 'var(--text-secondary)', transform: expandedCourse === idx ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </div>
+                        </button>
+
+                        {/* Week details */}
+                        {expandedCourse === idx && (
+                          <div style={{ borderTop: '1px solid var(--border-color, #334155)', padding: '0 20px 16px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+                              {course.weeks.map((w, widx) => (
+                                <div key={widx} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0' }}>
+                                  <div style={{ width: '120px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)' }}>
+                                    {w.week}
+                                  </div>
+                                  <div style={{ flex: 1, height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '999px', overflow: 'hidden' }}>
+                                    <div style={{
+                                      width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px',
+                                      background: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444',
+                                      transition: 'width 0.5s ease'
+                                    }} />
+                                  </div>
+                                  <span style={{
+                                    minWidth: '42px', textAlign: 'right', fontSize: '0.875rem', fontWeight: 700,
+                                    color: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444'
+                                  }}>
+                                    {w.avg_compliance}%
+                                  </span>
+                                  <span style={{
+                                    padding: '2px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 600,
+                                    background: w.status === 'compliant' ? 'rgba(16,185,129,0.15)' : w.status === 'partial' ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
+                                    color: w.status === 'compliant' ? '#34d399' : w.status === 'partial' ? '#fbbf24' : '#f87171'
+                                  }}>
+                                    {w.status === 'compliant' ? '✓' : w.status === 'partial' ? '~' : '✗'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Vista General ── */}
+          {activeView === 'overview' && <>
           {/* Stats Grid */}
           <div className="stats-grid">
             {stats.map((stat) => (
@@ -318,6 +459,7 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
+          </>}
         </div>
       </main>
     </div>

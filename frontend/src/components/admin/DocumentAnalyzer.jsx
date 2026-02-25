@@ -17,6 +17,10 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
   // Validación de contenido con IA
   const [validatingContent, setValidatingContent] = useState(false);
   const [contentValidationResult, setContentValidationResult] = useState(null);
+
+  // Validación de curso completo (lote)
+  const [validatingCourse, setValidatingCourse] = useState(false);
+  const [courseValidationResult, setCourseValidationResult] = useState(null);
   
   // Navegación jerárquica
   const [currentFolderId, setCurrentFolderId] = useState(folderId);
@@ -114,6 +118,24 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       alert(`Error al validar: ${error.response?.data?.detail || error.message}`);
     } finally {
       setValidating(false);
+    }
+  };
+
+  const handleValidateCourse = async () => {
+    setValidatingCourse(true);
+    setCourseValidationResult(null);
+    try {
+      const response = await api.post('/api/validation/validate-course', {
+        course_folder_id: currentFolderId,
+        course_name: breadcrumbs[0]?.name || currentFolderId,
+        validation_type: 'both'
+      });
+      setCourseValidationResult(response.data);
+    } catch (error) {
+      console.error('Error en validación de curso:', error);
+      alert(`Error al validar curso: ${error.response?.data?.detail || error.message}`);
+    } finally {
+      setValidatingCourse(false);
     }
   };
 
@@ -548,6 +570,137 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
     );
   };
 
+  const renderCourseValidationModal = () => {
+    if (!courseValidationResult) return null;
+
+    const {
+      success, course_name, total_weeks, completed, failed,
+      average_compliance, weeks, error
+    } = courseValidationResult;
+
+    const pctColor = (pct) =>
+      pct >= 70 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#ef4444';
+
+    const thStyle = {
+      padding: '10px 14px', textAlign: 'left', fontSize: '0.75rem',
+      textTransform: 'uppercase', letterSpacing: '0.5px',
+      color: 'var(--text-secondary)', fontWeight: 600,
+      background: 'var(--bg-secondary)', position: 'sticky', top: 0,
+    };
+
+    return (
+      <div className="analysis-modal-overlay" onClick={() => setCourseValidationResult(null)}>
+        <div className="analysis-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1100px' }}>
+          <div className="modal-header">
+            <div className="modal-title-wrapper">
+              <h2 className="modal-title">📦 Validación de Curso Completo</h2>
+              <p className="modal-subtitle">
+                {course_name || breadcrumbs[0]?.name}
+                {total_weeks > 0 && ` · ${total_weeks} semana(s) · Promedio: ${average_compliance}%`}
+              </p>
+            </div>
+            <button className="modal-close" onClick={() => setCourseValidationResult(null)}>✕</button>
+          </div>
+
+          <div className="modal-content">
+            {!success ? (
+              <div className="analysis-section" style={{ borderLeftColor: '#ef4444' }}>
+                <h3>❌ Error en Validación</h3>
+                <p>{error || 'No se pudo completar la validación del curso.'}</p>
+              </div>
+            ) : (
+              <>
+                {(() => {
+                  const level = average_compliance >= 70 ? 'compliant' : average_compliance >= 40 ? 'partial' : 'low';
+                  return (
+                    <div className={`compliance-summary ${level}`}>
+                      <div className="compliance-header">
+                        <h3>📊 Resumen del Curso</h3>
+                        <span className={`compliance-percentage ${level}`}>{average_compliance}%</span>
+                      </div>
+                      <div className="compliance-stats-grid">
+                        <div className="validation-stat-card total">
+                          <div className="validation-stat-value">{total_weeks}</div>
+                          <div className="validation-stat-label">Semanas</div>
+                        </div>
+                        <div className="validation-stat-card found">
+                          <div className="validation-stat-value">{completed}</div>
+                          <div className="validation-stat-label">Validadas</div>
+                        </div>
+                        {failed > 0 && (
+                          <div className="validation-stat-card missing">
+                            <div className="validation-stat-value">{failed}</div>
+                            <div className="validation-stat-label">Con error</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {weeks && weeks.length > 0 && (
+                  <div className="analysis-section">
+                    <h3>📋 Resultados por Semana</h3>
+                    <div style={{ overflowX: 'auto', maxHeight: '440px', overflowY: 'auto' }}>
+                      <table className="cv-table">
+                        <thead>
+                          <tr>
+                            <th style={thStyle}>Semana</th>
+                            <th style={{ ...thStyle, width: '120px', textAlign: 'center' }}>Estructura</th>
+                            <th style={{ ...thStyle, width: '120px', textAlign: 'center' }}>Contenido</th>
+                            <th style={{ ...thStyle, width: '130px', textAlign: 'center' }}>Promedio</th>
+                            <th style={{ ...thStyle, width: '110px', textAlign: 'center' }}>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {weeks.map((w, idx) => (
+                            <tr key={idx}>
+                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)' }}>
+                                <strong>{w.folder_name}</strong>
+                                {w.error && (
+                                  <div style={{ fontSize: '0.8rem', color: '#ef4444', marginTop: '4px' }}>⚠️ {w.error}</div>
+                                )}
+                              </td>
+                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', textAlign: 'center' }}>
+                                {w.structure
+                                  ? <span style={{ fontWeight: 600, color: pctColor(w.structure.compliance_percentage) }}>{w.structure.compliance_percentage}%</span>
+                                  : <span style={{ color: 'var(--text-light)' }}>—</span>}
+                              </td>
+                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', textAlign: 'center' }}>
+                                {w.content && !w.content.error
+                                  ? <span style={{ fontWeight: 600, color: pctColor(w.content.compliance_percentage) }}>{w.content.compliance_percentage}%</span>
+                                  : <span style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>{w.content?.error ? '⚠️ Sin datos' : '—'}</span>}
+                              </td>
+                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', textAlign: 'center' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                  <span style={{ fontWeight: 700, color: pctColor(w.compliance_percentage) }}>
+                                    {w.compliance_percentage}%
+                                  </span>
+                                  <div style={{ width: '80px', height: '6px', background: 'var(--border-light)', borderRadius: '999px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${w.compliance_percentage}%`, height: '100%', background: pctColor(w.compliance_percentage), borderRadius: '999px', transition: 'width 0.5s ease' }} />
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-light)', textAlign: 'center' }}>
+                                <span className={`status-badge ${w.status === 'compliant' ? 'success' : w.status === 'partial' ? 'warning' : 'error'}`} style={{ fontSize: '0.75rem' }}>
+                                  {w.status === 'compliant' ? '✓ Cumple' : w.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading && folders.length === 0 && files.length === 0) {
     return (
       <div className="document-analyzer">
@@ -606,6 +759,23 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
               }}
             >
               {validatingContent ? '⏳ Analizando con IA...' : '🧠 Validar Contenido'}
+            </button>
+          )}
+
+          {/* Botón Validar Curso Completo — solo visible en la raíz del curso */}
+          {breadcrumbs.length === 1 && (
+            <button
+              className="btn-analyze"
+              onClick={handleValidateCourse}
+              disabled={validatingCourse}
+              style={{
+                background: validatingCourse
+                  ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
+                  : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {validatingCourse ? '⏳ Validando curso...' : '📦 Validar Curso Completo'}
             </button>
           )}
         </div>
@@ -702,6 +872,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       {renderAnalysisModal()}
       {renderValidationModal()}
       {renderContentValidationModal()}
+      {renderCourseValidationModal()}
     </div>
   );
 };

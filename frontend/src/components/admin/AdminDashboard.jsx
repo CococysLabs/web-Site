@@ -30,6 +30,12 @@ const AdminDashboard = () => {
   const [settingsForm, setSettingsForm]     = useState({});
   const [savingSettings, setSavingSettings] = useState(null); // categoría que se está guardando
 
+  // Reports state
+  const [reportStats, setReportStats]     = useState(null);
+  const [reportHistory, setReportHistory] = useState({ records: [], total: 0 });
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportFilter, setReportFilter]   = useState({ type: '', days: 30 });
+
   const showToast = (type, message) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3500);
@@ -154,6 +160,23 @@ const AdminDashboard = () => {
     }
   };
 
+  const loadReports = async (filter) => {
+    const f = filter || reportFilter;
+    setReportLoading(true);
+    try {
+      const [statsRes, historyRes] = await Promise.all([
+        api.get(`/api/validation/stats?days=${f.days}`),
+        api.get(`/api/validation/history?limit=50${f.type ? `&type=${f.type}` : ''}`)
+      ]);
+      setReportStats(statsRes.data);
+      setReportHistory(historyRes.data);
+    } catch (err) {
+      showToast('error', 'Error al cargar reportes');
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   return (
     <div className="admin-dashboard">
       {/* Toast notification */}
@@ -227,6 +250,16 @@ const AdminDashboard = () => {
             Documentos
           </button>
           
+          <button
+            className={activeTab === 'reports' ? 'active' : ''}
+            onClick={() => { setActiveTab('reports'); if (!reportStats) loadReports(); }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Reportes
+          </button>
+
           <button
             className={activeTab === 'users' ? 'active' : ''}
             onClick={() => setActiveTab('users')}
@@ -801,6 +834,206 @@ const AdminDashboard = () => {
                   </button>
                 </div>
 
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Reports Tab */}
+        {activeTab === 'reports' && (
+          <div className="reports-tab">
+            {/* Header + Filtros */}
+            <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h1>Reportes de Validaciones</h1>
+                <p className="subtitle">Estadísticas e historial de validaciones del sistema.</p>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="settings-input"
+                  style={{ width: 'auto', padding: '8px 12px', fontSize: '0.875rem' }}
+                  value={reportFilter.type}
+                  onChange={e => {
+                    const f = { ...reportFilter, type: e.target.value };
+                    setReportFilter(f);
+                    loadReports(f);
+                  }}
+                >
+                  <option value="">Todos los tipos</option>
+                  <option value="structure">Solo Estructura</option>
+                  <option value="content">Solo Contenido</option>
+                </select>
+                <select
+                  className="settings-input"
+                  style={{ width: 'auto', padding: '8px 12px', fontSize: '0.875rem' }}
+                  value={reportFilter.days}
+                  onChange={e => {
+                    const f = { ...reportFilter, days: parseInt(e.target.value) };
+                    setReportFilter(f);
+                    loadReports(f);
+                  }}
+                >
+                  <option value="7">Últimos 7 días</option>
+                  <option value="30">Últimos 30 días</option>
+                  <option value="90">Últimos 90 días</option>
+                  <option value="365">Último año</option>
+                </select>
+                <button
+                  className="btn-primary"
+                  style={{ padding: '8px 16px', fontSize: '0.875rem' }}
+                  onClick={() => loadReports(reportFilter)}
+                  disabled={reportLoading}
+                >
+                  {reportLoading ? '⏳' : '🔄 Actualizar'}
+                </button>
+              </div>
+            </div>
+
+            {reportLoading && !reportStats ? (
+              <div className="loading-state"><div className="spinner"></div><p>Cargando reportes...</p></div>
+            ) : reportStats ? (
+              <>
+                {/* Stat cards */}
+                <div className="reports-stats-grid">
+                  {[
+                    { icon: '📊', value: reportStats.total_validations, label: 'Total Validaciones', color: '#6366f1,#4f46e5' },
+                    { icon: '📈', value: `${reportStats.average_compliance}%`, label: 'Promedio Cumplimiento', color: '#10b981,#059669' },
+                    { icon: '✅', value: reportStats.by_status?.compliant || 0, label: 'Compliant (≥70%)', color: '#22c55e,#16a34a' },
+                    { icon: '⚠️', value: reportStats.by_status?.partial || 0, label: 'Parcial (40–69%)', color: '#f59e0b,#d97706' },
+                  ].map((card, i) => (
+                    <div key={i} className="report-stat-card">
+                      <div className="report-stat-icon" style={{ background: `linear-gradient(135deg,${card.color})` }}>
+                        {card.icon}
+                      </div>
+                      <div>
+                        <div className="report-stat-value">{card.value}</div>
+                        <div className="report-stat-label">{card.label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Cumplimiento por semana */}
+                {reportStats.by_week?.length > 0 && (
+                  <div className="report-table-card">
+                    <h3>📚 Cumplimiento por Semana/Carpeta</h3>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="report-table">
+                        <thead>
+                          <tr>
+                            {['Carpeta', 'Curso', 'Validaciones', 'Promedio'].map(h => (
+                              <th key={h}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportStats.by_week.map((row, idx) => (
+                            <tr key={idx}>
+                              <td style={{ fontWeight: 500 }}>{row.week}</td>
+                              <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{row.course || '—'}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <span className="report-count-badge">{row.count}</span>
+                              </td>
+                              <td>
+                                <div className="report-compliance-bar-row">
+                                  <div className="report-compliance-bar">
+                                    <div style={{
+                                      width: `${row.avg_compliance}%`, height: '100%',
+                                      background: row.avg_compliance >= 70 ? '#10b981' : row.avg_compliance >= 40 ? '#f59e0b' : '#ef4444',
+                                      borderRadius: '999px'
+                                    }} />
+                                  </div>
+                                  <span style={{
+                                    fontSize: '0.875rem', fontWeight: 600, minWidth: '42px',
+                                    color: row.avg_compliance >= 70 ? '#10b981' : row.avg_compliance >= 40 ? '#f59e0b' : '#ef4444'
+                                  }}>
+                                    {row.avg_compliance}%
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Historial */}
+                <div className="report-table-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ margin: 0 }}>📋 Historial de Validaciones</h3>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{reportHistory.total} registros en total</span>
+                  </div>
+                  {reportHistory.records.length === 0 ? (
+                    <div className="empty-state" style={{ padding: '2rem 0' }}>
+                      <p>No hay validaciones en el período seleccionado</p>
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
+                      <table className="report-table">
+                        <thead>
+                          <tr>
+                            {['Fecha', 'Carpeta', 'Curso', 'Tipo', 'Cumplimiento', 'Estado'].map(h => (
+                              <th key={h} style={{ position: 'sticky', top: 0, background: 'var(--bg-card)' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportHistory.records.map((r, idx) => (
+                            <tr key={idx}>
+                              <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
+                                {r.created_at
+                                  ? new Date(r.created_at).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                                  : '—'}
+                              </td>
+                              <td style={{ fontWeight: 500 }}>{r.folder_name}</td>
+                              <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{r.course_name || '—'}</td>
+                              <td>
+                                <span style={{
+                                  padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
+                                  background: r.validation_type === 'structure' ? 'rgba(139,92,246,0.2)' : 'rgba(16,185,129,0.2)',
+                                  color: r.validation_type === 'structure' ? '#a78bfa' : '#34d399'
+                                }}>
+                                  {r.validation_type === 'structure' ? '📋 Estructura' : '🧠 Contenido'}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="report-compliance-bar-row">
+                                  <div className="report-compliance-bar" style={{ width: '60px' }}>
+                                    <div style={{
+                                      width: `${r.compliance_percentage}%`, height: '100%',
+                                      background: r.compliance_percentage >= 70 ? '#10b981' : r.compliance_percentage >= 40 ? '#f59e0b' : '#ef4444',
+                                      borderRadius: '999px'
+                                    }} />
+                                  </div>
+                                  <span style={{
+                                    fontSize: '0.875rem', fontWeight: 600,
+                                    color: r.compliance_percentage >= 70 ? '#10b981' : r.compliance_percentage >= 40 ? '#f59e0b' : '#ef4444'
+                                  }}>
+                                    {r.compliance_percentage?.toFixed(1)}%
+                                  </span>
+                                </div>
+                              </td>
+                              <td>
+                                <span className={`report-status-badge ${r.status === 'compliant' ? 'compliant' : r.status === 'partial' ? 'partial' : 'low'}`}>
+                                  {r.status === 'compliant' ? '✓ Cumple' : r.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <p>No hay datos de reportes disponibles</p>
+                <button className="btn-primary" style={{ marginTop: '1rem' }} onClick={() => loadReports()}>
+                  Cargar Reportes
+                </button>
               </div>
             )}
           </div>
