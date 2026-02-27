@@ -363,7 +363,7 @@ async def get_validation_history(
     folder_id:   Optional[str] = Query(None),
     course_name: Optional[str] = Query(None),
     type:        Optional[str] = Query(None),   # "structure" | "content"
-    limit:       int           = Query(50, le=200),
+    limit:       int           = Query(50, le=500),
     offset:      int           = Query(0),
     current_user: User         = Depends(get_current_user),
     db: Session                = Depends(get_db)

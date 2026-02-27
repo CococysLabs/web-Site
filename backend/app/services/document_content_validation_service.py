@@ -406,6 +406,21 @@ class DocumentContentValidationService:
         'reporte':       ['pdf', 'wordprocessingml'],
     }
 
+    def _names_match(self, group_name: str, file_name: str) -> bool:
+        """
+        Compara el nombre del grupo (tipo de documento) con el nombre del archivo.
+        Devuelve True si el nombre normalizado del grupo aparece en el nombre del archivo.
+
+        Ejemplos:
+          "Presentación", "Lab pdc1 Presentacion 6 1S2025.pdf"  → True
+          "Lectura",       "Lectura_Semana2.pdf"                 → True
+          "Video",         "Lab pdc1 Presentacion 6 1S2025.pdf" → False
+        """
+        norm_group = self._normalize(group_name).lower()
+        norm_file  = self._normalize(file_name).lower()
+        # Coincidencia si el grupo (o sus primeras palabras) aparece en el nombre del archivo
+        return norm_group in norm_file
+
     def _match_file_to_group(
         self,
         group_name: str,
