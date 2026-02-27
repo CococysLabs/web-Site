@@ -62,33 +62,46 @@ async def analyze_drive_file(
         
         file_name = file_metadata.get('name', 'Unknown')
         mime_type = file_metadata.get('mimeType', '')
-        
-        # Verificar que sea PDF
-        if 'pdf' not in mime_type.lower():
+
+        # Verificar que sea un formato soportado (PDF, DOCX, PPTX)
+        from app.services.analysis_service import SUPPORTED_MIMES
+        supported = any(
+            frag in mime_type
+            for frag in ('pdf', 'wordprocessingml', 'presentationml')
+        )
+        if not supported:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Solo se pueden analizar archivos PDF. Tipo detectado: {mime_type}"
+                detail=f"Formato no soportado: {mime_type}. Se aceptan PDF, DOCX y PPTX."
             )
-        
+
         # Descargar el archivo
-        print(f"📥 Descargando: {file_name}")
+        print(f"📥 Descargando: {file_name} ({mime_type})")
         file_content = drive_service.download_file(request.file_id)
-        
+
         if not file_content:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error al descargar el archivo desde Drive"
             )
-        
+
         # Analizar el documento completo
         print(f"🔍 Analizando: {file_name}")
-        analysis_result = analysis_service.analyze_complete(file_content)
+        analysis_result = analysis_service.analyze_complete(file_content, mime_type)
         
         # Guardar o actualizar en la base de datos
         existing_doc = db.query(Document).filter(
             Document.drive_file_id == request.file_id
         ).first()
         
+        # Determinar DocumentType a partir de mime_type
+        if 'wordprocessingml' in mime_type:
+            doc_type = DocumentType.WORD
+        elif 'presentationml' in mime_type:
+            doc_type = DocumentType.POWERPOINT
+        else:
+            doc_type = DocumentType.PDF
+
         if existing_doc:
             # Actualizar documento existente
             existing_doc.analysis_result = analysis_result
@@ -98,7 +111,7 @@ async def analyze_drive_file(
             # Crear nuevo documento
             new_doc = Document(
                 name=file_name,
-                type=DocumentType.PDF,
+                type=doc_type,
                 drive_file_id=request.file_id,
                 drive_folder_id=request.folder_id,
                 drive_web_view_link=file_metadata.get('webViewLink'),
