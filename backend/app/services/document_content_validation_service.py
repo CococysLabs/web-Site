@@ -496,34 +496,167 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         return last_result
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Escritura de resultados al Excel
+    # Generación del reporte Excel (archivo nuevo, no modifica la matriz)
     # ──────────────────────────────────────────────────────────────────────────
 
-    def write_results_to_excel(
+    REPORT_PREFIX = "Reporte Validacion"
+
+    def _build_report_excel(
         self,
-        wb: openpyxl.Workbook,
-        ws,
-        col_map: Dict[str, int],
+        section_name: str,
         requirements: List[Dict],
-        results: List[Dict]
+        results: List[Dict],
+        compliance_pct: float,
+        docs_analyzed: List[str],
+        model_name: str,
     ) -> bytes:
         """
-        Rellena las columnas 'Presente' y 'Observaciones' del Excel.
-        Retorna los bytes del workbook modificado.
+        Crea un nuevo workbook de reporte desde cero.
+        No toca el Excel original de la matriz.
         """
-        presente_col     = col_map.get('presente')
-        observacion_col  = col_map.get('observaciones')
+        from datetime import datetime
+        from openpyxl.styles import (
+            Font, PatternFill, Alignment, Border, Side
+        )
 
-        for req, result in zip(requirements, results):
-            row_idx = req['row_idx']
-            if presente_col:
-                ws.cell(row=row_idx, column=presente_col).value = result['presente']
-            if observacion_col:
-                ws.cell(row=row_idx, column=observacion_col).value = result['observacion']
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Validación Contenido"
+
+        # ── Estilos ──────────────────────────────────────────────
+        title_font   = Font(bold=True, size=14)
+        header_font  = Font(bold=True, size=10, color="FFFFFF")
+        label_font   = Font(bold=True, size=10)
+        normal_font  = Font(size=10)
+
+        header_fill  = PatternFill("solid", fgColor="1E3A5F")   # azul oscuro
+        green_fill   = PatternFill("solid", fgColor="C6EFCE")   # verde claro
+        red_fill     = PatternFill("solid", fgColor="FFC7CE")   # rojo claro
+        gray_fill    = PatternFill("solid", fgColor="F2F2F2")   # gris info
+
+        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        left   = Alignment(horizontal="left",   vertical="center", wrap_text=True)
+
+        thin = Side(style="thin", color="CCCCCC")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        # ── Fila 1: Título ────────────────────────────────────────
+        ws.merge_cells("A1:D1")
+        ws["A1"].value     = "Reporte de Validación de Contenido"
+        ws["A1"].font      = title_font
+        ws["A1"].alignment = center
+        ws.row_dimensions[1].height = 28
+
+        # ── Filas 2-4: Metadatos ──────────────────────────────────
+        meta = [
+            ("Sección:",      section_name,
+             "Fecha:",        datetime.now().strftime("%Y-%m-%d %H:%M")),
+            ("Cumplimiento:", f"{compliance_pct}%",
+             "Modelo IA:",    model_name),
+            ("Documentos:",   ", ".join(docs_analyzed) if docs_analyzed else "—",
+             "",              ""),
+        ]
+        for r_offset, (la, va, lb, vb) in enumerate(meta, start=2):
+            ws[f"A{r_offset}"].value      = la
+            ws[f"A{r_offset}"].font       = label_font
+            ws[f"A{r_offset}"].fill       = gray_fill
+            ws[f"B{r_offset}"].value      = va
+            ws[f"B{r_offset}"].font       = normal_font
+            ws[f"C{r_offset}"].value      = lb
+            ws[f"C{r_offset}"].font       = label_font
+            ws[f"C{r_offset}"].fill       = gray_fill
+            ws[f"D{r_offset}"].value      = vb
+            ws[f"D{r_offset}"].font       = normal_font
+            ws.row_dimensions[r_offset].height = 18
+
+        # Merge celda B3 si "Documentos" es larga
+        ws.merge_cells("B4:D4")
+
+        # ── Fila 5: Espaciador ────────────────────────────────────
+        ws.row_dimensions[5].height = 8
+
+        # ── Fila 6: Encabezados de tabla ──────────────────────────
+        headers = ["Sub-sección / Requisito", "Autor", "Presente", "Observación"]
+        for col, h in enumerate(headers, start=1):
+            cell = ws.cell(row=6, column=col)
+            cell.value     = h
+            cell.font      = header_font
+            cell.fill      = header_fill
+            cell.alignment = center
+            cell.border    = border
+        ws.row_dimensions[6].height = 20
+
+        # ── Filas 7+: Datos ───────────────────────────────────────
+        present_count = 0
+        for i, (req, result) in enumerate(zip(requirements, results), start=7):
+            presente = result.get('presente', 'No')
+            if presente == 'Si':
+                present_count += 1
+                row_fill = green_fill
+            else:
+                row_fill = red_fill
+
+            row_data = [
+                req['sub_seccion'],
+                req.get('autor', ''),
+                presente,
+                result.get('observacion', ''),
+            ]
+            for col, val in enumerate(row_data, start=1):
+                cell = ws.cell(row=i, column=col)
+                cell.value     = val
+                cell.font      = normal_font
+                cell.fill      = row_fill
+                cell.alignment = left if col != 3 else center
+                cell.border    = border
+            ws.row_dimensions[i].height = 36
+
+        # ── Anchos de columna ─────────────────────────────────────
+        ws.column_dimensions["A"].width = 55
+        ws.column_dimensions["B"].width = 20
+        ws.column_dimensions["C"].width = 12
+        ws.column_dimensions["D"].width = 60
 
         buf = io.BytesIO()
         wb.save(buf)
         return buf.getvalue()
+
+    def _save_report(
+        self,
+        report_bytes: bytes,
+        section_name: str,
+        target_folder_id: str,
+    ) -> Optional[Dict]:
+        """
+        Sube el reporte a Drive.
+        Si ya existe un reporte para esta sección en la carpeta, lo actualiza.
+        Si no, crea uno nuevo.
+        Retorna {'id', 'name', 'webViewLink'} o None.
+        """
+        from datetime import datetime
+
+        # Prefijo estable para poder encontrarlo después
+        safe_section = section_name.replace(" ", "_")
+        prefix = f"{self.REPORT_PREFIX} {safe_section}"
+
+        # Buscar si ya existe
+        existing = drive_service.find_file_by_prefix(target_folder_id, prefix)
+
+        if existing:
+            # Actualizar en lugar de crear nuevo
+            ok = drive_service.upload_file(report_bytes, EXCEL_MIME_TYPE, existing['id'])
+            if ok:
+                print(f"  📤 Reporte actualizado: '{existing['name']}'")
+                return existing
+            return None
+        else:
+            # Crear archivo nuevo con timestamp
+            ts = datetime.now().strftime("%Y-%m-%d %H-%M")
+            filename = f"{prefix} - {ts}.xlsx"
+            result = drive_service.create_file(
+                report_bytes, EXCEL_MIME_TYPE, filename, target_folder_id
+            )
+            return result
 
     # ──────────────────────────────────────────────────────────────────────────
     # Punto de entrada principal
@@ -632,18 +765,27 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
                 if self.enabled and i < len(requirements):
                     time.sleep(0.5)
 
-            # 7. Escribir resultados al Excel y re-subir a Drive
-            updated_bytes = self.write_results_to_excel(wb, ws, col_map, requirements, results)
-            excel_updated = drive_service.upload_file(updated_bytes, EXCEL_MIME_TYPE, matrix_file_id)
-
-            # 8. Calcular estadísticas
-            present_count = sum(1 for r in results if r['presente'] == 'Si')
-            absent_count  = len(results) - present_count
+            # 7. Calcular estadísticas
+            present_count  = sum(1 for r in results if r['presente'] == 'Si')
+            absent_count   = len(results) - present_count
             compliance_pct = round(present_count / len(results) * 100, 2) if results else 0
 
             print(f"\n✅ Validación completada: {present_count}/{len(results)} ({compliance_pct}%) presentes")
-            if excel_updated:
-                print(f"  📤 Excel actualizado en Drive: '{matrix_file_name}'")
+
+            # 8. Crear nuevo Excel de reporte (NO modifica la matriz original)
+            report_bytes = self._build_report_excel(
+                section_name   = section_name,
+                requirements   = requirements,
+                results        = results,
+                compliance_pct = compliance_pct,
+                docs_analyzed  = list(doc_texts.keys()),
+                model_name     = active_model_name,
+            )
+            report_info = self._save_report(report_bytes, section_name, semana_folder_id)
+            if report_info:
+                print(f"  📄 Reporte generado en Drive: '{report_info.get('name')}'")
+            else:
+                print(f"  ⚠️  No se pudo guardar el reporte en Drive")
 
             return {
                 'success':               True,
@@ -661,9 +803,12 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
                     }
                     for req, result in zip(requirements, results)
                 ],
-                'documents_analyzed': list(doc_texts.keys()),
-                'excel_updated':      excel_updated,
-                'gemini_enabled':     self.enabled,
+                'documents_analyzed':  list(doc_texts.keys()),
+                'report_generated':    report_info is not None,
+                'report_name':         report_info.get('name') if report_info else None,
+                'report_link':         report_info.get('webViewLink') if report_info else None,
+                'excel_updated':       False,   # compatibilidad: ya no se modifica la matriz
+                'gemini_enabled':      self.enabled,
             }
 
         except Exception as e:

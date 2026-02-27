@@ -468,7 +468,9 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       compliance_percentage,
       results,
       documents_analyzed,
-      excel_updated,
+      report_generated,
+      report_name,
+      report_link,
       gemini_enabled,
       error
     } = contentValidationResult;
@@ -501,9 +503,21 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
               <p className="modal-subtitle">
                 {section || breadcrumbs[breadcrumbs.length - 1]?.name}
                 {documents_analyzed?.length > 0 && ` · ${documents_analyzed.length} documento(s) analizados`}
-                {excel_updated && ' · Excel actualizado ✓'}
                 {gemini_enabled === false && ' · Modo básico (sin Gemini)'}
               </p>
+              {report_generated && report_link && (
+                <a
+                  href={report_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '6px', fontSize: '0.8rem', color: '#10b981', textDecoration: 'none', fontWeight: 600 }}
+                >
+                  📄 Ver reporte Excel generado
+                  <svg style={{ width: 12, height: 12 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              )}
             </div>
             <button className="modal-close" onClick={() => setContentValidationResult(null)}>✕</button>
           </div>

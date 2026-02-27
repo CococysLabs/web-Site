@@ -171,6 +171,61 @@ class GoogleDriveService:
             print(f"Error actualizando archivo en Drive: {e}")
             return False
 
+    def create_file(
+        self,
+        file_bytes: bytes,
+        mime_type: str,
+        filename: str,
+        parent_folder_id: str,
+    ) -> Optional[Dict]:
+        """
+        Sube un archivo NUEVO a una carpeta de Drive.
+        Retorna {'id': str, 'name': str, 'webViewLink': str} o None si falla.
+        """
+        if not self.service:
+            return None
+        try:
+            metadata = {
+                'name': filename,
+                'parents': [parent_folder_id],
+            }
+            media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type)
+            result = self.service.files().create(
+                body=metadata,
+                media_body=media,
+                fields='id, name, webViewLink'
+            ).execute()
+            print(f"✅ Archivo creado en Drive: '{filename}' ({result.get('id')})")
+            return result
+        except Exception as e:
+            print(f"Error creando archivo en Drive: {e}")
+            return None
+
+    def find_file_by_prefix(self, folder_id: str, prefix: str) -> Optional[Dict]:
+        """
+        Busca el primer archivo en una carpeta cuyo nombre empiece con 'prefix'.
+        Retorna metadatos {'id', 'name', 'webViewLink'} o None.
+        """
+        if not self.service:
+            return None
+        try:
+            query = (
+                f"'{folder_id}' in parents "
+                f"and name contains '{prefix}' "
+                f"and trashed=false"
+            )
+            results = self.service.files().list(
+                q=query,
+                fields="files(id, name, webViewLink)",
+                orderBy="createdTime desc",
+                pageSize=1
+            ).execute()
+            files = results.get('files', [])
+            return files[0] if files else None
+        except Exception as e:
+            print(f"Error buscando archivo por prefijo: {e}")
+            return None
+
     def get_folder_structure(self, folder_id: str, depth: int = 2) -> Dict:
         """Obtener estructura de carpetas recursivamente"""
         if not self.service or depth <= 0:
