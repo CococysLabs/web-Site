@@ -531,6 +531,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       absent_count,
       compliance_percentage,
       results,
+      groups,
       documents_analyzed,
       report_generated,
       report_name,
@@ -623,8 +624,137 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
                   );
                 })()}
 
-                {/* Tabla detallada por requisito */}
-                {results && results.length > 0 && (
+                {/* Tarjetas por grupo de documento */}
+                {groups && groups.length > 0 ? (
+                  <div className="analysis-section">
+                    <h3>📑 Detalle por Tipo de Documento</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {groups.map((group, gIdx) => {
+                        const gLevel = group.compliance_percentage === 100 ? 'compliant'
+                          : group.compliance_percentage >= 70 ? 'partial' : 'low';
+                        const barColor = gLevel === 'compliant' ? '#10b981'
+                          : gLevel === 'partial' ? '#f59e0b' : '#ef4444';
+                        return (
+                          <div key={gIdx} style={{
+                            border: '1px solid var(--border-light)',
+                            borderRadius: '10px',
+                            overflow: 'hidden',
+                            background: 'var(--bg-card)',
+                          }}>
+                            {/* Encabezado del grupo */}
+                            <div style={{
+                              padding: '12px 16px',
+                              background: 'var(--bg-secondary)',
+                              borderBottom: '1px solid var(--border-light)',
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '8px',
+                              alignItems: 'center',
+                            }}>
+                              <span style={{ fontWeight: 700, fontSize: '0.95rem', flex: 1, minWidth: '150px' }}>
+                                📑 {group.group_name}
+                              </span>
+                              {group.file_found ? (
+                                <span style={{
+                                  fontSize: '0.8rem',
+                                  color: 'var(--text-secondary)',
+                                  background: 'var(--bg-primary)',
+                                  border: '1px solid var(--border-light)',
+                                  borderRadius: '6px',
+                                  padding: '3px 9px',
+                                  maxWidth: '340px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  📄 {group.matched_file}
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: '0.8rem',
+                                  color: '#ef4444',
+                                  background: '#fee2e2',
+                                  borderRadius: '6px',
+                                  padding: '3px 9px',
+                                }}>
+                                  ⚠️ Archivo no encontrado
+                                </span>
+                              )}
+                              <span style={{
+                                fontWeight: 700,
+                                fontSize: '0.9rem',
+                                color: barColor,
+                                minWidth: '46px',
+                                textAlign: 'right',
+                              }}>
+                                {group.compliance_percentage?.toFixed(0)}%
+                              </span>
+                            </div>
+
+                            {/* Barra de progreso del grupo */}
+                            <div style={{ height: '5px', background: 'var(--border-light)' }}>
+                              <div style={{
+                                width: `${group.compliance_percentage}%`,
+                                height: '100%',
+                                background: barColor,
+                                transition: 'width 0.5s ease',
+                              }} />
+                            </div>
+
+                            {/* Contador resumen */}
+                            <div style={{
+                              padding: '8px 16px',
+                              fontSize: '0.8rem',
+                              color: 'var(--text-secondary)',
+                              borderBottom: group.results?.length ? '1px solid var(--border-light)' : 'none',
+                            }}>
+                              ✓ {group.present_count} presentes &nbsp;·&nbsp; ✗ {group.absent_count} ausentes &nbsp;·&nbsp; {group.total_params} requisitos
+                            </div>
+
+                            {/* Tabla de parámetros del grupo */}
+                            {group.results && group.results.length > 0 && (
+                              <div style={{ overflowX: 'auto', maxHeight: '300px', overflowY: 'auto' }}>
+                                <table className="cv-table" style={{ fontSize: '0.875rem' }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={thStyle}>Requisito</th>
+                                      <th style={{ ...thStyle, width: '110px' }}>Autor</th>
+                                      <th style={{ ...thStyle, width: '85px' }}>Presente</th>
+                                      <th style={thStyle}>Observación IA</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {group.results.map((r, rIdx) => (
+                                      <tr key={rIdx} style={{
+                                        background: r.presente === 'Si'
+                                          ? 'rgba(16,185,129,0.04)'
+                                          : 'rgba(239,68,68,0.04)',
+                                      }}>
+                                        <td style={tdStyle}>{r.sub_seccion}</td>
+                                        <td style={{ ...tdStyle, color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                                          {r.autor || '—'}
+                                        </td>
+                                        <td style={tdStyle}>
+                                          <span className={`status-badge ${r.presente === 'Si' ? 'success' : 'error'}`}>
+                                            {r.presente === 'Si' ? '✓ Si' : '✗ No'}
+                                          </span>
+                                        </td>
+                                        <td style={{ ...tdStyle, color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.82rem' }}>
+                                          {r.observacion}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : results && results.length > 0 && (
+                  /* Fallback: tabla plana si no hay grupos */
                   <div className="analysis-section">
                     <h3>📋 Detalle por Sub-sección</h3>
                     <div style={{ overflowX: 'auto', maxHeight: '400px', overflowY: 'auto' }}>

@@ -300,21 +300,176 @@ class DocumentContentValidationService:
             return self._extract_pptx_text(file_bytes)
         return ''
 
-    def download_and_extract_all_docs(self, folder_id: str) -> Dict[str, str]:
+    def parse_requirements_by_group(
+        self,
+        ws,
+        target_section: str,
+        col_map: Dict[str, int],
+        header_row_idx: int
+    ) -> List[Dict]:
+        """
+        Lee la hoja y agrupa los requisitos por tipo de documento (Presentación, Lectura, Video…).
+
+        Estructura del Excel:
+          Sección  | Sub-sección          | Aplica
+          Semana 2 | Presentación         |        ← encabezado de grupo (sin Aplica)
+          Semana 2 | Bienvenida           | Si     ← parámetro
+          Semana 2 | Agenda               | Si     ← parámetro
+          ...
+          Semana 2 | Lectura              |        ← encabezado de grupo
+          Semana 2 | Titulo               | Si     ← parámetro
+
+        Retorna lista de grupos:
+          [
+            {
+              'group_name': 'Presentación',
+              'params': [
+                {'row_idx': int, 'sub_seccion': str, 'autor': str},
+                ...
+              ]
+            },
+            ...
+          ]
+        """
+        norm_target = self._normalize(target_section)
+        sec_col   = col_map.get('seccion')
+        sub_col   = col_map.get('sub_seccion')
+        aplica_col = col_map.get('aplica')
+        autor_col  = col_map.get('autor')
+
+        if not sec_col or not sub_col:
+            return []
+
+        groups: List[Dict] = []
+        current_group: Optional[Dict] = None
+
+        for row_idx in range(header_row_idx + 1, ws.max_row + 1):
+            sec_val = ws.cell(row=row_idx, column=sec_col).value
+            if not sec_val:
+                continue
+            if self._normalize(str(sec_val)) != norm_target:
+                continue
+
+            sub_val = ws.cell(row=row_idx, column=sub_col).value
+            if not sub_val or str(sub_val).strip() == '':
+                continue
+            sub_str = str(sub_val).strip()
+
+            aplica_val = ws.cell(row=row_idx, column=aplica_col).value if aplica_col else None
+            aplica_norm = self._normalize(str(aplica_val or ''))
+
+            if aplica_norm != 'si':
+                # Fila sin Aplica=Si → encabezado de tipo de documento
+                current_group = {'group_name': sub_str, 'params': []}
+                groups.append(current_group)
+            else:
+                # Fila con Aplica=Si → parámetro del grupo actual
+                autor_val = ws.cell(row=row_idx, column=autor_col).value if autor_col else None
+                param = {
+                    'row_idx':    row_idx,
+                    'sub_seccion': sub_str,
+                    'autor':      str(autor_val).strip() if autor_val else '',
+                }
+                if current_group is not None:
+                    current_group['params'].append(param)
+                else:
+                    # No hay encabezado previo → grupo implícito "General"
+                    current_group = {'group_name': 'General', 'params': [param]}
+                    groups.append(current_group)
+
+        # Descartar grupos vacíos
+        groups = [g for g in groups if g['params']]
+
+        total_params = sum(len(g['params']) for g in groups)
+        print(f"📋 Grupos para '{target_section}': {len(groups)} grupos, {total_params} parámetros")
+        for g in groups:
+            print(f"   📑 '{g['group_name']}': {len(g['params'])} parámetros")
+
+        return groups
+
+    # Pistas de tipo: qué MIME buscar para cada nombre de grupo
+    _GROUP_TYPE_HINTS: Dict[str, List[str]] = {
+        'presentacion':  ['presentationml'],
+        'presentación':  ['presentationml'],
+        'diapositivas':  ['presentationml'],
+        'slides':        ['presentationml'],
+        'lectura':       ['pdf', 'wordprocessingml'],
+        'reading':       ['pdf', 'wordprocessingml'],
+        'documento':     ['pdf', 'wordprocessingml'],
+        'video':         ['pdf', 'wordprocessingml'],   # cuestionario/actividad asociada
+        'cuestionario':  ['pdf', 'wordprocessingml'],
+        'actividad':     ['pdf', 'wordprocessingml'],
+        'guia':          ['pdf', 'wordprocessingml'],
+        'guía':          ['pdf', 'wordprocessingml'],
+        'tarea':         ['pdf', 'wordprocessingml'],
+        'informe':       ['pdf', 'wordprocessingml'],
+        'reporte':       ['pdf', 'wordprocessingml'],
+    }
+
+    def _match_file_to_group(
+        self,
+        group_name: str,
+        files_metadata: List[Dict],
+        already_matched: set
+    ) -> Optional[Dict]:
+        """
+        Encuentra el archivo más adecuado para un tipo de documento (grupo).
+
+        Prioridad:
+          1. Coincidencia de nombre normalizado (p.ej. "Presentación" ↔ "Presentacion_S2.pptx")
+          2. Pista por MIME type según el nombre del grupo
+          3. Cualquier archivo soportado no asignado aún
+        """
+        norm_group = self._normalize(group_name)
+
+        # 1. Coincidencia de nombre
+        for f in files_metadata:
+            if f['name'] in already_matched:
+                continue
+            if self._names_match(group_name, f['name']):
+                return f
+
+        # 2. Pista por MIME
+        for hint_key, mime_frags in self._GROUP_TYPE_HINTS.items():
+            if hint_key in norm_group:
+                for f in files_metadata:
+                    if f['name'] in already_matched:
+                        continue
+                    mime = f.get('mimeType', '').lower()
+                    if any(frag in mime for frag in mime_frags):
+                        return f
+                break   # intentar solo la primera pista que aplique
+
+        # 3. Cualquier archivo soportado disponible
+        for f in files_metadata:
+            if f['name'] not in already_matched:
+                return f
+
+        return None
+
+    def download_and_extract_all_docs(
+        self, folder_id: str
+    ) -> Tuple[Dict[str, str], List[Dict]]:
         """
         Descarga y extrae texto de todos los documentos soportados en la carpeta.
         Excluye el Excel de la matriz.
-        Retorna Dict[filename → extracted_text].
+
+        Retorna:
+          doc_texts:      Dict[filename → extracted_text]
+          files_metadata: List[{name, mimeType, id}]  (los archivos procesados)
         """
         files = drive_service.list_files(folder_id)
         doc_texts: Dict[str, str] = {}
+        files_metadata: List[Dict] = []
 
         for f in files:
             name = f.get('name', '')
             mime = f.get('mimeType', '')
 
-            # Excluir el Excel de la matriz
+            # Excluir matriz y reportes generados por el sistema
             if name.startswith(MATRIX_FILE_PREFIX):
+                continue
+            if name.startswith(self.REPORT_PREFIX):
                 continue
             # Solo tipos soportados
             if mime not in SUPPORTED_MIMES:
@@ -329,9 +484,10 @@ class DocumentContentValidationService:
 
             text = self.extract_text_from_bytes(file_bytes, mime)
             doc_texts[name] = text
-            print(f"  📄 '{name}': {len(text)} caracteres extraídos")
+            files_metadata.append({'name': name, 'mimeType': mime, 'id': f.get('id', '')})
+            print(f"  📄 '{name}': {len(text)} chars | {len(text.split())} palabras")
 
-        return doc_texts
+        return doc_texts, files_metadata
 
     def combine_document_texts(self, doc_texts: Dict[str, str]) -> str:
         """Une todos los textos con separadores claros de documento."""
@@ -509,6 +665,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         compliance_pct: float,
         docs_analyzed: List[str],
         model_name: str,
+        groups: Optional[List[Dict]] = None,
     ) -> bytes:
         """
         Crea un nuevo workbook de reporte desde cero.
@@ -572,11 +729,14 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         # Merge celda B3 si "Documentos" es larga
         ws.merge_cells("B4:D4")
 
+        group_header_fill = PatternFill("solid", fgColor="2563EB")   # azul medio (encab. grupo)
+        group_header_font = Font(bold=True, size=10, color="FFFFFF")
+
         # ── Fila 5: Espaciador ────────────────────────────────────
         ws.row_dimensions[5].height = 8
 
         # ── Fila 6: Encabezados de tabla ──────────────────────────
-        headers = ["Sub-sección / Requisito", "Autor", "Presente", "Observación"]
+        headers = ["Sub-sección / Requisito", "Archivo analizado", "Presente", "Observación"]
         for col, h in enumerate(headers, start=1):
             cell = ws.cell(row=6, column=col)
             cell.value     = h
@@ -586,30 +746,59 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
             cell.border    = border
         ws.row_dimensions[6].height = 20
 
-        # ── Filas 7+: Datos ───────────────────────────────────────
-        present_count = 0
-        for i, (req, result) in enumerate(zip(requirements, results), start=7):
-            presente = result.get('presente', 'No')
-            if presente == 'Si':
-                present_count += 1
-                row_fill = green_fill
-            else:
-                row_fill = red_fill
+        # ── Filas 7+: Datos (agrupados si hay grupos, planos si no) ──────────
+        current_row = 7
 
-            row_data = [
-                req['sub_seccion'],
-                req.get('autor', ''),
-                presente,
-                result.get('observacion', ''),
-            ]
-            for col, val in enumerate(row_data, start=1):
-                cell = ws.cell(row=i, column=col)
-                cell.value     = val
-                cell.font      = normal_font
-                cell.fill      = row_fill
-                cell.alignment = left if col != 3 else center
-                cell.border    = border
-            ws.row_dimensions[i].height = 36
+        if groups:
+            for group in groups:
+                # Fila de encabezado de grupo (tipo de documento)
+                g_pct   = group.get('compliance_percentage', 0)
+                g_file  = group.get('matched_file') or '— archivo no encontrado —'
+                g_label = (f"📑 {group['group_name']}  ·  {g_file}  "
+                           f"·  {group.get('present_count', 0)}/{group.get('total_params', 0)} "
+                           f"({g_pct}%)")
+                ws.merge_cells(
+                    start_row=current_row, start_column=1,
+                    end_row=current_row,   end_column=4
+                )
+                gc = ws.cell(row=current_row, column=1)
+                gc.value     = g_label
+                gc.font      = group_header_font
+                gc.fill      = group_header_fill
+                gc.alignment = left
+                ws.row_dimensions[current_row].height = 18
+                current_row += 1
+
+                # Filas de parámetros del grupo
+                for r in group.get('results', []):
+                    presente   = r.get('presente', 'No')
+                    row_fill   = green_fill if presente == 'Si' else red_fill
+                    row_data   = [r['sub_seccion'], g_file, presente, r.get('observacion', '')]
+                    for col, val in enumerate(row_data, start=1):
+                        cell = ws.cell(row=current_row, column=col)
+                        cell.value     = val
+                        cell.font      = normal_font
+                        cell.fill      = row_fill
+                        cell.alignment = left if col != 3 else center
+                        cell.border    = border
+                    ws.row_dimensions[current_row].height = 32
+                    current_row += 1
+
+        else:
+            # Fallback: lista plana (sin grupos)
+            for req, result in zip(requirements, results):
+                presente = result.get('presente', 'No')
+                row_fill = green_fill if presente == 'Si' else red_fill
+                row_data = [req['sub_seccion'], req.get('autor', ''), presente, result.get('observacion', '')]
+                for col, val in enumerate(row_data, start=1):
+                    cell = ws.cell(row=current_row, column=col)
+                    cell.value     = val
+                    cell.font      = normal_font
+                    cell.fill      = row_fill
+                    cell.alignment = left if col != 3 else center
+                    cell.border    = border
+                ws.row_dimensions[current_row].height = 36
+                current_row += 1
 
         # ── Anchos de columna ─────────────────────────────────────
         ws.column_dimensions["A"].width = 55
@@ -672,15 +861,12 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         """
         Pipeline completo de validación de contenido para una carpeta Semana_X.
 
-        Args:
-            semana_folder_id:     ID de Drive de la carpeta Semana_X a analizar
-            semana_folder_name:   Nombre de la carpeta (ej. "Semana_2")
-            candidate_folder_ids: IDs de carpetas candidatas donde buscar el Excel
-                                  (de más específico a más general)
-
-        Returns dict con:
-            success, section, total_requirements, present_count, absent_count,
-            compliance_percentage, results[], documents_analyzed[], excel_updated, gemini_enabled
+        Nuevo enfoque por grupos:
+          - El Excel agrupa parámetros bajo encabezados de tipo de documento
+            (Presentación, Lectura, Video…)
+          - Cada tipo de documento se localiza en la carpeta Drive
+          - Los parámetros se evalúan SOLO contra el archivo correspondiente
+            → Gemini recibe contexto puro, sin mezclar documentos
         """
         try:
             print(f"\n🧠 Iniciando validación de contenido: '{semana_folder_name}'")
@@ -695,120 +881,179 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
                     active_model_name = settings_service.get("gemini_model", db) or GEMINI_MODEL
                     print(f"  ⚙️  Gemini: {'habilitado' if use_gemini else 'deshabilitado'} | modelo: {active_model_name}")
                 except Exception:
-                    pass  # Si falla la lectura de settings, usar defaults
+                    pass
 
             # 1. Derivar sección
             section_name = self._derive_section_from_folder(semana_folder_name)
-            print(f"  📌 Sección derivada: '{section_name}'")
+            print(f"  📌 Sección: '{section_name}'")
 
-            # 2. Buscar el Excel buscando en cada carpeta candidata (del más cercano al más lejano)
+            # 2. Buscar el Excel en cada carpeta candidata
             matrix_info = None
             matrix_folder_id = None
             for fid in candidate_folder_ids:
-                print(f"  🔎 Buscando matriz en carpeta: {fid}")
+                print(f"  🔎 Buscando matriz en: {fid}")
                 matrix_info = self.find_matrix_file(fid)
                 if matrix_info:
                     matrix_folder_id = fid
                     break
 
             if not matrix_info:
-                searched = ', '.join(candidate_folder_ids)
                 return {
                     'success': False,
-                    'error': f'No se encontró "{MATRIX_FILE_PREFIX}" en ninguna carpeta candidata (buscado en: {searched})'
+                    'error': f'No se encontró "{MATRIX_FILE_PREFIX}" en ninguna carpeta candidata'
                 }
             matrix_file_id, matrix_file_name = matrix_info
-            print(f"  📊 Matriz encontrada: '{matrix_file_name}' en carpeta {matrix_folder_id}")
+            print(f"  📊 Matriz: '{matrix_file_name}'")
 
-            # 3. Cargar workbook y hoja de contenido
+            # 3. Cargar workbook
             wb = self.read_workbook(matrix_file_id)
             if wb is None:
                 return {'success': False, 'error': 'No se pudo leer el Excel'}
-
             ws = self.get_content_sheet(wb)
             if ws is None:
-                return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones" (2da hoja)'}
+                return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones"'}
 
-            # 4. Parsear requisitos para la sección
-            requirements, col_map, _ = self.parse_requirements(ws, section_name)
-            if not requirements:
+            header_row_idx, col_map = self._find_header_row(ws)
+
+            # 4. Parsear requisitos AGRUPADOS por tipo de documento
+            groups = self.parse_requirements_by_group(ws, section_name, col_map, header_row_idx)
+            if not groups:
                 return {
                     'success': False,
-                    'error': f'No se encontraron requisitos aplicables para la sección "{section_name}"'
+                    'error': f'No se encontraron requisitos para la sección "{section_name}"'
                 }
 
-            # 5. Descargar y extraer texto de todos los documentos
-            doc_texts = self.download_and_extract_all_docs(semana_folder_id)
+            # 5. Descargar y extraer texto de TODOS los documentos de la carpeta
+            doc_texts, files_metadata = self.download_and_extract_all_docs(semana_folder_id)
             if not doc_texts:
                 return {
                     'success': False,
                     'error': 'No se encontraron documentos PDF/DOCX/PPTX en la carpeta'
                 }
-            combined_text = self.combine_document_texts(doc_texts)
-            print(f"  📝 Texto combinado: {len(combined_text)} caracteres de {len(doc_texts)} documento(s)")
+            print(f"  📁 {len(doc_texts)} documento(s) en la carpeta")
 
-            # 6. Evaluar cada requisito con Gemini
-            results: List[Dict] = []
-            for i, req in enumerate(requirements, 1):
-                print(f"  🔍 [{i}/{len(requirements)}] '{req['sub_seccion'][:60]}...' ")
-                result = self._evaluate_requirement(
-                    req['sub_seccion'],
-                    combined_text,
-                    section_name,
-                    req['autor'],
-                    use_gemini=use_gemini,
-                    model_name=active_model_name
+            # 6. Validar cada grupo contra su documento específico
+            group_results: List[Dict] = []
+            already_matched: set = set()      # evitar asignar el mismo archivo a 2 grupos
+            total_present = 0
+            total_absent  = 0
+            call_count    = 0
+
+            for group in groups:
+                # 6a. Buscar el archivo correspondiente al tipo de documento
+                matched_file = self._match_file_to_group(
+                    group['group_name'], files_metadata, already_matched
                 )
-                results.append(result)
-                print(f"    → {result['presente']}: {result['observacion'][:80]}")
-                # Pausa entre llamadas a Gemini para evitar rate limiting
-                if self.enabled and i < len(requirements):
-                    time.sleep(0.5)
+                file_found    = matched_file is not None
+                matched_name  = matched_file['name'] if matched_file else None
+                if matched_name:
+                    already_matched.add(matched_name)
 
-            # 7. Calcular estadísticas
-            present_count  = sum(1 for r in results if r['presente'] == 'Si')
-            absent_count   = len(results) - present_count
-            compliance_pct = round(present_count / len(results) * 100, 2) if results else 0
+                doc_text = doc_texts.get(matched_name, '') if matched_name else ''
 
-            print(f"\n✅ Validación completada: {present_count}/{len(results)} ({compliance_pct}%) presentes")
+                print(f"\n  📑 Grupo '{group['group_name']}' → "
+                      f"{'archivo: ' + matched_name if file_found else '⚠️ sin archivo'}")
 
-            # 8. Crear nuevo Excel de reporte (NO modifica la matriz original)
+                # 6b. Evaluar cada parámetro del grupo
+                params_results: List[Dict] = []
+                present_in_group = 0
+                absent_in_group  = 0
+
+                for i, param in enumerate(group['params'], 1):
+                    sub = param['sub_seccion']
+                    print(f"    [{i}/{len(group['params'])}] '{sub[:55]}' ...", end=" ")
+
+                    if not file_found or not doc_text.strip():
+                        result_eval = {
+                            'presente':    'No',
+                            'observacion': (f'Documento tipo "{group["group_name"]}" no encontrado '
+                                           f'en la carpeta "{semana_folder_name}"'),
+                        }
+                        absent_in_group += 1
+                    else:
+                        result_eval = self._evaluate_requirement(
+                            sub, doc_text, section_name, param['autor'],
+                            use_gemini=use_gemini, model_name=active_model_name
+                        )
+                        if result_eval['presente'] == 'Si':
+                            present_in_group += 1
+                        else:
+                            absent_in_group += 1
+                        call_count += 1
+                        if self.enabled and call_count % 3 == 0:
+                            time.sleep(0.4)     # rate limiting suave
+
+                    print(f"→ {result_eval['presente']}")
+                    params_results.append({
+                        'sub_seccion': sub,
+                        'autor':       param['autor'],
+                        'presente':    result_eval['presente'],
+                        'observacion': result_eval['observacion'],
+                    })
+
+                total_present += present_in_group
+                total_absent  += absent_in_group
+                g_total = len(group['params'])
+                g_pct   = round(present_in_group / g_total * 100, 2) if g_total else 0
+
+                group_results.append({
+                    'group_name':           group['group_name'],
+                    'matched_file':         matched_name,
+                    'file_found':           file_found,
+                    'total_params':         g_total,
+                    'present_count':        present_in_group,
+                    'absent_count':         absent_in_group,
+                    'compliance_percentage': g_pct,
+                    'results':              params_results,
+                })
+                print(f"  ✅ '{group['group_name']}': {present_in_group}/{g_total} ({g_pct}%)")
+
+            # 7. Estadísticas globales
+            total_requirements = total_present + total_absent
+            compliance_pct = round(total_present / total_requirements * 100, 2) if total_requirements else 0
+
+            # Lista plana para compatibilidad (report, batch, etc.)
+            flat_results = [r for g in group_results for r in g['results']]
+            # Flat requirements list for report builder
+            flat_requirements = [
+                {'sub_seccion': r['sub_seccion'], 'autor': r['autor']}
+                for r in flat_results
+            ]
+
+            print(f"\n✅ Validación: {total_present}/{total_requirements} ({compliance_pct}%) presentes "
+                  f"en {len(groups)} grupo(s)")
+
+            # 8. Generar reporte Excel (sin tocar la matriz original)
             report_bytes = self._build_report_excel(
                 section_name   = section_name,
-                requirements   = requirements,
-                results        = results,
+                requirements   = flat_requirements,
+                results        = flat_results,
                 compliance_pct = compliance_pct,
                 docs_analyzed  = list(doc_texts.keys()),
                 model_name     = active_model_name,
+                groups         = group_results,
             )
             report_info = self._save_report(report_bytes, section_name, semana_folder_id)
             if report_info:
-                print(f"  📄 Reporte generado en Drive: '{report_info.get('name')}'")
-            else:
-                print(f"  ⚠️  No se pudo guardar el reporte en Drive")
+                print(f"  📄 Reporte: '{report_info.get('name')}'")
 
             return {
                 'success':               True,
                 'section':               section_name,
-                'total_requirements':    len(requirements),
-                'present_count':         present_count,
-                'absent_count':          absent_count,
+                'total_requirements':    total_requirements,
+                'present_count':         total_present,
+                'absent_count':          total_absent,
                 'compliance_percentage': compliance_pct,
-                'results': [
-                    {
-                        'sub_seccion': req['sub_seccion'],
-                        'autor':       req['autor'],
-                        'presente':    result['presente'],
-                        'observacion': result['observacion'],
-                    }
-                    for req, result in zip(requirements, results)
-                ],
-                'documents_analyzed':  list(doc_texts.keys()),
-                'report_generated':    report_info is not None,
-                'report_name':         report_info.get('name') if report_info else None,
-                'report_link':         report_info.get('webViewLink') if report_info else None,
-                'excel_updated':       False,   # compatibilidad: ya no se modifica la matriz
-                'gemini_enabled':      self.enabled,
+                # NUEVO: desglose por grupo
+                'groups':                group_results,
+                # Compatibilidad hacia atrás (batch, history)
+                'results':               flat_results,
+                'documents_analyzed':    list(doc_texts.keys()),
+                'report_generated':      report_info is not None,
+                'report_name':           report_info.get('name') if report_info else None,
+                'report_link':           report_info.get('webViewLink') if report_info else None,
+                'excel_updated':         False,
+                'gemini_enabled':        self.enabled,
             }
 
         except Exception as e:
