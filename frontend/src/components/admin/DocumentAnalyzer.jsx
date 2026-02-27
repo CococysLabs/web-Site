@@ -200,132 +200,196 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
     if (!analysisResult) return null;
 
     const { analysis } = analysisResult;
-    const { existence, structure, context } = analysis;
+    const { existence, structure, context, quality } = analysis;
+
+    // Color del score de calidad
+    const scoreColor = (s) =>
+      s >= 80 ? '#10b981' : s >= 60 ? '#f59e0b' : s >= 40 ? '#f97316' : '#ef4444';
+    const scoreBg = (s) =>
+      s >= 80 ? 'rgba(16,185,129,0.1)' : s >= 60 ? 'rgba(245,158,11,0.1)' : s >= 40 ? 'rgba(249,115,22,0.1)' : 'rgba(239,68,68,0.1)';
+
+    const score = quality?.score ?? 0;
 
     return (
       <div className="analysis-modal-overlay" onClick={() => setAnalysisResult(null)}>
-        <div className="analysis-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="analysis-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '860px' }}>
           {/* Header */}
           <div className="modal-header">
             <div className="modal-title-wrapper">
-              <h2 className="modal-title">Análisis de Documento</h2>
+              <h2 className="modal-title">🔍 Análisis de Documento</h2>
               <p className="modal-subtitle">{selectedFile?.name}</p>
+              {analysis.gemini_enabled === false && (
+                <span style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '4px', display: 'block' }}>
+                  ⚠️ Análisis básico (Gemini no disponible)
+                </span>
+              )}
             </div>
-            <button className="modal-close" onClick={() => setAnalysisResult(null)}>
-              ✕
-            </button>
+            <button className="modal-close" onClick={() => setAnalysisResult(null)}>✕</button>
           </div>
 
-          {/* Content */}
           <div className="modal-content">
-            {/* Sección: Existencia */}
+
+            {/* ── 1. Calidad académica (score destacado) ── */}
+            {quality && (
+              <div style={{ background: scoreBg(score), border: `1px solid ${scoreColor(score)}30`, borderRadius: '10px', padding: '16px 20px', marginBottom: '16px', display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                {/* Score circular */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '80px' }}>
+                  <div style={{ width: 72, height: 72, borderRadius: '50%', background: `conic-gradient(${scoreColor(score)} ${score}%, var(--border-light) 0)`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                    <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '1.1rem', fontWeight: 800, color: scoreColor(score) }}>{score}</span>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '0.7rem', marginTop: '4px', fontWeight: 600, color: scoreColor(score), textTransform: 'uppercase' }}>{quality.level}</span>
+                </div>
+
+                {/* Fortalezas y debilidades */}
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <p style={{ fontWeight: 700, marginBottom: '8px', fontSize: '0.875rem' }}>📊 Evaluación de Calidad Académica</p>
+                  {quality.strengths?.length > 0 && (
+                    <div style={{ marginBottom: '6px' }}>
+                      {quality.strengths.map((s, i) => (
+                        <div key={i} style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', gap: '5px', marginBottom: '3px' }}>
+                          <span>✓</span><span>{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {quality.weaknesses?.length > 0 && (
+                    <div>
+                      {quality.weaknesses.map((w, i) => (
+                        <div key={i} style={{ fontSize: '0.8rem', color: '#ef4444', display: 'flex', gap: '5px', marginBottom: '3px' }}>
+                          <span>✗</span><span>{w}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Recomendaciones */}
+                {quality.recommendations?.length > 0 && (
+                  <div style={{ minWidth: 200, flex: 1 }}>
+                    <p style={{ fontWeight: 700, marginBottom: '8px', fontSize: '0.875rem' }}>💡 Recomendaciones</p>
+                    {quality.recommendations.map((r, i) => (
+                      <div key={i} style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', gap: '5px', marginBottom: '3px' }}>
+                        <span style={{ color: '#8b5cf6' }}>→</span><span>{r}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── 2. Información General ── */}
             <div className="analysis-section">
               <h3>📄 Información General</h3>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                {existence.readable && (
-                  <span className="status-badge success">
-                    ✓ Legible
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                {existence.readable && <span className="status-badge success">✓ Legible</span>}
+                {existence.has_images && <span className="status-badge success">🖼️ Con imágenes</span>}
+                {context?.document_type && context.document_type !== 'desconocido' && (
+                  <span className="status-badge" style={{ background: 'rgba(139,92,246,0.12)', color: '#7c3aed' }}>
+                    📑 {context.document_type}
                   </span>
                 )}
-                {existence.has_images && (
-                  <span className="status-badge success">
-                    🖼️ Con Imágenes
+                {context?.language && context.language !== 'desconocido' && (
+                  <span className="status-badge" style={{ background: 'rgba(59,130,246,0.12)', color: '#2563eb' }}>
+                    🌐 {context.language}
                   </span>
                 )}
-                {existence.has_metadata && (
-                  <span className="status-badge success">
-                    📋 Con Metadatos
+                {context?.academic_level && context.academic_level !== 'no determinado' && (
+                  <span className="status-badge" style={{ background: 'rgba(16,185,129,0.12)', color: '#065f46' }}>
+                    🎓 {context.academic_level}
                   </span>
                 )}
               </div>
-              <ul className="analysis-list">
-                <li><strong>Páginas:</strong> {existence.pages}</li>
-                <li><strong>Tamaño:</strong> {existence.file_size_kb} KB</li>
-                {existence.images_count > 0 && (
-                  <li><strong>Imágenes detectadas:</strong> {existence.images_count}</li>
-                )}
-              </ul>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '10px' }}>
+                {[
+                  existence.pages != null && { label: 'Páginas/Slides', value: existence.pages },
+                  existence.slides != null && { label: 'Diapositivas', value: existence.slides },
+                  existence.sheet_count != null && { label: 'Hojas', value: existence.sheet_count },
+                  existence.word_count > 0 && { label: 'Palabras', value: existence.word_count?.toLocaleString() },
+                  existence.reading_time_min > 0 && { label: 'Lectura aprox.', value: `${existence.reading_time_min} min` },
+                  existence.file_size_kb && { label: 'Tamaño', value: `${existence.file_size_kb} KB` },
+                  existence.paragraph_count != null && { label: 'Párrafos', value: existence.paragraph_count },
+                  existence.table_count != null && { label: 'Tablas', value: existence.table_count },
+                ].filter(Boolean).map((item, i) => (
+                  <div key={i} style={{ background: 'var(--bg-secondary)', borderRadius: '8px', padding: '10px 14px' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{item.label}</div>
+                    <div style={{ fontWeight: 700, fontSize: '1rem', marginTop: '2px' }}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Hojas de Excel */}
+              {existence.sheet_summaries?.length > 0 && (
+                <div style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  <strong>Hojas:</strong> {existence.sheet_summaries.join(' · ')}
+                </div>
+              )}
             </div>
 
-            {/* Sección: Estructura */}
-            <div className="analysis-section">
-              <h3>🏗️ Estructura del Documento</h3>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                {structure.has_table_of_contents && (
-                  <span className="status-badge success">
-                    ✓ Tabla de Contenidos
-                  </span>
+            {/* ── 3. Resumen de contenido ── */}
+            {context?.summary && (
+              <div className="analysis-section">
+                <h3>💡 Contenido</h3>
+                <p style={{ lineHeight: 1.7, color: 'var(--text-secondary)', marginBottom: '14px' }}>{context.summary}</p>
+
+                {context.main_topics?.length > 0 && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <p style={{ fontWeight: 600, marginBottom: '6px', fontSize: '0.875rem' }}>Temas principales:</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {context.main_topics.map((topic, i) => (
+                        <span key={i} style={{ padding: '3px 10px', background: 'rgba(59,130,246,0.1)', color: '#2563eb', borderRadius: '999px', fontSize: '0.8rem' }}>{topic}</span>
+                      ))}
+                    </div>
+                  </div>
                 )}
-                {structure.has_bibliography && (
-                  <span className="status-badge success">
-                    ✓ Bibliografía
-                  </span>
-                )}
-                {structure.has_tables && (
-                  <span className="status-badge success">
-                    📊 Tablas
-                  </span>
+
+                {context.keywords?.length > 0 && (
+                  <div>
+                    <p style={{ fontWeight: 600, marginBottom: '6px', fontSize: '0.875rem' }}>Palabras clave:</p>
+                    <div className="keywords-container">
+                      {context.keywords.map((kw, i) => <span key={i} className="keyword-tag">{kw}</span>)}
+                    </div>
+                  </div>
                 )}
               </div>
+            )}
 
-              {structure.sections && structure.sections.length > 0 && (
+            {/* ── 4. Estructura ── */}
+            <div className="analysis-section">
+              <h3>🏗️ Estructura</h3>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                {[
+                  structure.has_table_of_contents && '✓ Tabla de contenidos',
+                  structure.has_bibliography && '✓ Bibliografía',
+                  structure.has_tables && '📊 Tablas',
+                  structure.has_images && '🖼️ Imágenes',
+                ].filter(Boolean).map((label, i) => (
+                  <span key={i} className="status-badge success">{label}</span>
+                ))}
+                {[
+                  !structure.has_table_of_contents && '✗ Sin tabla de contenidos',
+                  !structure.has_bibliography && '✗ Sin bibliografía',
+                ].filter(Boolean).map((label, i) => (
+                  <span key={i} className="status-badge error">{label}</span>
+                ))}
+              </div>
+              {structure.sections?.length > 0 && (
                 <div>
-                  <p><strong>Secciones encontradas:</strong> {structure.total_sections || structure.sections.length}</p>
-                  <ul className="analysis-list">
-                    {structure.sections.slice(0, 8).map((section, idx) => (
-                      <li key={idx}>
-                        {typeof section === 'string' ? section : section.title}
-                      </li>
+                  <p style={{ fontWeight: 600, marginBottom: '6px', fontSize: '0.875rem' }}>
+                    Secciones detectadas ({structure.total_sections || structure.sections.length}):
+                  </p>
+                  <ul className="analysis-list" style={{ maxHeight: '160px', overflowY: 'auto' }}>
+                    {structure.sections.slice(0, 12).map((s, i) => (
+                      <li key={i}>{typeof s === 'string' ? s : s.title}</li>
                     ))}
-                    {structure.sections.length > 8 && (
-                      <li style={{ opacity: 0.7 }}>... y {structure.sections.length - 8} secciones más</li>
+                    {structure.sections.length > 12 && (
+                      <li style={{ opacity: 0.6 }}>... y {structure.sections.length - 12} más</li>
                     )}
                   </ul>
                 </div>
               )}
             </div>
 
-            {/* Sección: Contexto */}
-            <div className="analysis-section">
-              <h3>💡 Análisis de Contenido</h3>
-              
-              {context.summary && (
-                <div style={{ marginBottom: '16px' }}>
-                  <p><strong>Resumen:</strong></p>
-                  <p style={{ lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                    {context.summary}
-                  </p>
-                </div>
-              )}
-
-              {context.language && (
-                <p><strong>Idioma detectado:</strong> {context.language}</p>
-              )}
-
-              {context.keywords && context.keywords.length > 0 && (
-                <div>
-                  <p><strong>Palabras clave:</strong></p>
-                  <div className="keywords-container">
-                    {context.keywords.map((keyword, idx) => (
-                      <span key={idx} className="keyword-tag">
-                        {keyword}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {context.main_topics && context.main_topics.length > 0 && (
-                <div style={{ marginTop: '16px' }}>
-                  <p><strong>Temas principales:</strong></p>
-                  <ul className="analysis-list">
-                    {context.main_topics.map((topic, idx) => (
-                      <li key={idx}>{topic}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>

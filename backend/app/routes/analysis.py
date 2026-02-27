@@ -63,19 +63,15 @@ async def analyze_drive_file(
         file_name = file_metadata.get('name', 'Unknown')
         mime_type = file_metadata.get('mimeType', '')
 
-        # Verificar que sea un formato soportado (PDF, DOCX, PPTX)
+        # Verificar que sea un formato soportado (incluyendo Google Workspace nativos)
         from app.services.analysis_service import SUPPORTED_MIMES
-        supported = any(
-            frag in mime_type
-            for frag in ('pdf', 'wordprocessingml', 'presentationml')
-        )
-        if not supported:
+        if mime_type not in SUPPORTED_MIMES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Formato no soportado: {mime_type}. Se aceptan PDF, DOCX y PPTX."
+                detail=f"Formato no soportado: {mime_type}. Se aceptan PDF, DOCX, PPTX, XLSX, TXT y archivos de Google Workspace."
             )
 
-        # Descargar el archivo
+        # Descargar (o exportar si es Google Workspace)
         print(f"📥 Descargando: {file_name} ({mime_type})")
         file_content = drive_service.download_file(request.file_id)
 
@@ -85,20 +81,25 @@ async def analyze_drive_file(
                 detail="Error al descargar el archivo desde Drive"
             )
 
+        # Para archivos de Google Workspace, el mime efectivo es el formato exportado
+        effective_mime = drive_service.get_effective_mime(mime_type)
+
         # Analizar el documento completo
-        print(f"🔍 Analizando: {file_name}")
-        analysis_result = analysis_service.analyze_complete(file_content, mime_type)
+        print(f"🔍 Analizando: {file_name} (effective mime: {effective_mime})")
+        analysis_result = analysis_service.analyze_complete(file_content, effective_mime)
         
         # Guardar o actualizar en la base de datos
         existing_doc = db.query(Document).filter(
             Document.drive_file_id == request.file_id
         ).first()
         
-        # Determinar DocumentType a partir de mime_type
-        if 'wordprocessingml' in mime_type:
+        # Determinar DocumentType a partir del mime efectivo
+        if 'wordprocessingml' in effective_mime or 'google-apps.document' in mime_type:
             doc_type = DocumentType.WORD
-        elif 'presentationml' in mime_type:
+        elif 'presentationml' in effective_mime or 'google-apps.presentation' in mime_type:
             doc_type = DocumentType.POWERPOINT
+        elif 'spreadsheetml' in effective_mime or 'google-apps.spreadsheet' in mime_type:
+            doc_type = DocumentType.EXCEL
         else:
             doc_type = DocumentType.PDF
 

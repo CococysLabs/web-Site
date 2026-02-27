@@ -110,20 +110,50 @@ class GoogleDriveService:
             print(f"Error getting file metadata: {e}")
             return None
     
+    # MIME types de Google Workspace → formato de exportación
+    GOOGLE_EXPORT_MAP = {
+        'application/vnd.google-apps.document':     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.google-apps.spreadsheet':  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.google-apps.presentation': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    }
+
+    def get_effective_mime(self, original_mime: str) -> str:
+        """
+        Para archivos nativos de Google Workspace, retorna el MIME del formato
+        exportado (DOCX/XLSX/PPTX). Para el resto, retorna el mismo MIME.
+        """
+        return self.GOOGLE_EXPORT_MAP.get(original_mime, original_mime)
+
     def download_file(self, file_id: str) -> Optional[bytes]:
-        """Descargar un archivo de Drive"""
+        """
+        Descarga un archivo de Drive.
+        Para archivos nativos de Google Workspace (Docs/Sheets/Slides),
+        los exporta automáticamente como DOCX/XLSX/PPTX.
+        """
         if not self.service:
             return None
-        
         try:
-            request = self.service.files().get_media(fileId=file_id)
+            # Obtener el MIME real del archivo
+            meta = self.service.files().get(
+                fileId=file_id, fields="mimeType"
+            ).execute()
+            mime = meta.get('mimeType', '')
+
+            export_mime = self.GOOGLE_EXPORT_MAP.get(mime)
+            if export_mime:
+                # Exportar archivo Google Workspace a formato Office
+                request = self.service.files().export_media(
+                    fileId=file_id, mimeType=export_mime
+                )
+                print(f"  ↳ Exportando Google Workspace file como {export_mime.split('.')[-1]}")
+            else:
+                request = self.service.files().get_media(fileId=file_id)
+
             file_buffer = io.BytesIO()
             downloader = MediaIoBaseDownload(file_buffer, request)
-            
             done = False
             while not done:
-                status, done = downloader.next_chunk()
-            
+                _, done = downloader.next_chunk()
             file_buffer.seek(0)
             return file_buffer.read()
         except Exception as e:
