@@ -47,6 +47,23 @@ SUPPORTED_MIMES = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
+# Vocabulario de tipos de documento que actúan como encabezados de grupo en el Excel.
+# Cuando sub_seccion normalizada coincide con alguno de estos, se trata como
+# separador de grupo aunque tenga Aplica=Si (el Excel lo marca así).
+DOCUMENT_TYPE_HEADERS: set = {
+    'presentacion', 'presentación',
+    'lectura', 'reading',
+    'video',
+    'cuestionario',
+    'actividad',
+    'tarea',
+    'practica', 'práctica',
+    'proyecto',
+    'guia', 'guía',
+    'informe',
+    'reporte',
+}
+
 
 class DocumentContentValidationService:
     """
@@ -371,12 +388,20 @@ class DocumentContentValidationService:
             aplica_val = ws.cell(row=row_idx, column=aplica_col).value if aplica_col else None
             aplica_norm = self._normalize(str(aplica_val or ''))
 
-            if aplica_norm != 'si':
-                # Fila sin Aplica=Si → encabezado de tipo de documento
+            # Detectar si esta fila es encabezado de tipo de documento.
+            # Estrategia dual:
+            #   1. Aplica != 'Si'  (estructura tradicional)
+            #   2. Sub-sección normalizada está en DOCUMENT_TYPE_HEADERS
+            #      (cubre Excels donde TODOS los aplica=Si, incluido el encabezado)
+            sub_norm = self._normalize(sub_str)
+            is_group_header = (aplica_norm != 'si') or (sub_norm in DOCUMENT_TYPE_HEADERS)
+
+            if is_group_header:
+                # Fila de tipo de documento → nuevo grupo
                 current_group = {'group_name': sub_str, 'params': []}
                 groups.append(current_group)
             else:
-                # Fila con Aplica=Si → parámetro del grupo actual
+                # Fila con Aplica=Si y no es tipo de documento → parámetro del grupo actual
                 autor_val = ws.cell(row=row_idx, column=autor_col).value if autor_col else None
                 param = {
                     'row_idx':    row_idx,
@@ -470,10 +495,15 @@ class DocumentContentValidationService:
                         return f
                 break   # intentar solo la primera pista que aplique
 
-        # 3. Cualquier archivo soportado disponible
+        # 3. Cualquier archivo soportado disponible (no asignado aún)
         for f in files_metadata:
             if f['name'] not in already_matched:
                 return f
+
+        # 4. Fallback: si solo hay UN archivo y todos los grupos lo necesitan,
+        #    compartir el mismo archivo (caso común: una carpeta con un solo PDF).
+        if files_metadata:
+            return files_metadata[0]
 
         return None
 
