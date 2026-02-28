@@ -723,6 +723,98 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
 
         return last_result
 
+    def _evaluate_group_batch(
+        self,
+        params: List[Dict],
+        doc_text: str,
+        section_name: str,
+        group_name: str,
+        use_gemini: bool = True,
+        model_name: Optional[str] = None,
+    ) -> List[Dict[str, str]]:
+        """
+        Evalúa TODOS los parámetros de un grupo en UNA SOLA llamada a Gemini.
+        Reduce N llamadas a 1 por grupo → de 18 llamadas a 3 por Semana.
+
+        Retorna lista ordenada de {'presente', 'observacion'} por parámetro.
+        Si Gemini falla, aplica fallback keyword por cada param.
+        """
+        if not use_gemini or not self.enabled:
+            return [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
+
+        # Truncar texto al máximo razonable para un solo prompt
+        max_chars = MAX_CHUNK_CHARS
+        doc_snippet = doc_text[:max_chars]
+
+        reqs_list = "\n".join(
+            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
+        )
+
+        prompt = f"""Eres un evaluador académico riguroso. Analiza el siguiente contenido de un documento universitario y determina si cubre cada uno de los requisitos listados.
+
+SECCIÓN DEL CURSO: {section_name}
+TIPO DE DOCUMENTO: {group_name}
+
+Un requisito se considera PRESENTE (Si) si el documento lo aborda, aunque sea con terminología diferente, mediante ejemplos, o de forma implícita.
+Un requisito se considera AUSENTE (No) si el tema no aparece en ninguna forma o el contenido es claramente insuficiente.
+
+REQUISITOS A EVALUAR:
+{reqs_list}
+
+CONTENIDO DEL DOCUMENTO:
+{doc_snippet}
+
+Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), con exactamente {len(params)} objetos en el mismo orden que los requisitos:
+[
+  {{"presente": "Si" o "No", "observacion": "Explicación breve de 1 oración"}},
+  ...
+]"""
+
+        MAX_RETRIES = 3
+        for attempt in range(MAX_RETRIES):
+            try:
+                import google.generativeai as genai
+                active_model = genai.GenerativeModel(model_name or GEMINI_MODEL)
+                response = active_model.generate_content(prompt)
+                raw = response.text.strip()
+                raw = re.sub(r'^```json?\s*', '', raw)
+                raw = re.sub(r'\s*```$', '', raw)
+                parsed = json.loads(raw)
+
+                if not isinstance(parsed, list):
+                    raise ValueError("Respuesta no es lista")
+
+                results = []
+                for i, p in enumerate(params):
+                    if i < len(parsed):
+                        item = parsed[i]
+                        results.append({
+                            'presente':    str(item.get('presente', 'No')),
+                            'observacion': str(item.get('observacion', '')),
+                        })
+                    else:
+                        results.append(self._fallback_keyword_check(p['sub_seccion'], doc_text))
+                return results
+
+            except json.JSONDecodeError:
+                print(f"  ⚠️  Batch JSON inválido (intento {attempt+1}), fallback por parámetro")
+                break
+            except Exception as e:
+                err_str = str(e)
+                if '429' in err_str or 'quota' in err_str.lower() or 'RESOURCE_EXHAUSTED' in err_str:
+                    wait = 2 ** (attempt + 1)   # 2s, 4s, 8s
+                    print(f"  ⏳ Quota excedida, esperando {wait}s... (intento {attempt+1}/{MAX_RETRIES})")
+                    time.sleep(wait)
+                    if attempt == MAX_RETRIES - 1:
+                        print(f"  ⚠️  Gemini quota agotada tras {MAX_RETRIES} intentos, usando fallback")
+                        break
+                else:
+                    print(f"  ⚠️  Error Gemini batch: {e}")
+                    break
+
+        # Fallback: keyword check para cada param
+        return [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
+
     # ──────────────────────────────────────────────────────────────────────────
     # Generación del reporte Excel (archivo nuevo, no modifica la matriz)
     # ──────────────────────────────────────────────────────────────────────────
@@ -1009,7 +1101,6 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
             already_matched: set = set()      # evitar asignar el mismo archivo a 2 grupos
             total_present = 0
             total_absent  = 0
-            call_count    = 0
 
             for group in groups:
                 # 6a. Buscar el archivo correspondiente al tipo de documento
@@ -1026,41 +1117,47 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
                 print(f"\n  📑 Grupo '{group['group_name']}' → "
                       f"{'archivo: ' + matched_name if file_found else '⚠️ sin archivo'}")
 
-                # 6b. Evaluar cada parámetro del grupo
+                # 6b. Evaluar TODOS los parámetros del grupo en UNA sola llamada batch
                 params_results: List[Dict] = []
                 present_in_group = 0
                 absent_in_group  = 0
+                n = len(group['params'])
 
-                for i, param in enumerate(group['params'], 1):
-                    sub = param['sub_seccion']
-                    print(f"    [{i}/{len(group['params'])}] '{sub[:55]}' ...", end=" ")
-
-                    if not file_found or not doc_text.strip():
-                        result_eval = {
+                if not file_found or not doc_text.strip():
+                    # Sin archivo → todos ausentes
+                    batch_evals = [
+                        {
                             'presente':    'No',
                             'observacion': (f'Documento tipo "{group["group_name"]}" no encontrado '
                                            f'en la carpeta "{semana_folder_name}"'),
                         }
-                        absent_in_group += 1
-                    else:
-                        result_eval = self._evaluate_requirement(
-                            sub, doc_text, section_name, param['autor'],
-                            use_gemini=use_gemini, model_name=active_model_name
-                        )
-                        if result_eval['presente'] == 'Si':
-                            present_in_group += 1
-                        else:
-                            absent_in_group += 1
-                        call_count += 1
-                        if self.enabled and call_count % 3 == 0:
-                            time.sleep(0.4)     # rate limiting suave
+                        for _ in group['params']
+                    ]
+                else:
+                    print(f"    🤖 Batch Gemini: {n} parámetros en 1 llamada...")
+                    batch_evals = self._evaluate_group_batch(
+                        params     = group['params'],
+                        doc_text   = doc_text,
+                        section_name = section_name,
+                        group_name = group['group_name'],
+                        use_gemini = use_gemini,
+                        model_name = active_model_name,
+                    )
+                    # Pausa cortés entre grupos (no entre parámetros)
+                    time.sleep(1.5)
 
-                    print(f"→ {result_eval['presente']}")
+                for i, (param, eval_r) in enumerate(zip(group['params'], batch_evals), 1):
+                    sub = param['sub_seccion']
+                    print(f"    [{i}/{n}] '{sub[:50]}' → {eval_r['presente']}")
+                    if eval_r['presente'] == 'Si':
+                        present_in_group += 1
+                    else:
+                        absent_in_group += 1
                     params_results.append({
                         'sub_seccion': sub,
                         'autor':       param['autor'],
-                        'presente':    result_eval['presente'],
-                        'observacion': result_eval['observacion'],
+                        'presente':    eval_r['presente'],
+                        'observacion': eval_r['observacion'],
                     })
 
                 total_present += present_in_group
