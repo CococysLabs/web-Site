@@ -570,7 +570,7 @@ async def export_validations_csv(
     """
     Exportar historial de validaciones como CSV (solo admin)
     """
-    if current_user.role != UserRole.admin:
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="No tienes permisos")
 
     import csv
