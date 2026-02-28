@@ -42,9 +42,14 @@ CHUNK_OVERLAP      = 500
 EXCEL_MIME_TYPE    = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 SUPPORTED_MIMES = {
+    # Formatos binarios directos
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    # Google Workspace nativos — drive_service los exporta automáticamente
+    "application/vnd.google-apps.presentation",   # → PPTX
+    "application/vnd.google-apps.document",        # → DOCX
+    "application/vnd.google-apps.spreadsheet",     # → XLSX (no se usa para extracción)
 }
 
 # Vocabulario de tipos de documento que actúan como ENCABEZADOS de grupo en el Excel.
@@ -548,13 +553,19 @@ class DocumentContentValidationService:
                 print(f"  ↷ Omitiendo '{name}' (MIME: {mime})")
                 continue
 
-            print(f"  ⬇️  Descargando '{name}'...")
+            # Para Google Workspace nativos, drive_service.download_file() exporta
+            # automáticamente (Slides→PPTX, Docs→DOCX). Necesitamos el MIME efectivo
+            # (después de exportar) para elegir el extractor correcto.
+            effective_mime = drive_service.get_effective_mime(mime)
+
+            tipo = "exportando" if effective_mime != mime else "descargando"
+            print(f"  ⬇️  {tipo.capitalize()} '{name}' [{effective_mime.split('.')[-1]}]...")
             file_bytes = drive_service.download_file(f['id'])
             if not file_bytes:
-                print(f"  ⚠️  No se pudo descargar '{name}'")
+                print(f"  ⚠️  No se pudo obtener '{name}'")
                 continue
 
-            text = self.extract_text_from_bytes(file_bytes, mime)
+            text = self.extract_text_from_bytes(file_bytes, effective_mime)
             doc_texts[name] = text
             files_metadata.append({'name': name, 'mimeType': mime, 'id': f.get('id', '')})
             print(f"  📄 '{name}': {len(text)} chars | {len(text.split())} palabras")
@@ -670,26 +681,42 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
     def _fallback_keyword_check(self, requirement_text: str, doc_text: str) -> Dict[str, str]:
         """
         Fallback cuando Gemini no está disponible o falla.
-        Busca palabras clave del requisito en el texto del documento.
+        Búsqueda inteligente de palabras clave con matching parcial (stem-like).
         """
         norm_req = self._normalize(requirement_text)
         norm_doc = self._normalize(doc_text)
-        # Extraer palabras significativas (>3 chars) del requisito
-        keywords = [w for w in norm_req.split() if len(w) > 3]
-        if not keywords:
-            return {'presente': 'No', 'observacion': 'Análisis básico sin IA: sin palabras clave'}
 
-        hits = sum(1 for kw in keywords if kw in norm_doc)
-        ratio = hits / len(keywords)
-        if ratio >= 0.4:
+        # Palabras significativas (≥4 chars), sin stopwords básicas
+        STOPWORDS = {'para', 'como', 'esta', 'este', 'esto', 'cion', 'idad', 'mente', 'del', 'los', 'las', 'con', 'que', 'una', 'por', 'sus'}
+        keywords = [w for w in norm_req.split() if len(w) >= 4 and w not in STOPWORDS]
+
+        if not keywords:
             return {
-                'presente': 'Si',
-                'observacion': f'Análisis básico sin IA: {hits}/{len(keywords)} términos clave encontrados'
+                'presente': 'No',
+                'observacion': f'Sin IA (quota agotada): el requisito "{requirement_text}" no tiene términos evaluables'
             }
-        return {
-            'presente': 'No',
-            'observacion': f'Análisis básico sin IA: solo {hits}/{len(keywords)} términos clave encontrados'
-        }
+
+        # Match parcial: cada keyword se busca como substring Y por sus primeros 5 chars (stem)
+        found = []
+        missing = []
+        for kw in keywords:
+            stem = kw[:5]
+            if kw in norm_doc or stem in norm_doc:
+                found.append(kw)
+            else:
+                missing.append(kw)
+
+        ratio = len(found) / len(keywords)
+        presente = 'Si' if ratio >= 0.35 else 'No'
+
+        found_str   = ', '.join(found[:4])   or '—'
+        missing_str = ', '.join(missing[:4]) or '—'
+        obs = (
+            f'Sin IA (quota agotada): encontrado [{found_str}]'
+            + (f' | faltante [{missing_str}]' if missing else '')
+            + f' ({len(found)}/{len(keywords)} términos)'
+        )
+        return {'presente': presente, 'observacion': obs}
 
     def _evaluate_requirement(
         self,
