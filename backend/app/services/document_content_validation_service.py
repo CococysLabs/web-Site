@@ -47,18 +47,21 @@ SUPPORTED_MIMES = {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 
-# Vocabulario de tipos de documento que actúan como encabezados de grupo en el Excel.
-# Cuando sub_seccion normalizada coincide con alguno de estos, se trata como
-# separador de grupo aunque tenga Aplica=Si (el Excel lo marca así).
+# Vocabulario de tipos de documento que actúan como ENCABEZADOS de grupo en el Excel.
+# Solo nombres que representan el TIPO de archivo a buscar en Drive, no parámetros
+# de contenido. Cuestionario/Actividad/Tarea/etc. son parámetros DENTRO de un tipo.
+#
+# Regla de inclusión: ¿corresponde a un archivo separado en Drive?
+#   ✓ Presentación → Presentacion_S2.pptx
+#   ✓ Lectura      → Lectura_S2.pdf
+#   ✓ Video        → Video_S2.mp4 (o cuestionario PDF asociado al video)
+#   ✗ Cuestionario → es un parámetro/requisito DENTRO del Video, no un archivo propio
+#   ✗ Actividad    → ídem
 DOCUMENT_TYPE_HEADERS: set = {
     'presentacion', 'presentación',
-    'lectura', 'reading',
+    'diapositivas', 'slides',
+    'lectura', 'reading', 'documento',
     'video',
-    'cuestionario',
-    'actividad',
-    'tarea',
-    'practica', 'práctica',
-    'proyecto',
     'guia', 'guía',
     'informe',
     'reporte',
@@ -388,20 +391,30 @@ class DocumentContentValidationService:
             aplica_val = ws.cell(row=row_idx, column=aplica_col).value if aplica_col else None
             aplica_norm = self._normalize(str(aplica_val or ''))
 
-            # Detectar si esta fila es encabezado de tipo de documento.
-            # Estrategia dual:
-            #   1. Aplica != 'Si'  (estructura tradicional)
-            #   2. Sub-sección normalizada está en DOCUMENT_TYPE_HEADERS
-            #      (cubre Excels donde TODOS los aplica=Si, incluido el encabezado)
-            sub_norm = self._normalize(sub_str)
-            is_group_header = (aplica_norm != 'si') or (sub_norm in DOCUMENT_TYPE_HEADERS)
+            # Excluir filas explícitamente marcadas como No aplica
+            if aplica_norm == 'no':
+                continue
 
-            if is_group_header:
-                # Fila de tipo de documento → nuevo grupo
+            sub_norm = self._normalize(sub_str)
+
+            # ── Detección de encabezado de grupo ────────────────────────────
+            # El vocabulario es el criterio PRIMARIO (robusto ante cualquier
+            # variante de Aplica: 'Si', None, vacío, etc.).
+            #
+            # Dos patrones de Excel observados:
+            #   A) aplica='Si' en todas las filas (incluidos tipos de doc)
+            #   B) aplica=None en todas las filas
+            # En ambos casos el nombre de sub-sección identifica el tipo.
+            #
+            # Fallback: si el sub_seccion NO está en el vocabulario y aplica
+            # tampoco es 'si' (ej. aplica=None), lo tratamos como parámetro
+            # asumiendo que el Excel omite la columna Aplica.
+            if sub_norm in DOCUMENT_TYPE_HEADERS:
+                # Tipo de documento conocido → nuevo grupo
                 current_group = {'group_name': sub_str, 'params': []}
                 groups.append(current_group)
             else:
-                # Fila con Aplica=Si y no es tipo de documento → parámetro del grupo actual
+                # Parámetro a evaluar
                 autor_val = ws.cell(row=row_idx, column=autor_col).value if autor_col else None
                 param = {
                     'row_idx':    row_idx,
