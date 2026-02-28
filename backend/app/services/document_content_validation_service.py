@@ -496,15 +496,14 @@ class DocumentContentValidationService:
                 break   # intentar solo la primera pista que aplique
 
         # 3. Cualquier archivo soportado disponible (no asignado aún)
+        #    Solo si no hay un match más específico.
         for f in files_metadata:
             if f['name'] not in already_matched:
                 return f
 
-        # 4. Fallback: si solo hay UN archivo y todos los grupos lo necesitan,
-        #    compartir el mismo archivo (caso común: una carpeta con un solo PDF).
-        if files_metadata:
-            return files_metadata[0]
-
+        # Sin archivo exclusivo → el grupo reportará "no encontrado".
+        # Si la carpeta no tiene un archivo de Lectura, Video, etc.,
+        # es correcto decir que ese tipo de documento no existe.
         return None
 
     def download_and_extract_all_docs(
