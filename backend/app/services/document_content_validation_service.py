@@ -91,7 +91,8 @@ class DocumentContentValidationService:
         Para otros tipos devuelve el nombre limpio (underscores → espacios).
         """
         normalized = self._normalize(folder_name)
-        m = re.match(r'^semana\s*(\d+)$', normalized)
+        # Sin $ final: acepta "Semana_6 - Algoritmos" → "semana 6 algoritmos" → "Semana 6"
+        m = re.match(r'^semana\s*(\d+)', normalized)
         if m:
             return f"Semana {m.group(1)}"
         return folder_name.replace('_', ' ').replace('-', ' ').strip()
@@ -194,6 +195,7 @@ class DocumentContentValidationService:
         header_row_idx, col_map = self._find_header_row(ws)
         norm_target = self._normalize(target_section)
         requirements = []
+        last_sec_val = None   # soporte para celdas combinadas (merged cells)
 
         for row_idx in range(header_row_idx + 1, ws.max_row + 1):
             # Leer sección
@@ -201,6 +203,10 @@ class DocumentContentValidationService:
             if not sec_col:
                 continue
             sec_val = ws.cell(row=row_idx, column=sec_col).value
+            if sec_val:
+                last_sec_val = sec_val
+            elif last_sec_val:
+                sec_val = last_sec_val
             if not sec_val:
                 continue
             if self._normalize(str(sec_val)) != norm_target:
@@ -342,9 +348,16 @@ class DocumentContentValidationService:
 
         groups: List[Dict] = []
         current_group: Optional[Dict] = None
+        last_sec_val = None   # soporte para celdas combinadas (merged cells)
 
         for row_idx in range(header_row_idx + 1, ws.max_row + 1):
             sec_val = ws.cell(row=row_idx, column=sec_col).value
+            # Celdas combinadas: la primera celda del rango tiene valor;
+            # las siguientes son None → usar el último valor conocido.
+            if sec_val:
+                last_sec_val = sec_val
+            elif last_sec_val:
+                sec_val = last_sec_val
             if not sec_val:
                 continue
             if self._normalize(str(sec_val)) != norm_target:
@@ -384,6 +397,8 @@ class DocumentContentValidationService:
         print(f"📋 Grupos para '{target_section}': {len(groups)} grupos, {total_params} parámetros")
         for g in groups:
             print(f"   📑 '{g['group_name']}': {len(g['params'])} parámetros")
+            for p in g['params']:
+                print(f"      · {p['sub_seccion']}")
 
         return groups
 
