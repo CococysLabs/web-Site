@@ -32,7 +32,10 @@ def _normalize(name: str) -> str:
 
 
 def _is_semana_folder(name: str) -> bool:
-    return bool(re.match(r'^semana[\s_]\d+$', _normalize(name)))
+    # _normalize ya convierte a minúsculas y reemplaza _ por espacio.
+    # El separador es opcional (maneja "Semana6") y no hay $ final
+    # para aceptar nombres como "Semana_6 - Algoritmos".
+    return bool(re.match(r'^semana\s?\d+', _normalize(name)))
 
 
 def _compliance_status(pct: float) -> str:
