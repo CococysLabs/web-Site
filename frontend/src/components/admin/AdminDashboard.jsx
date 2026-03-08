@@ -221,6 +221,26 @@ const AdminDashboard = () => {
     }
   };
 
+  // Teacher modal state
+  const [teacherModal, setTeacherModal] = useState(null); // { user }
+  const [teacherForm, setTeacherForm] = useState({ is_teacher: false, drive_folder_id: '' });
+
+  const openTeacherModal = (u) => {
+    setTeacherModal(u);
+    setTeacherForm({ is_teacher: !!u.is_teacher, drive_folder_id: u.drive_folder_id || '' });
+  };
+
+  const saveTeacher = async () => {
+    try {
+      await api.patch(`/api/auth/users/${teacherModal.id}/set-teacher`, teacherForm);
+      showToast('success', 'Configuración de docente guardada');
+      setTeacherModal(null);
+      loadAllUsers();
+    } catch (err) {
+      showToast('error', err.response?.data?.detail || 'Error al guardar');
+    }
+  };
+
   const handleExportCSV = () => {
     const params = new URLSearchParams();
     params.set('days', reportFilter.days);
@@ -254,6 +274,52 @@ const AdminDashboard = () => {
             </svg>
           )}
           <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Teacher modal */}
+      {teacherModal && (
+        <div className="admin-modal-overlay" onClick={() => setTeacherModal(null)}>
+          <div className="admin-confirm-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="confirm-icon" style={{ background: 'rgba(16,185,129,0.1)' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#10b981">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+              </svg>
+            </div>
+            <p style={{ fontWeight: 600, fontSize: '1rem', marginBottom: '1rem' }}>
+              Rol Docente — {teacherModal.nombre} {teacherModal.apellidos}
+            </p>
+            <div style={{ textAlign: 'left', marginBottom: '1rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={teacherForm.is_teacher}
+                  onChange={e => setTeacherForm(f => ({ ...f, is_teacher: e.target.checked }))}
+                  style={{ accentColor: '#10b981', width: 16, height: 16 }}
+                />
+                <span style={{ fontSize: '0.9rem' }}>Habilitar vista de docente</span>
+              </label>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                ID de carpeta Drive asignada
+              </label>
+              <input
+                className="settings-input"
+                type="text"
+                placeholder="Ej: 1ABC...xyz"
+                value={teacherForm.drive_folder_id}
+                onChange={e => setTeacherForm(f => ({ ...f, drive_folder_id: e.target.value }))}
+                style={{ width: '100%', fontSize: '0.875rem' }}
+              />
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                El docente verá el historial de validaciones de esta carpeta en su panel.
+              </p>
+            </div>
+            <div className="confirm-actions">
+              <button className="confirm-cancel" onClick={() => setTeacherModal(null)}>Cancelar</button>
+              <button className="confirm-ok" style={{ background: '#10b981', borderColor: '#10b981' }} onClick={saveTeacher}>Guardar</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1215,14 +1281,14 @@ const AdminDashboard = () => {
                   <table className="report-table">
                     <thead>
                       <tr>
-                        {['Usuario', 'Correo', 'Rol', 'Estado', 'Aprobado', 'Registrado', 'Acciones'].map(h => (
+                        {['Usuario', 'Correo', 'Rol', 'Estado', 'Aprobado', 'Registrado', 'Docente', 'Acciones'].map(h => (
                           <th key={h}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {allUsers.users.length === 0 ? (
-                        <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No hay usuarios que coincidan</td></tr>
+                        <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No hay usuarios que coincidan</td></tr>
                       ) : allUsers.users.map(u => (
                         <tr key={u.id}>
                           <td style={{ fontWeight: 500 }}>
@@ -1250,8 +1316,24 @@ const AdminDashboard = () => {
                           <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                             {u.created_at ? new Date(u.created_at).toLocaleDateString('es-ES') : '—'}
                           </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {u.is_teacher ? (
+                              <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
+                                🏫 Docente
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>—</span>
+                            )}
+                          </td>
                           <td>
                             <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, background: 'rgba(16,185,129,0.12)', color: '#10b981' }}
+                                onClick={() => openTeacherModal(u)}
+                                title="Configurar rol de docente"
+                              >
+                                🏫
+                              </button>
                               <button
                                 style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, background: u.is_active ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)', color: u.is_active ? '#ef4444' : '#10b981' }}
                                 onClick={() => setConfirmModal({
@@ -1259,7 +1341,7 @@ const AdminDashboard = () => {
                                   onConfirm: () => { setConfirmModal(null); handleToggleActive(u.id, u.is_active); }
                                 })}
                               >
-                                {u.is_active ? '🚫 Desactivar' : '✓ Activar'}
+                                {u.is_active ? '🚫' : '✓'}
                               </button>
                             </div>
                           </td>

@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     # Google Gemini API
     GEMINI_API_KEY: str
     GOOGLE_API_KEY: Optional[str] = None  # Alias para Gemini
+    # Claves adicionales de Gemini (separadas por comas) para rotación cuando la principal se agota
+    GEMINI_API_KEYS: Optional[str] = None
+    # Groq como proveedor de LLM alternativo (gratis, OpenAI-compatible)
+    GROQ_API_KEY: Optional[str] = None
+    # OpenRouter como proveedor de LLM de respaldo (gratis con modelos :free)
+    OPENROUTER_API_KEY: Optional[str] = None
     
     # Google Drive API
     GOOGLE_CREDENTIALS_FILE: Optional[str] = None

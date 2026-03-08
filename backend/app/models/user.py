@@ -29,6 +29,8 @@ class User(Base):
     is_approved = Column(Boolean, default=False)  # Requiere aprobación del admin
     approved_by = Column(UUID(as_uuid=True), nullable=True)  # ID del admin que aprobó
     approved_at = Column(DateTime(timezone=True), nullable=True)
+    is_teacher = Column(Boolean, default=False, nullable=True)  # Tiene vista de docente
+    drive_folder_id = Column(String(200), nullable=True)         # Carpeta de Drive asignada
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 # Relaciones

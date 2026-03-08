@@ -18,12 +18,31 @@ const Dashboard = () => {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [expandedCourse, setExpandedCourse] = useState(null);
 
+  // Vista docente
+  const [teacherSummary, setTeacherSummary] = useState(null);
+  const [teacherLoading, setTeacherLoading] = useState(false);
+
+  const isTeacher = user?.is_teacher;
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     loadDocuments();
     loadValidationSummary();
+    if (isTeacher) loadTeacherSummary();
     return () => clearInterval(timer);
-  }, []);
+  }, [isTeacher]);
+
+  const loadTeacherSummary = async () => {
+    try {
+      setTeacherLoading(true);
+      const res = await api.get('/api/validation/teacher-summary');
+      setTeacherSummary(res.data);
+    } catch (err) {
+      console.error('Error loading teacher summary:', err);
+    } finally {
+      setTeacherLoading(false);
+    }
+  };
 
   const loadDocuments = async () => {
     try {
@@ -191,6 +210,18 @@ const Dashboard = () => {
               <span className="nav-badge">{validationSummary.total_validations}</span>
             )}
           </button>
+          {isTeacher && (
+            <button
+              className={`nav-item ${activeView === 'teacher' ? 'active' : ''}`}
+              onClick={() => { setActiveView('teacher'); if (!teacherSummary) loadTeacherSummary(); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+              </svg>
+              <span>Mi Curso</span>
+            </button>
+          )}
           <button className="nav-item" onClick={() => window.open('https://www.youtube.com/@COCOCYSECYS', '_blank')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -357,6 +388,93 @@ const Dashboard = () => {
                     ))}
                   </div>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Vista Docente ── */}
+          {activeView === 'teacher' && isTeacher && (
+            <div style={{ paddingBottom: '2rem' }}>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h2 style={{ margin: 0, color: 'var(--text-primary)' }}>Mi Curso — Estado de Validaciones</h2>
+                <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                  Resultados de validación del material académico de tu carpeta asignada
+                </p>
+              </div>
+
+              {teacherLoading ? (
+                <div style={{ padding: '3rem 0', textAlign: 'center' }}>
+                  <div className="spinner" style={{ margin: '0 auto 1rem' }}></div>
+                  <p style={{ color: 'var(--text-secondary)' }}>Cargando datos de tu curso...</p>
+                </div>
+              ) : !teacherSummary || !teacherSummary.has_folder ? (
+                <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏫</div>
+                  <p>No tienes una carpeta de Drive asignada.</p>
+                  <p style={{ fontSize: '0.85rem', marginTop: '4px' }}>Contacta al administrador para que la configure.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Resumen */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '1.5rem' }}>
+                    {[
+                      { label: 'Total Validaciones', value: teacherSummary.total, color: '#6366f1' },
+                      { label: 'Cumplimiento Promedio', value: `${teacherSummary.avg_compliance}%`, color: teacherSummary.avg_compliance >= 70 ? '#10b981' : teacherSummary.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' },
+                      { label: 'Semanas Registradas', value: teacherSummary.by_week?.length || 0, color: '#f59e0b' },
+                    ].map((card, i) => (
+                      <div key={i} style={{ background: 'var(--bg-card, #1e293b)', border: '1px solid var(--border-color, #334155)', borderRadius: '12px', padding: '16px' }}>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: card.color }}>{card.value}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{card.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Semanas */}
+                  {teacherSummary.by_week?.length > 0 && (
+                    <div style={{ background: 'var(--bg-card, #1e293b)', border: '1px solid var(--border-color, #334155)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.25rem' }}>
+                      <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: 600 }}>Cumplimiento por Semana</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {teacherSummary.by_week.map((w, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '120px', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-primary)', flexShrink: 0 }}>{w.week}</div>
+                            <div style={{ flex: 1, height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
+                              <div style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', background: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444', transition: 'width 0.5s ease' }} />
+                            </div>
+                            <span style={{ minWidth: '42px', textAlign: 'right', fontSize: '0.875rem', fontWeight: 700, color: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
+                              {w.avg_compliance}%
+                            </span>
+                            <span style={{ padding: '2px 8px', borderRadius: '8px', fontSize: '0.7rem', fontWeight: 600, background: w.status === 'compliant' ? 'rgba(16,185,129,0.15)' : w.status === 'partial' ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)', color: w.status === 'compliant' ? '#34d399' : w.status === 'partial' ? '#fbbf24' : '#f87171' }}>
+                              {w.status === 'compliant' ? '✓ Cumple' : w.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Validaciones recientes */}
+                  {teacherSummary.recent?.length > 0 && (
+                    <div style={{ background: 'var(--bg-card, #1e293b)', border: '1px solid var(--border-color, #334155)', borderRadius: '12px', padding: '1.25rem' }}>
+                      <h3 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: 600 }}>Validaciones Recientes</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {teacherSummary.recent.map((r, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: i < teacherSummary.recent.length - 1 ? '1px solid var(--border-color, #334155)' : 'none' }}>
+                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 600, background: r.validation_type === 'structure' ? 'rgba(139,92,246,0.2)' : 'rgba(16,185,129,0.2)', color: r.validation_type === 'structure' ? '#a78bfa' : '#34d399', flexShrink: 0 }}>
+                              {r.validation_type === 'structure' ? '📋 Estructura' : '🧠 Contenido'}
+                            </span>
+                            <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 500 }}>{r.folder_name}</span>
+                            <span style={{ fontWeight: 700, fontSize: '0.875rem', color: r.compliance_percentage >= 70 ? '#10b981' : r.compliance_percentage >= 40 ? '#f59e0b' : '#ef4444' }}>
+                              {r.compliance_percentage?.toFixed(1)}%
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                              {r.created_at ? new Date(r.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

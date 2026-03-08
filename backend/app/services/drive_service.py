@@ -55,9 +55,11 @@ class GoogleDriveService:
             results = self.service.files().list(
                 q=query,
                 fields="files(id, name, webViewLink, createdTime, modifiedTime)",
-                orderBy="name"
+                orderBy="name",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
             ).execute()
-            
+
             return results.get('files', [])
         except Exception as e:
             print(f"Error listing folders: {e}")
@@ -87,9 +89,11 @@ class GoogleDriveService:
             results = self.service.files().list(
                 q=query,
                 fields="files(id, name, mimeType, size, webViewLink, createdTime, modifiedTime, owners)",
-                orderBy="name"
+                orderBy="name",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
             ).execute()
-            
+
             return results.get('files', [])
         except Exception as e:
             print(f"Error listing files: {e}")
@@ -174,7 +178,9 @@ class GoogleDriveService:
             results = self.service.files().list(
                 q=search_query,
                 fields="files(id, name, mimeType, size, webViewLink)",
-                orderBy="name"
+                orderBy="name",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
             ).execute()
             
             return results.get('files', [])
@@ -193,7 +199,8 @@ class GoogleDriveService:
             media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type)
             self.service.files().update(
                 fileId=existing_file_id,
-                media_body=media
+                media_body=media,
+                supportsAllDrives=True,
             ).execute()
             print(f"✅ Archivo actualizado en Drive: {existing_file_id}")
             return True
@@ -211,6 +218,10 @@ class GoogleDriveService:
         """
         Sube un archivo NUEVO a una carpeta de Drive.
         Retorna {'id': str, 'name': str, 'webViewLink': str} o None si falla.
+
+        Nota: Las Service Accounts no tienen cuota de almacenamiento en Drive personal.
+        Solo pueden crear archivos en Shared Drives. Si la carpeta es personal, esta
+        operación fallará — los resultados de validación se devuelven igual como JSON.
         """
         if not self.service:
             return None
@@ -223,12 +234,21 @@ class GoogleDriveService:
             result = self.service.files().create(
                 body=metadata,
                 media_body=media,
-                fields='id, name, webViewLink'
+                fields='id, name, webViewLink',
+                supportsAllDrives=True,
             ).execute()
-            print(f"✅ Archivo creado en Drive: '{filename}' ({result.get('id')})")
+            print(f"✅ Reporte guardado en Drive: '{filename}'")
             return result
         except Exception as e:
-            print(f"Error creando archivo en Drive: {e}")
+            err_str = str(e)
+            if 'storageQuotaExceeded' in err_str or 'storage quota' in err_str.lower():
+                print(
+                    "  ℹ️  Reporte no guardado en Drive (carpeta personal — "
+                    "las Service Accounts requieren Shared Drive para escribir). "
+                    "Los resultados de validación se devuelven normalmente."
+                )
+            else:
+                print(f"  ⚠️  No se pudo guardar reporte en Drive: {e}")
             return None
 
     def find_file_by_prefix(self, folder_id: str, prefix: str) -> Optional[Dict]:
@@ -248,7 +268,9 @@ class GoogleDriveService:
                 q=query,
                 fields="files(id, name, webViewLink)",
                 orderBy="createdTime desc",
-                pageSize=1
+                pageSize=1,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
             ).execute()
             files = results.get('files', [])
             return files[0] if files else None

@@ -82,20 +82,309 @@ class DocumentContentValidationService:
     def __init__(self):
         self.model = None
         self.enabled = False
+        # Multi-key rotation: lista de todas las claves Gemini disponibles
+        self._api_keys: List[str] = []
+        # Claves que ya recibieron 429 en esta sesión (se resetean al reiniciar)
+        self._exhausted_keys: set = set()
+        # Proveedores alternativos
+        self._groq_key: Optional[str] = None
+        self._openrouter_key: Optional[str] = None
         self._init_gemini()
 
     def _init_gemini(self):
         if not GENAI_AVAILABLE:
             print("⚠️  google-generativeai no disponible")
             return
-        api_key = getattr(settings, 'GEMINI_API_KEY', None)
-        if api_key and api_key not in ('', 'kjkj'):
-            genai.configure(api_key=api_key)
+
+        # ── Recolectar todas las claves Gemini ───────────────────────────────
+        keys: List[str] = []
+
+        # Clave principal (GEMINI_API_KEY)
+        primary = getattr(settings, 'GEMINI_API_KEY', '') or ''
+        if primary and primary not in ('', 'kjkj'):
+            keys.append(primary.strip())
+
+        # Claves adicionales (GEMINI_API_KEYS = "key1,key2,key3")
+        extra = getattr(settings, 'GEMINI_API_KEYS', '') or ''
+        for k in extra.split(','):
+            k = k.strip()
+            if k and k not in keys:
+                keys.append(k)
+
+        self._api_keys = keys
+        self.enabled = len(keys) > 0
+
+        if self.enabled:
+            # Configurar con la primera clave por defecto
+            genai.configure(api_key=keys[0])
             self.model = genai.GenerativeModel(GEMINI_MODEL)
-            self.enabled = True
-            print(f"✅ Gemini ({GEMINI_MODEL}) listo para validación de contenido")
+            total = len(keys)
+            print(f"✅ Gemini ({GEMINI_MODEL}) listo — {total} clave{'s' if total > 1 else ''} disponible{'s' if total > 1 else ''}")
         else:
             print("⚠️  GEMINI_API_KEY no configurada — modo fallback (keyword matching)")
+
+        # ── Groq como proveedor de respaldo ──────────────────────────────────
+        groq_key = getattr(settings, 'GROQ_API_KEY', '') or ''
+        if groq_key:
+            self._groq_key = groq_key.strip()
+            print("✅ Groq configurado como proveedor de respaldo")
+
+        # ── OpenRouter como proveedor de respaldo adicional ───────────────────
+        openrouter_key = getattr(settings, 'OPENROUTER_API_KEY', '') or ''
+        if openrouter_key:
+            self._openrouter_key = openrouter_key.strip()
+            print("✅ OpenRouter configurado como proveedor de respaldo adicional")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Multi-key rotation & proveedores alternativos
+    # ──────────────────────────────────────────────────────────────────────────
+
+    def _get_available_keys(self) -> List[str]:
+        """Retorna las claves Gemini que aún no han sido marcadas como agotadas."""
+        return [k for k in self._api_keys if k not in self._exhausted_keys]
+
+    def _call_gemini_raw(self, api_key: str, model_name: str, prompt: str) -> str:
+        """
+        Llama a Gemini con una clave específica y retorna el texto crudo.
+        Configura la clave antes de llamar (cada llamada puede usar una clave diferente).
+        Lanza excepciones — el llamador decide cómo manejarlas (rotar, fallback, etc.).
+        """
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(prompt)
+        raw = response.text.strip()
+        raw = re.sub(r'^```json?\s*', '', raw)
+        raw = re.sub(r'\s*```$', '', raw)
+        return raw
+
+    def _call_groq_batch(
+        self,
+        params: List[Dict],
+        doc_snippet: str,
+        section_name: str,
+        group_name: str,
+    ) -> Optional[List[Dict[str, str]]]:
+        """
+        Llama a Groq (proveedor alternativo gratuito, compatible con OpenAI) para
+        evaluar todos los parámetros del grupo.  No requiere dependencias extras —
+        usa urllib.request de la biblioteca estándar de Python.
+
+        Modelos Groq actuales (2026):
+          - llama-3.1-8b-instant  (rápido, ligero — principal)
+          - llama-3.3-70b-versatile (más capaz — fallback)
+        """
+        import urllib.request
+        import urllib.error
+
+        reqs_list = "\n".join(
+            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
+        )
+
+        system_msg = (
+            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
+            "sin texto introductorio ni explicación. Tu respuesta debe ser "
+            f"un array JSON con exactamente {len(params)} elementos."
+        )
+
+        user_msg = (
+            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
+            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
+            f"Contenido del documento:\n{doc_snippet[:12_000]}\n\n"
+            f"Responde SOLO el array JSON (sin texto adicional):\n"
+            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
+        )
+
+        # Intentar con modelos Groq en orden de preferencia
+        groq_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
+
+        for groq_model in groq_models:
+            payload = json.dumps({
+                "model": groq_model,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user",   "content": user_msg},
+                ],
+                "temperature": 0.05,
+                "max_tokens": 2000,
+            }).encode("utf-8")
+
+            try:
+                req = urllib.request.Request(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    data=payload,
+                    headers={
+                        "Authorization": f"Bearer {self._groq_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "python-httpx/0.27.0",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                    content = result["choices"][0]["message"]["content"].strip()
+                    content = re.sub(r"^```json?\s*", "", content)
+                    content = re.sub(r"\s*```$", "", content)
+
+                    parsed = json.loads(content)
+                    if isinstance(parsed, dict):
+                        for v in parsed.values():
+                            if isinstance(v, list):
+                                parsed = v
+                                break
+
+                    if not isinstance(parsed, list):
+                        print(f"  ⚠️  Groq ({groq_model}): respuesta no es lista")
+                        continue
+
+                    results = []
+                    for i, p in enumerate(params):
+                        if i < len(parsed):
+                            item = parsed[i]
+                            results.append({
+                                "presente":    str(item.get("presente", "No")),
+                                "observacion": f"[Groq] {item.get('observacion', '')}",
+                            })
+                        else:
+                            results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
+
+                    print(f"  🤖 [MODELO: GROQ {groq_model}] respondió — {len(results)} resultados")
+                    return results
+
+            except urllib.error.HTTPError as e:
+                body = ""
+                try:
+                    body = e.read().decode("utf-8")[:200]
+                except Exception:
+                    pass
+                if e.code == 429:
+                    print(f"  ⚠️  Groq ({groq_model}) quota agotada")
+                elif "decommissioned" in body or "deprecated" in body:
+                    print(f"  ⚠️  Groq ({groq_model}) descontinuado, probando siguiente")
+                    continue
+                else:
+                    print(f"  ⚠️  Groq ({groq_model}) HTTP {e.code}: {body[:80]}")
+            except json.JSONDecodeError:
+                print(f"  ⚠️  Groq ({groq_model}): JSON inválido, probando siguiente")
+                continue
+            except Exception as e:
+                print(f"  ⚠️  Groq ({groq_model}): {e}")
+
+        return None
+
+    def _call_openrouter_batch(
+        self,
+        params: List[Dict],
+        doc_snippet: str,
+        section_name: str,
+        group_name: str,
+    ) -> Optional[List[Dict[str, str]]]:
+        """
+        Llama a OpenRouter (proveedor alternativo gratuito, compatible con OpenAI).
+        Modelos gratuitos disponibles (etiqueta :free en openrouter.ai):
+          - meta-llama/llama-3.1-8b-instruct:free
+          - google/gemma-3-12b-it:free
+        """
+        import urllib.request
+        import urllib.error
+
+        reqs_list = "\n".join(
+            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
+        )
+
+        system_msg = (
+            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
+            "sin texto introductorio ni explicación. Tu respuesta debe ser "
+            f"un array JSON con exactamente {len(params)} elementos."
+        )
+
+        user_msg = (
+            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
+            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
+            f"Contenido del documento:\n{doc_snippet[:12_000]}\n\n"
+            f"Responde SOLO el array JSON (sin texto adicional):\n"
+            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
+        )
+
+        openrouter_models = [
+            "meta-llama/llama-3.1-8b-instruct:free",
+            "google/gemma-3-12b-it:free",
+        ]
+
+        for model in openrouter_models:
+            payload = json.dumps({
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user",   "content": user_msg},
+                ],
+                "temperature": 0.05,
+                "max_tokens": 2000,
+            }).encode("utf-8")
+
+            try:
+                req = urllib.request.Request(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    data=payload,
+                    headers={
+                        "Authorization": f"Bearer {self._openrouter_key}",
+                        "Content-Type": "application/json",
+                        "User-Agent": "python-httpx/0.27.0",
+                        "HTTP-Referer": "https://cococys.app",
+                    },
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                    content = result["choices"][0]["message"]["content"].strip()
+                    content = re.sub(r"^```json?\s*", "", content)
+                    content = re.sub(r"\s*```$", "", content)
+
+                    parsed = json.loads(content)
+                    if isinstance(parsed, dict):
+                        for v in parsed.values():
+                            if isinstance(v, list):
+                                parsed = v
+                                break
+
+                    if not isinstance(parsed, list):
+                        print(f"  ⚠️  OpenRouter ({model}): respuesta no es lista")
+                        continue
+
+                    results = []
+                    for i, p in enumerate(params):
+                        if i < len(parsed):
+                            item = parsed[i]
+                            results.append({
+                                "presente":    str(item.get("presente", "No")),
+                                "observacion": f"[OpenRouter] {item.get('observacion', '')}",
+                            })
+                        else:
+                            results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
+
+                    print(f"  🤖 [MODELO: OPENROUTER {model}] respondió — {len(results)} resultados")
+                    return results
+
+            except urllib.error.HTTPError as e:
+                body = ""
+                try:
+                    body = e.read().decode("utf-8")[:200]
+                except Exception:
+                    pass
+                if e.code == 429:
+                    print(f"  ⚠️  OpenRouter ({model}) quota agotada")
+                elif e.code == 402:
+                    print(f"  ⚠️  OpenRouter ({model}) requiere créditos — probando siguiente")
+                    continue
+                else:
+                    print(f"  ⚠️  OpenRouter ({model}) HTTP {e.code}: {body[:80]}")
+            except json.JSONDecodeError:
+                print(f"  ⚠️  OpenRouter ({model}): JSON inválido, probando siguiente")
+                continue
+            except Exception as e:
+                print(f"  ⚠️  OpenRouter ({model}): {e}")
+
+        return None
 
     # ──────────────────────────────────────────────────────────────────────────
     # Normalización (igual que structure_validation_service)
@@ -657,26 +946,36 @@ CONTENIDO DE LOS DOCUMENTOS:
 Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
 {{"presente": "Si" o "No", "observacion": "Explicación de 1-2 oraciones"}}"""
 
-        try:
-            # Usar modelo dinámico si se especifica (desde settings de BD)
-            import google.generativeai as genai
-            active_model = genai.GenerativeModel(model_name or GEMINI_MODEL)
-            response = active_model.generate_content(prompt)
-            raw = response.text.strip()
-            # Limpiar posible markdown
-            raw = re.sub(r'^```json?\s*', '', raw)
-            raw = re.sub(r'\s*```$', '', raw)
-            parsed = json.loads(raw)
-            return {
-                'presente':    str(parsed.get('presente', 'No')),
-                'observacion': str(parsed.get('observacion', ''))
-            }
-        except json.JSONDecodeError:
-            print(f"  ⚠️  JSON inválido de Gemini, usando fallback")
-            return self._fallback_keyword_check(requirement_text, doc_chunk)
-        except Exception as e:
-            print(f"  ⚠️  Error en Gemini: {e}")
-            return self._fallback_keyword_check(requirement_text, doc_chunk)
+        target_model = model_name or GEMINI_MODEL
+
+        for key in self._get_available_keys():
+            try:
+                raw = self._call_gemini_raw(key, target_model, prompt)
+                parsed = json.loads(raw)
+                return {
+                    'presente':    str(parsed.get('presente', 'No')),
+                    'observacion': str(parsed.get('observacion', ''))
+                }
+            except json.JSONDecodeError:
+                print(f"  ⚠️  JSON inválido de Gemini")
+                break
+            except Exception as e:
+                err_str = str(e)
+                if '429' in err_str or 'quota' in err_str.lower() or 'RESOURCE_EXHAUSTED' in err_str:
+                    self._exhausted_keys.add(key)
+                    remaining = len(self._get_available_keys())
+                    if remaining > 0:
+                        print(f"  🔄 Key agotada, rotando ({remaining} restante{'s' if remaining > 1 else ''})")
+                        time.sleep(1)
+                        continue
+                    else:
+                        print("  ⚠️  Todas las claves Gemini agotadas")
+                        break
+                else:
+                    print(f"  ⚠️  Error en Gemini: {e}")
+                    break
+
+        return self._fallback_keyword_check(requirement_text, doc_chunk)
 
     def _fallback_keyword_check(self, requirement_text: str, doc_text: str) -> Dict[str, str]:
         """
@@ -797,49 +1096,99 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
   ...
 ]"""
 
-        MAX_RETRIES = 3
-        for attempt in range(MAX_RETRIES):
-            try:
-                import google.generativeai as genai
-                active_model = genai.GenerativeModel(model_name or GEMINI_MODEL)
-                response = active_model.generate_content(prompt)
-                raw = response.text.strip()
-                raw = re.sub(r'^```json?\s*', '', raw)
-                raw = re.sub(r'\s*```$', '', raw)
-                parsed = json.loads(raw)
+        # ── Intentar con cada clave Gemini disponible (exponential backoff) ────
+        available_keys = self._get_available_keys()
+        target_model = model_name or GEMINI_MODEL
 
-                if not isinstance(parsed, list):
-                    raise ValueError("Respuesta no es lista")
+        # Distingue entre dos tipos de 429:
+        #   A) Cuota diaria agotada (limit: 0) → rotar key inmediatamente
+        #   B) Burst de RPM                    → reintentar misma key con backoff
+        MAX_RPM_RETRIES = 4   # reintentos por burst: 5s, 10s, 20s, 40s
 
-                results = []
-                for i, p in enumerate(params):
-                    if i < len(parsed):
-                        item = parsed[i]
-                        results.append({
-                            'presente':    str(item.get('presente', 'No')),
-                            'observacion': str(item.get('observacion', '')),
-                        })
-                    else:
-                        results.append(self._fallback_keyword_check(p['sub_seccion'], doc_text))
-                return results
+        for key in available_keys:
+            short_key = key[:8] + '...'
+            backoff = 5.0   # primer wait: 5s (estándar de la industria)
 
-            except json.JSONDecodeError:
-                print(f"  ⚠️  Batch JSON inválido (intento {attempt+1}), fallback por parámetro")
-                break
-            except Exception as e:
-                err_str = str(e)
-                if '429' in err_str or 'quota' in err_str.lower() or 'RESOURCE_EXHAUSTED' in err_str:
-                    wait = 2 ** (attempt + 1)   # 2s, 4s, 8s
-                    print(f"  ⏳ Quota excedida, esperando {wait}s... (intento {attempt+1}/{MAX_RETRIES})")
-                    time.sleep(wait)
-                    if attempt == MAX_RETRIES - 1:
-                        print(f"  ⚠️  Gemini quota agotada tras {MAX_RETRIES} intentos, usando fallback")
+            for rpm_attempt in range(MAX_RPM_RETRIES + 1):
+                try:
+                    raw = self._call_gemini_raw(key, target_model, prompt)
+                    parsed = json.loads(raw)
+
+                    if not isinstance(parsed, list):
+                        raise ValueError("Respuesta no es lista")
+
+                    results = []
+                    for i, p in enumerate(params):
+                        if i < len(parsed):
+                            item = parsed[i]
+                            results.append({
+                                'presente':    str(item.get('presente', 'No')),
+                                'observacion': str(item.get('observacion', '')),
+                            })
+                        else:
+                            results.append(self._fallback_keyword_check(p['sub_seccion'], doc_text))
+                    key_idx = self._api_keys.index(key) + 1 if key in self._api_keys else '?'
+                    print(f"  🤖 [MODELO: GEMINI {target_model} / Key #{key_idx}] respondió — {len(results)} resultados")
+                    return results
+
+                except json.JSONDecodeError:
+                    print(f"  ⚠️  Batch JSON inválido ({short_key})")
+                    break   # JSON raro → pasar al siguiente proveedor
+
+                except Exception as e:
+                    err_str = str(e)
+                    is_quota = (
+                        '429' in err_str
+                        or 'quota' in err_str.lower()
+                        or 'RESOURCE_EXHAUSTED' in err_str
+                    )
+                    if not is_quota:
+                        print(f"  ⚠️  Error Gemini: {e}")
                         break
-                else:
-                    print(f"  ⚠️  Error Gemini batch: {e}")
-                    break
 
-        # Fallback: keyword check para cada param
+                    # — Distinguir: cuota diaria vs. burst de RPM —
+                    daily_exhausted = 'limit: 0' in err_str or 'limit_per_day' in err_str.lower()
+
+                    if daily_exhausted:
+                        # Cuota diaria: esta key no sirve más hoy → rotar
+                        self._exhausted_keys.add(key)
+                        remaining = len(self._get_available_keys())
+                        print(f"  🔄 Key ({short_key}) cuota diaria agotada "
+                              f"→ rotando ({remaining} key{'s' if remaining != 1 else ''} restante{'s' if remaining != 1 else ''})")
+                        break   # salir del bucle RPM, ir a siguiente key
+
+                    else:
+                        # Burst de RPM: la key sigue válida, solo hay que esperar
+                        if rpm_attempt >= MAX_RPM_RETRIES:
+                            # Demasiados reintentos de RPM → tratar como agotada
+                            self._exhausted_keys.add(key)
+                            print(f"  ⚠️  Key ({short_key}) no respondió tras {MAX_RPM_RETRIES} reintentos RPM → rotando")
+                            break
+                        wait = min(backoff, 60.0)   # máximo 60s de espera
+                        print(f"  ⏳ RPM excedido ({short_key}) — esperando {wait:.0f}s "
+                              f"(intento {rpm_attempt + 1}/{MAX_RPM_RETRIES})...")
+                        time.sleep(wait)
+                        backoff *= 2   # doblar: 5 → 10 → 20 → 40s
+
+        # ── Respaldo 1: Groq ──────────────────────────────────────────────────
+        if self._groq_key:
+            print("  🔄 Intentando con Groq (proveedor alternativo)...")
+            groq_results = self._call_groq_batch(
+                params, doc_snippet, section_name, group_name
+            )
+            if groq_results is not None:
+                return groq_results
+
+        # ── Respaldo 2: OpenRouter ────────────────────────────────────────────
+        if self._openrouter_key:
+            print("  🔄 Intentando con OpenRouter (proveedor alternativo)...")
+            or_results = self._call_openrouter_batch(
+                params, doc_snippet, section_name, group_name
+            )
+            if or_results is not None:
+                return or_results
+
+        # ── Último recurso: keyword matching ─────────────────────────────────
         return [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -1038,6 +1387,60 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
             )
             return result
 
+    def _write_results_to_matrix(
+        self,
+        ws,
+        col_map: Dict[str, int],
+        group_results: List[Dict],
+    ) -> int:
+        """
+        Escribe los resultados de validación directamente en la hoja 'Matriz observaciones'.
+        Actualiza las columnas 'Presente' y 'Observaciones' para cada parámetro usando
+        el row_idx guardado durante el parseo.
+
+        Aplica fill verde (C6EFCE) para 'Si' y rojo (FFC7CE) para 'No'.
+        Retorna el número de filas actualizadas.
+        """
+        from openpyxl.styles import PatternFill, Alignment
+
+        presente_col = col_map.get('presente')
+        obs_col      = col_map.get('observaciones')
+
+        if not presente_col and not obs_col:
+            print("  ⚠️  No se encontraron columnas 'Presente'/'Observaciones' — no se puede escribir en la matriz")
+            return 0
+
+        green_fill = PatternFill("solid", fgColor="C6EFCE")
+        red_fill   = PatternFill("solid", fgColor="FFC7CE")
+        left_wrap  = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        center     = Alignment(horizontal="center", vertical="center")
+
+        updated = 0
+        for group in group_results:
+            for r in group.get('results', []):
+                row_idx = r.get('row_idx')
+                if not row_idx:
+                    continue
+
+                presente = r.get('presente', 'No')
+                fill     = green_fill if presente == 'Si' else red_fill
+
+                if presente_col:
+                    cell       = ws.cell(row=row_idx, column=presente_col)
+                    cell.value = presente
+                    cell.fill  = fill
+                    cell.alignment = center
+
+                if obs_col:
+                    obs_cell       = ws.cell(row=row_idx, column=obs_col)
+                    obs_cell.value = r.get('observacion', '')
+                    obs_cell.fill  = fill
+                    obs_cell.alignment = left_wrap
+
+                updated += 1
+
+        return updated
+
     # ──────────────────────────────────────────────────────────────────────────
     # Punto de entrada principal
     # ──────────────────────────────────────────────────────────────────────────
@@ -1170,8 +1573,12 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                         use_gemini = use_gemini,
                         model_name = active_model_name,
                     )
-                    # Pausa cortés entre grupos (no entre parámetros)
-                    time.sleep(1.5)
+                    # Pausa entre grupos para respetar límite de RPM del plan gratuito:
+                    # gemini-2.0-flash = 15 RPM → mínimo 4s entre llamadas.
+                    # Usamos 4.5s para tener margen y evitar ráfagas (burst).
+                    # Si la llamada fue a Groq (no Gemini), el sleep sigue siendo útil
+                    # para no saturar la API alternativa tampoco.
+                    time.sleep(4.5)
 
                 for i, (param, eval_r) in enumerate(zip(group['params'], batch_evals), 1):
                     sub = param['sub_seccion']
@@ -1185,6 +1592,7 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                         'autor':       param['autor'],
                         'presente':    eval_r['presente'],
                         'observacion': eval_r['observacion'],
+                        'row_idx':     param['row_idx'],   # fila en el Excel para write-back
                     })
 
                 total_present += present_in_group
@@ -1219,6 +1627,25 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
             print(f"\n✅ Validación: {total_present}/{total_requirements} ({compliance_pct}%) presentes "
                   f"en {len(groups)} grupo(s)")
 
+            # 7b. Escribir resultados en la MATRIZ ORIGINAL (Presente + Observaciones)
+            print("\n  📝 Escribiendo resultados en la matriz original...")
+            n_written = self._write_results_to_matrix(ws, col_map, group_results)
+            matrix_updated = False
+            if n_written > 0:
+                try:
+                    buf = io.BytesIO()
+                    wb.save(buf)
+                    matrix_bytes = buf.getvalue()
+                    matrix_updated = drive_service.upload_file(
+                        matrix_bytes, EXCEL_MIME_TYPE, matrix_file_id
+                    )
+                    if matrix_updated:
+                        print(f"  ✅ Matriz actualizada en Drive: {n_written} fila(s) escritas")
+                    else:
+                        print("  ⚠️  No se pudo subir la matriz actualizada a Drive")
+                except Exception as e:
+                    print(f"  ⚠️  Error guardando matriz: {e}")
+
             # 8. Generar reporte Excel (sin tocar la matriz original)
             report_bytes = self._build_report_excel(
                 section_name   = section_name,
@@ -1248,7 +1675,7 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                 'report_generated':      report_info is not None,
                 'report_name':           report_info.get('name') if report_info else None,
                 'report_link':           report_info.get('webViewLink') if report_info else None,
-                'excel_updated':         False,
+                'excel_updated':         matrix_updated,
                 'gemini_enabled':        self.enabled,
             }
 

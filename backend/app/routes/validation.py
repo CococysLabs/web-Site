@@ -613,6 +613,77 @@ async def export_validations_csv(
     )
 
 
+# ─── Teacher Summary ─────────────────────────────────────────────────────────
+
+@router.get("/teacher-summary")
+async def get_teacher_summary(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Resumen de validaciones para el docente autenticado.
+    Filtra por el drive_folder_id asignado en su perfil.
+    """
+    folder_id = getattr(current_user, "drive_folder_id", None)
+    if not folder_id:
+        return {"has_folder": False, "records": [], "total": 0,
+                "avg_compliance": 0.0, "by_week": []}
+
+    records = (
+        db.query(ValidationRecord)
+        .filter(
+            (ValidationRecord.folder_id == folder_id) |
+            (ValidationRecord.course_name.ilike(f"%{folder_id}%"))
+        )
+        .order_by(desc(ValidationRecord.created_at))
+        .all()
+    )
+
+    total = len(records)
+    avg = round(sum(r.compliance_percentage for r in records) / total, 1) if total else 0.0
+
+    by_week: Dict[str, Dict] = {}
+    for r in records:
+        key = r.folder_name or r.folder_id
+        if key not in by_week:
+            by_week[key] = {"count": 0, "total_pct": 0.0, "last_validated": None}
+        by_week[key]["count"] += 1
+        by_week[key]["total_pct"] += r.compliance_percentage
+        if by_week[key]["last_validated"] is None:
+            by_week[key]["last_validated"] = r.created_at
+
+    by_week_list = sorted([
+        {
+            "week": k,
+            "count": v["count"],
+            "avg_compliance": round(v["total_pct"] / v["count"], 1),
+            "status": _compliance_status(round(v["total_pct"] / v["count"], 1)),
+            "last_validated": v["last_validated"].isoformat() if v["last_validated"] else None,
+        }
+        for k, v in by_week.items()
+    ], key=lambda x: x["week"])
+
+    return {
+        "has_folder": True,
+        "folder_id": folder_id,
+        "total": total,
+        "avg_compliance": avg,
+        "overall_status": _compliance_status(avg),
+        "by_week": by_week_list,
+        "recent": [
+            {
+                "id": str(r.id),
+                "folder_name": r.folder_name,
+                "validation_type": r.validation_type,
+                "compliance_percentage": r.compliance_percentage,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in records[:10]
+        ]
+    }
+
+
 # ─── Health ───────────────────────────────────────────────────────────────────
 
 @router.get("/health-check")

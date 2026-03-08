@@ -25,6 +25,11 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
   // Error inline (reemplaza alert())
   const [error, setError] = useState(null);
 
+  // Vista previa de documento
+  const [previewFile, setPreviewFile] = useState(null);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [iframeError, setIframeError] = useState(false);
+
   // Historial de validaciones por folder_id → { compliance, status, type }
   const [folderHistory, setFolderHistory] = useState({});
 
@@ -537,6 +542,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       report_name,
       report_link,
       gemini_enabled,
+      excel_updated,
       error
     } = contentValidationResult;
 
@@ -570,19 +576,26 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
                 {documents_analyzed?.length > 0 && ` · ${documents_analyzed.length} documento(s) analizados`}
                 {gemini_enabled === false && ' · Modo básico (sin Gemini)'}
               </p>
-              {report_generated && report_link && (
-                <a
-                  href={report_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '6px', fontSize: '0.8rem', color: '#10b981', textDecoration: 'none', fontWeight: 600 }}
-                >
-                  📄 Ver reporte Excel generado
-                  <svg style={{ width: 12, height: 12 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              )}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                {excel_updated && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
+                    ✅ Matriz actualizada en Drive
+                  </span>
+                )}
+                {report_generated && report_link && (
+                  <a
+                    href={report_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: '#60a5fa', textDecoration: 'none', fontWeight: 600 }}
+                  >
+                    📄 Ver reporte Excel
+                    <svg style={{ width: 12, height: 12 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                )}
+              </div>
             </div>
             <button className="modal-close" onClick={() => setContentValidationResult(null)}>✕</button>
           </div>
@@ -982,6 +995,178 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
     );
   };
 
+  // ── Helper: info visual por tipo de archivo ──────────────────────────────
+  const getFileTypeInfo = (mimeType = '') => {
+    if (mimeType.includes('pdf'))
+      return { emoji: '📕', label: 'PDF', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' };
+    if (mimeType.includes('presentation') || mimeType.includes('google-apps.presentation'))
+      return { emoji: '📊', label: 'Presentación', color: '#f97316', bg: 'rgba(249,115,22,0.12)' };
+    if (mimeType.includes('wordprocessing') || mimeType.includes('google-apps.document'))
+      return { emoji: '📝', label: 'Word', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' };
+    if (mimeType.includes('spreadsheet') || mimeType.includes('google-apps.spreadsheet'))
+      return { emoji: '📈', label: 'Excel', color: '#10b981', bg: 'rgba(16,185,129,0.12)' };
+    return { emoji: '📄', label: 'Documento', color: '#64748b', bg: 'rgba(100,116,139,0.15)' };
+  };
+
+  const closePreview = () => { setPreviewFile(null); setIframeLoaded(false); setIframeError(false); };
+
+  // Cierra el visor con Escape
+  useEffect(() => {
+    if (!previewFile) return;
+    const onKey = (e) => { if (e.key === 'Escape') closePreview(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [previewFile]);
+
+  // Genera la URL de preview correcta según el tipo MIME
+  const getPreviewUrl = (mimeType = '', fileId = '') => {
+    if (mimeType === 'application/vnd.google-apps.document')
+      return `https://docs.google.com/document/d/${fileId}/preview`;
+    if (mimeType === 'application/vnd.google-apps.spreadsheet')
+      return `https://docs.google.com/spreadsheets/d/${fileId}/preview`;
+    if (mimeType === 'application/vnd.google-apps.presentation')
+      return `https://docs.google.com/presentation/d/${fileId}/preview`;
+    return `https://drive.google.com/file/d/${fileId}/preview`;
+  };
+
+  const renderDocumentPreview = () => {
+    if (!previewFile) return null;
+    const { emoji, label, color, bg } = getFileTypeInfo(previewFile.mimeType);
+    const previewUrl = getPreviewUrl(previewFile.mimeType, previewFile.id);
+    const viewUrl = previewFile.webViewLink || `https://drive.google.com/file/d/${previewFile.id}/view`;
+
+    return (
+      <div className="doc-viewer-overlay" onClick={closePreview}>
+        <div className="doc-viewer" onClick={e => e.stopPropagation()}>
+
+          {/* ── Barra de color del tipo de archivo ── */}
+          <div className="doc-viewer-accent" style={{ background: color }} />
+
+          {/* ── Toolbar ── */}
+          <div className="doc-viewer-toolbar">
+            <div className="doc-viewer-filetype" style={{ background: bg }}>
+              {emoji}
+            </div>
+
+            <div className="doc-viewer-meta">
+              <p className="doc-viewer-name">{previewFile.name}</p>
+              <div className="doc-viewer-info">
+                <span className="doc-viewer-info-label" style={{ background: bg, color }}>
+                  {label}
+                </span>
+                {previewFile.size && <span>{formatFileSize(previewFile.size)}</span>}
+                {previewFile.modifiedTime && (
+                  <span>Modificado {formatDate(previewFile.modifiedTime)}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="doc-viewer-actions">
+              <a
+                href={viewUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="doc-viewer-btn"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                <span>Abrir en Drive</span>
+              </a>
+              <button className="doc-viewer-btn-close" onClick={closePreview} title="Cerrar (Esc)">
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {/* ── Área del iframe ── */}
+          <div className="doc-viewer-body">
+            {!iframeLoaded && !iframeError && (
+              <div className="doc-viewer-loading">
+                <div className="spinner" style={{ borderTopColor: color }} />
+                <p>Cargando vista previa...</p>
+              </div>
+            )}
+
+            {iframeError && (
+              <div className="doc-viewer-error">
+                <div className="doc-viewer-error-icon">📄</div>
+                <h3>Vista previa no disponible</h3>
+                <p>
+                  Este documento requiere autenticación en Google o no está
+                  habilitado para previsualización embebida.
+                </p>
+                <a
+                  href={viewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="doc-viewer-error-btn"
+                  style={{ background: color }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Abrir en Google Drive
+                </a>
+              </div>
+            )}
+
+            <iframe
+              key={previewFile.id}
+              src={previewUrl}
+              title={previewFile.name}
+              onLoad={() => { setIframeLoaded(true); setIframeError(false); }}
+              onError={() => { setIframeError(true); setIframeLoaded(true); }}
+              allow="autoplay"
+              className="doc-viewer-iframe"
+              style={{ opacity: iframeLoaded && !iframeError ? 1 : 0 }}
+            />
+          </div>
+
+          {/* ── Footer ── */}
+          {!iframeError && (
+            <div className="doc-viewer-footer">
+              <span>Si el documento no carga, asegúrate de estar autenticado en Google.</span>
+              <a href={viewUrl} target="_blank" rel="noopener noreferrer" style={{ color }}>
+                Abrir directamente →
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAILoadingOverlay = () => {
+    if (!validatingContent && !validatingCourse) return null;
+    const isCourse = validatingCourse;
+    return (
+      <div className="ai-loading-overlay">
+        <div className="ai-loading-card">
+          <div className="ai-loading-spinner-wrap">
+            <div className="ai-loading-spinner"></div>
+          </div>
+          <h3 className="ai-loading-title">
+            {isCourse ? '📦 Validando Curso Completo...' : '🧠 Validando Contenido con IA...'}
+          </h3>
+          <p className="ai-loading-desc">
+            {isCourse
+              ? 'Analizando todas las semanas del curso. Esto puede tardar varios minutos según la cantidad de semanas.'
+              : 'Evaluando los requisitos de contenido con inteligencia artificial. Esto puede tardar entre 30 y 90 segundos.'}
+          </p>
+          <div className="ai-loading-hint">
+            <span className="ai-loading-badge">Gemini</span>
+            <span className="ai-loading-badge groq">Groq</span>
+            <span className="ai-loading-badge openrouter">OpenRouter</span>
+          </div>
+          <p className="ai-loading-warn">Por favor, no cierre ni recargue esta página.</p>
+        </div>
+      </div>
+    );
+  };
+
   if (loading && folders.length === 0 && files.length === 0) {
     return (
       <div className="document-analyzer">
@@ -1089,7 +1274,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
                   onClick={() => navigateToFolder(folder)}
                   role="button"
                   tabIndex={0}
-                  onKeyPress={(e) => e.key === 'Enter' && navigateToFolder(folder)}
+                  onKeyDown={(e) => e.key === 'Enter' && navigateToFolder(folder)}
                   style={{ position: 'relative' }}
                 >
                   {/* Badge de última validación */}
@@ -1141,24 +1326,31 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
                       </div>
                     </div>
                   </div>
-                  <button
-                    className="btn-analyze"
-                    onClick={() => handleAnalyze(file)}
-                    disabled={analyzing === file.id}
-                  >
-                    {analyzing === file.id ? (
-                      <>
-                        <svg className="btn-analyze-icon" viewBox="0 0 24 24" fill="white">
-                          <path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/>
-                        </svg>
-                        Analizando...
-                      </>
-                    ) : (
-                      <>
-                        🔍 Analizar
-                      </>
-                    )}
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button
+                      className="btn-preview"
+                      onClick={() => { setPreviewFile(file); setIframeLoaded(false); setIframeError(false); }}
+                      title="Vista previa del documento"
+                    >
+                      👁 Ver
+                    </button>
+                    <button
+                      className="btn-analyze"
+                      onClick={() => handleAnalyze(file)}
+                      disabled={analyzing === file.id}
+                    >
+                      {analyzing === file.id ? (
+                        <>
+                          <svg className="btn-analyze-icon" viewBox="0 0 24 24" fill="white">
+                            <path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/>
+                          </svg>
+                          Analizando...
+                        </>
+                      ) : (
+                        <>🔍 Analizar</>
+                      )}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1180,6 +1372,10 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
       {renderValidationModal()}
       {renderContentValidationModal()}
       {renderCourseValidationModal()}
+      {/* Overlay de carga de IA (cubre toda la pantalla) */}
+      {renderAILoadingOverlay()}
+      {/* Vista previa de documento */}
+      {renderDocumentPreview()}
     </div>
   );
 };

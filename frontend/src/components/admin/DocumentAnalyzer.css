@@ -384,6 +384,35 @@
   transform: none;
 }
 
+/* Botón secundario para vista previa */
+.btn-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.btn-preview:hover {
+  background: var(--bg-secondary);
+  border-color: var(--cococys-orange);
+  color: var(--cococys-orange);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-preview:active {
+  transform: translateY(0);
+}
+
 .btn-analyze-icon {
   width: 16px;
   height: 16px;
@@ -894,6 +923,102 @@ button:focus-visible,
 }
 
 /* ========================================
+   OVERLAY DE CARGA DE IA
+   ======================================== */
+
+.ai-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeInOverlay 0.3s ease-out;
+}
+
+.ai-loading-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: 48px 40px 36px;
+  max-width: 460px;
+  width: 90%;
+  text-align: center;
+  box-shadow: var(--shadow-xl);
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ai-loading-spinner-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.ai-loading-spinner {
+  width: 64px;
+  height: 64px;
+  border: 5px solid var(--border-light);
+  border-top-color: var(--cococys-orange);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.ai-loading-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 12px 0;
+}
+
+.ai-loading-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 20px 0;
+}
+
+.ai-loading-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.ai-loading-badge {
+  padding: 3px 10px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ai-loading-badge.groq {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+}
+
+.ai-loading-badge.openrouter {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.ai-loading-warn {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  margin: 0;
+  font-style: italic;
+}
+
+/* ========================================
    TABLA DE VALIDACIÓN DE CONTENIDO (cv-table)
    ======================================== */
 
@@ -926,4 +1051,281 @@ button:focus-visible,
 
 .cv-table tbody tr:hover {
   background: var(--cococys-orange-subtle);
+}
+
+/* ========================================
+   VISOR DE DOCUMENTO (doc-viewer)
+   ======================================== */
+
+.doc-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+  padding: 16px;
+  animation: fadeInOverlay 0.2s ease-out;
+}
+
+.doc-viewer {
+  display: flex;
+  flex-direction: column;
+  width: 96vw;
+  height: 94vh;
+  max-width: 1400px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-light);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Toolbar ── */
+.doc-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+  min-height: 64px;
+}
+
+.doc-viewer-filetype {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.doc-viewer-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-viewer-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0 0 2px 0;
+}
+
+.doc-viewer-info {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.doc-viewer-info-label {
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+}
+
+.doc-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.doc-viewer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.doc-viewer-btn:hover {
+  border-color: var(--cococys-orange);
+  color: var(--cococys-orange);
+  background: var(--cococys-orange-subtle);
+}
+
+.doc-viewer-btn-close {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.doc-viewer-btn-close:hover {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: white;
+  transform: rotate(90deg);
+}
+
+/* ── Área de contenido (iframe) ── */
+.doc-viewer-body {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+}
+
+.doc-viewer-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg-secondary);
+  z-index: 2;
+}
+
+.doc-viewer-loading p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.doc-viewer-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--bg-secondary);
+  padding: 2rem;
+  z-index: 2;
+  text-align: center;
+}
+
+.doc-viewer-error-icon {
+  font-size: 3.5rem;
+  opacity: 0.7;
+}
+
+.doc-viewer-error h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.doc-viewer-error p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin: 0;
+  max-width: 380px;
+  line-height: 1.6;
+}
+
+.doc-viewer-error-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  color: white;
+  transition: all var(--transition-fast);
+  margin-top: 4px;
+}
+
+.doc-viewer-error-btn:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.doc-viewer-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  transition: opacity 0.25s ease;
+}
+
+/* ── Footer ── */
+.doc-viewer-footer {
+  padding: 6px 20px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-light);
+  font-size: 0.7rem;
+  color: var(--text-light);
+  text-align: center;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.doc-viewer-footer a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.doc-viewer-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ── Barra de color según tipo de archivo ── */
+.doc-viewer-accent {
+  height: 3px;
+  flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .doc-viewer {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .doc-viewer-overlay {
+    padding: 0;
+  }
+
+  .doc-viewer-toolbar {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .doc-viewer-btn span {
+    display: none;
+  }
 }

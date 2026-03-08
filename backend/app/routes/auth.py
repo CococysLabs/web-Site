@@ -204,6 +204,35 @@ async def approve_user(
     }
 
 
+@router.patch("/users/{user_id}/set-teacher")
+async def set_teacher(
+    user_id: uuid.UUID,
+    body: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Asignar/revocar rol de docente y carpeta de Drive (solo admin).
+    Body: { is_teacher: bool, drive_folder_id: str | null }
+    """
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="No tienes permisos para realizar esta acción")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    user.is_teacher = bool(body.get("is_teacher", False))
+    user.drive_folder_id = body.get("drive_folder_id") or None
+    db.commit()
+    db.refresh(user)
+    return {
+        "message": "Configuración de docente actualizada",
+        "is_teacher": user.is_teacher,
+        "drive_folder_id": user.drive_folder_id,
+    }
+
+
 @router.get("/users")
 async def get_all_users(
     role: Optional[str] = Query(None),
@@ -244,6 +273,8 @@ async def get_all_users(
                 "role": u.role.value,
                 "is_active": u.is_active,
                 "is_approved": u.is_approved,
+                "is_teacher": getattr(u, "is_teacher", False) or False,
+                "drive_folder_id": getattr(u, "drive_folder_id", None),
                 "created_at": u.created_at.isoformat() if u.created_at else None,
             }
             for u in users

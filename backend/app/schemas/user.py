@@ -63,6 +63,8 @@ class UserResponse(UserBase):
     is_approved: bool
     approved_at: Optional[datetime] = None
     created_at: datetime
+    is_teacher: Optional[bool] = False
+    drive_folder_id: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -38,6 +38,19 @@ app.add_middleware(
 async def startup_event():
     """Inicializar base de datos al iniciar"""
     init_db()
+
+    # Migraciones incrementales (columnas nuevas en tablas existentes)
+    from sqlalchemy import text
+    from app.database import engine
+    with engine.connect() as conn:
+        conn.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_teacher BOOLEAN DEFAULT FALSE"
+        ))
+        conn.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS drive_folder_id VARCHAR(200)"
+        ))
+        conn.commit()
+
     # Inicializar defaults de configuración del sistema
     from app.database import SessionLocal
     from app.services.settings_service import settings_service as svc
