@@ -233,6 +233,54 @@ async def set_teacher(
     }
 
 
+@router.patch("/users/{user_id}/update-config")
+async def update_user_config(
+    user_id: uuid.UUID,
+    body: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Configurar carpeta Drive + permisos granulares de un usuario (solo admin).
+    Body: {
+      drive_folder_id: str | null,
+      drive_folder_name: str | null,
+      is_teacher: bool,
+      permissions: {
+        can_view_drive: bool,
+        can_analyze: bool,
+        can_validate_structure: bool,
+        can_validate_content: bool
+      }
+    }
+    """
+    if current_user.role.value != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="No tienes permisos para realizar esta acción")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+
+    if "drive_folder_id" in body:
+        user.drive_folder_id = body["drive_folder_id"] or None
+    if "drive_folder_name" in body:
+        user.drive_folder_name = body["drive_folder_name"] or None
+    if "is_teacher" in body:
+        user.is_teacher = bool(body["is_teacher"])
+    if "permissions" in body and isinstance(body["permissions"], dict):
+        user.permissions = body["permissions"]
+
+    db.commit()
+    db.refresh(user)
+    return {
+        "message": "Configuración actualizada",
+        "drive_folder_id": user.drive_folder_id,
+        "drive_folder_name": user.drive_folder_name,
+        "is_teacher": user.is_teacher,
+        "permissions": user.permissions or {},
+    }
+
+
 @router.get("/users")
 async def get_all_users(
     role: Optional[str] = Query(None),

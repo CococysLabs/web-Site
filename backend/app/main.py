@@ -49,6 +49,12 @@ async def startup_event():
         conn.execute(text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS drive_folder_id VARCHAR(200)"
         ))
+        conn.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS drive_folder_name VARCHAR(300)"
+        ))
+        conn.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB"
+        ))
         conn.commit()
 
     # Inicializar defaults de configuración del sistema

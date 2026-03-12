@@ -125,14 +125,20 @@ async def list_contents(
     db: Session = Depends(get_db)
 ):
     """
-    Listar carpetas y archivos en una carpeta de Drive (navegación jerárquica)
+    Listar carpetas y archivos en una carpeta de Drive (navegación jerárquica).
+    Admins: acceso total.
+    Estudiantes: solo si tienen permiso can_view_drive.
     """
-    if current_user.role != UserRole.ADMIN:
+    is_admin = current_user.role == UserRole.ADMIN
+    permissions = getattr(current_user, "permissions", None) or {}
+    can_view = permissions.get("can_view_drive", False)
+
+    if not is_admin and not can_view:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo administradores pueden acceder"
+            detail="No tienes permiso para explorar carpetas de Drive"
         )
-    
+
     # Obtener carpetas y archivos
     folders = drive_service.list_folders(folder_id)
     files = drive_service.list_files(folder_id)

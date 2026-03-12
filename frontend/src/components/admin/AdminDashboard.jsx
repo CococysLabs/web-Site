@@ -221,20 +221,35 @@ const AdminDashboard = () => {
     }
   };
 
-  // Teacher modal state
-  const [teacherModal, setTeacherModal] = useState(null); // { user }
-  const [teacherForm, setTeacherForm] = useState({ is_teacher: false, drive_folder_id: '' });
+  // User config modal state
+  const [userConfigModal, setUserConfigModal] = useState(null); // user object
+  const [userConfigForm, setUserConfigForm] = useState({
+    drive_folder_id: '',
+    drive_folder_name: '',
+    is_teacher: false,
+    permissions: { can_view_drive: false, can_analyze: false, can_validate_structure: false, can_validate_content: false }
+  });
 
-  const openTeacherModal = (u) => {
-    setTeacherModal(u);
-    setTeacherForm({ is_teacher: !!u.is_teacher, drive_folder_id: u.drive_folder_id || '' });
+  const openUserConfigModal = (u) => {
+    setUserConfigModal(u);
+    setUserConfigForm({
+      drive_folder_id: u.drive_folder_id || '',
+      drive_folder_name: u.drive_folder_name || '',
+      is_teacher: !!u.is_teacher,
+      permissions: {
+        can_view_drive: u.permissions?.can_view_drive ?? false,
+        can_analyze: u.permissions?.can_analyze ?? false,
+        can_validate_structure: u.permissions?.can_validate_structure ?? false,
+        can_validate_content: u.permissions?.can_validate_content ?? false,
+      }
+    });
   };
 
-  const saveTeacher = async () => {
+  const saveUserConfig = async () => {
     try {
-      await api.patch(`/api/auth/users/${teacherModal.id}/set-teacher`, teacherForm);
-      showToast('success', 'Configuración de docente guardada');
-      setTeacherModal(null);
+      await api.patch(`/api/auth/users/${userConfigModal.id}/update-config`, userConfigForm);
+      showToast('success', 'Configuración del usuario guardada');
+      setUserConfigModal(null);
       loadAllUsers();
     } catch (err) {
       showToast('error', err.response?.data?.detail || 'Error al guardar');
@@ -277,47 +292,83 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Teacher modal */}
-      {teacherModal && (
-        <div className="admin-modal-overlay" onClick={() => setTeacherModal(null)}>
-          <div className="admin-confirm-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="confirm-icon" style={{ background: 'rgba(16,185,129,0.1)' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="#10b981">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
-              </svg>
+      {/* User config modal */}
+      {userConfigModal && (
+        <div className="admin-modal-overlay" onClick={() => setUserConfigModal(null)}>
+          <div className="admin-confirm-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', textAlign: 'left' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.9rem', flexShrink: 0 }}>
+                {userConfigModal.nombre?.[0]}{userConfigModal.apellidos?.[0]}
+              </div>
+              <div>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem' }}>{userConfigModal.nombre} {userConfigModal.apellidos}</p>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{userConfigModal.correo}</p>
+              </div>
             </div>
-            <p style={{ fontWeight: 600, fontSize: '1rem', marginBottom: '1rem' }}>
-              Rol Docente — {teacherModal.nombre} {teacherModal.apellidos}
-            </p>
-            <div style={{ textAlign: 'left', marginBottom: '1rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={teacherForm.is_teacher}
-                  onChange={e => setTeacherForm(f => ({ ...f, is_teacher: e.target.checked }))}
-                  style={{ accentColor: '#10b981', width: 16, height: 16 }}
-                />
-                <span style={{ fontSize: '0.9rem' }}>Habilitar vista de docente</span>
-              </label>
-              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                ID de carpeta Drive asignada
-              </label>
+
+            {/* Drive folder */}
+            <div style={{ marginBottom: '1rem' }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Carpeta de Google Drive asignada</p>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>ID de carpeta</label>
               <input
                 className="settings-input"
                 type="text"
                 placeholder="Ej: 1ABC...xyz"
-                value={teacherForm.drive_folder_id}
-                onChange={e => setTeacherForm(f => ({ ...f, drive_folder_id: e.target.value }))}
-                style={{ width: '100%', fontSize: '0.875rem' }}
+                value={userConfigForm.drive_folder_id}
+                onChange={e => setUserConfigForm(f => ({ ...f, drive_folder_id: e.target.value }))}
+                style={{ width: '100%', fontSize: '0.875rem', marginBottom: '8px', boxSizing: 'border-box' }}
               />
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                El docente verá el historial de validaciones de esta carpeta en su panel.
-              </p>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Nombre de carpeta (opcional, visible al usuario)</label>
+              <input
+                className="settings-input"
+                type="text"
+                placeholder="Ej: Sistemas Operativos 2025"
+                value={userConfigForm.drive_folder_name}
+                onChange={e => setUserConfigForm(f => ({ ...f, drive_folder_name: e.target.value }))}
+                style={{ width: '100%', fontSize: '0.875rem', boxSizing: 'border-box' }}
+              />
             </div>
+
+            {/* is_teacher toggle */}
+            <div style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-light)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={userConfigForm.is_teacher}
+                  onChange={e => setUserConfigForm(f => ({ ...f, is_teacher: e.target.checked }))}
+                  style={{ accentColor: '#10b981', width: 16, height: 16 }}
+                />
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Habilitar vista de docente (Mi Curso)</span>
+              </label>
+            </div>
+
+            {/* Permissions */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <p style={{ margin: '0 0 10px', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Permisos de funcionalidades</p>
+              {[
+                { key: 'can_view_drive', label: 'Ver explorador de Drive', desc: 'Puede navegar por su carpeta asignada' },
+                { key: 'can_analyze', label: 'Analizar documentos', desc: 'Puede usar el botón Analizar en archivos' },
+                { key: 'can_validate_structure', label: 'Validar estructura', desc: 'Puede ejecutar validación de estructura' },
+                { key: 'can_validate_content', label: 'Validar contenido (IA)', desc: 'Puede ejecutar validación de contenido con Gemini' },
+              ].map(({ key, label, desc }) => (
+                <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginBottom: '10px' }}>
+                  <input
+                    type="checkbox"
+                    checked={userConfigForm.permissions[key]}
+                    onChange={e => setUserConfigForm(f => ({ ...f, permissions: { ...f.permissions, [key]: e.target.checked } }))}
+                    style={{ accentColor: 'var(--cococys-orange)', width: 15, height: 15, marginTop: 2, flexShrink: 0 }}
+                  />
+                  <div>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{label}</span>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
             <div className="confirm-actions">
-              <button className="confirm-cancel" onClick={() => setTeacherModal(null)}>Cancelar</button>
-              <button className="confirm-ok" style={{ background: '#10b981', borderColor: '#10b981' }} onClick={saveTeacher}>Guardar</button>
+              <button className="confirm-cancel" onClick={() => setUserConfigModal(null)}>Cancelar</button>
+              <button className="confirm-ok" style={{ background: 'var(--cococys-orange)', borderColor: 'var(--cococys-orange)' }} onClick={saveUserConfig}>Guardar</button>
             </div>
           </div>
         </div>
@@ -1329,8 +1380,8 @@ const AdminDashboard = () => {
                             <div style={{ display: 'flex', gap: '6px' }}>
                               <button
                                 style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, background: 'rgba(16,185,129,0.12)', color: '#10b981' }}
-                                onClick={() => openTeacherModal(u)}
-                                title="Configurar rol de docente"
+                                onClick={() => openUserConfigModal(u)}
+                                title="Configurar usuario (Drive + permisos)"
                               >
                                 🏫
                               </button>

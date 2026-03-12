@@ -25,30 +25,30 @@ function HomePage() {
   const resources = [
     {
       id: 1,
-      title: 'Metodología COCOCYS - Segundo Ciclo',
-      description: 'Primera reunión 2025 sobre metodología para consolidación de conocimiento en ciencias y sistemas.',
+      title: 'Taller de Capacitación: Plataforma Moodle',
+      description: 'Taller de capacitación sobre el uso de la plataforma de educación a distancia Moodle.',
       type: 'youtube',
-      url: 'https://www.youtube.com/@COCOCYSECYS/videos',
+      url: 'https://www.youtube.com/watch?v=Xh07q_B2J0Y',
       category: 'Tutoriales',
-      tags: ['metodología', 'educación', 'sistemas']
+      tags: ['moodle', 'educación', 'capacitación']
     },
     {
       id: 2,
-      title: 'Cómo redactar una competencia',
-      description: 'Video tutorial sobre redacción de competencias según la metodología COCOCYS.',
+      title: 'Presentación de Proyectos de Graduación - USAC',
+      description: 'Presentación de proyectos de graduación de la Facultad de Ingeniería USAC.',
       type: 'youtube',
-      url: 'https://www.youtube.com/@COCOCYSECYS/videos',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       category: 'Tutoriales',
-      tags: ['competencias', 'educación', 'metodología']
+      tags: ['graduación', 'proyectos', 'USAC']
     },
     {
       id: 3,
-      title: 'Calificación de Proyectos COCOCYS',
-      description: 'Guía sobre calificación de proyectos con modificación de código o trabajo asignado.',
+      title: 'Tutorial: Instalación de Software de Simulación (Cococys v1.0)',
+      description: 'Guía paso a paso para la instalación del software de simulación Cococys v1.0.',
       type: 'youtube',
-      url: 'https://www.youtube.com/@COCOCYSECYS/videos',
+      url: 'https://www.youtube.com/watch?v=y6120qOlsfU',
       category: 'Tutoriales',
-      tags: ['evaluación', 'proyectos', 'calificación']
+      tags: ['instalación', 'simulación', 'cococys']
     },
     {
       id: 4,
@@ -124,12 +124,12 @@ function HomePage() {
     },
     {
       id: 12,
-      title: 'Canal de YouTube COCOCYS',
-      description: 'Videos educativos, tutoriales y metodología COCOCYS para ingeniería en sistemas.',
+      title: 'Conferencia sobre Ciberseguridad en el Ámbito Académico',
+      description: 'Conferencia especializada sobre ciberseguridad orientada al ámbito académico y universitario.',
       type: 'youtube',
-      url: 'https://www.youtube.com/@COCOCYSECYS',
+      url: 'https://www.youtube.com/watch?v=3JZ_D3ELwOQ',
       category: 'Tutoriales',
-      tags: ['videos', 'tutoriales', 'educación']
+      tags: ['ciberseguridad', 'académico', 'conferencia']
     }
   ]
 

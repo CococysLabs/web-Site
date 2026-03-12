@@ -93,6 +93,7 @@ class ValidateCourseRequest(BaseModel):
     course_folder_id: str
     course_name: str
     validation_type: str = "both"   # "structure" | "content" | "both"
+    candidate_folder_ids: List[str] = []  # ancestros del curso para localizar la matriz
 
 
 # ─── Validate Folder (estructura) ────────────────────────────────────────────
@@ -104,9 +105,11 @@ async def validate_folder_structure(
     db: Session = Depends(get_db)
 ):
     """Validar estructura de una carpeta de curso."""
-    if current_user.role != UserRole.ADMIN:
+    is_admin = current_user.role == UserRole.ADMIN
+    perms = getattr(current_user, "permissions", None) or {}
+    if not is_admin and not perms.get("can_validate_structure", False):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Solo administradores pueden validar carpetas")
+                            detail="No tienes permiso para validar estructura")
     try:
         result = structure_validation_service.validate_folder_structure(request.folder_id)
 
@@ -145,9 +148,11 @@ async def validate_document_content(
     db: Session = Depends(get_db)
 ):
     """Validar el CONTENIDO de los documentos en una carpeta Semana_X con Gemini AI."""
-    if current_user.role != UserRole.ADMIN:
+    is_admin = current_user.role == UserRole.ADMIN
+    perms = getattr(current_user, "permissions", None) or {}
+    if not is_admin and not perms.get("can_validate_content", False):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Solo administradores pueden validar contenido")
+                            detail="No tienes permiso para validar contenido")
     try:
         from app.services.document_content_validation_service import document_content_validation_service
         candidates = [request.matrix_folder_id]
@@ -201,9 +206,12 @@ async def validate_course_batch(
     Validar todas las carpetas Semana_X de un curso de una sola vez.
     Tipo: 'structure' | 'content' | 'both'
     """
-    if current_user.role != UserRole.ADMIN:
+    is_admin = current_user.role == UserRole.ADMIN
+    perms = getattr(current_user, "permissions", None) or {}
+    can_validate = perms.get("can_validate_structure", False) or perms.get("can_validate_content", False)
+    if not is_admin and not can_validate:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Solo administradores pueden validar cursos")
+                            detail="No tienes permiso para validar cursos")
 
     try:
         from app.services.document_content_validation_service import document_content_validation_service
@@ -280,7 +288,11 @@ async def validate_course_batch(
 
             try:
                 if request.validation_type in ("content", "both"):
-                    candidates = [request.course_folder_id, folder['id']]
+                    # Buscar la Matriz en el curso y también en los ancestros enviados por el frontend
+                    candidates = [request.course_folder_id]
+                    for fid in request.candidate_folder_ids:
+                        if fid not in candidates:
+                            candidates.append(fid)
                     content = document_content_validation_service.validate_folder_content(
                         semana_folder_id     = folder['id'],
                         semana_folder_name   = folder['name'],
@@ -372,11 +384,17 @@ async def get_validation_history(
     db: Session                = Depends(get_db)
 ):
     """Historial de validaciones con filtros opcionales."""
-    if current_user.role != UserRole.ADMIN:
+    is_admin = current_user.role == UserRole.ADMIN
+    perms = getattr(current_user, "permissions", None) or {}
+    can_any = perms.get("can_validate_structure", False) or perms.get("can_validate_content", False) or perms.get("can_analyze", False)
+    if not is_admin and not can_any:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Solo administradores pueden ver el historial")
+                            detail="No tienes permiso para ver el historial")
 
     q = db.query(ValidationRecord)
+    # Estudiantes solo ven sus propios registros
+    if not is_admin:
+        q = q.filter(ValidationRecord.validated_by == current_user.id)
     if folder_id:
         q = q.filter(ValidationRecord.folder_id == folder_id)
     if course_name:
@@ -423,12 +441,17 @@ async def get_validation_stats(
     db: Session                = Depends(get_db)
 ):
     """Estadísticas de validaciones para el dashboard de reportes."""
-    if current_user.role != UserRole.ADMIN:
+    is_admin = current_user.role == UserRole.ADMIN
+    perms = getattr(current_user, "permissions", None) or {}
+    can_any = perms.get("can_validate_structure", False) or perms.get("can_validate_content", False) or perms.get("can_analyze", False)
+    if not is_admin and not can_any:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Solo administradores pueden ver estadísticas")
+                            detail="No tienes permiso para ver estadísticas")
 
     since = datetime.now(timezone.utc) - timedelta(days=days)
     q = db.query(ValidationRecord).filter(ValidationRecord.created_at >= since)
+    if not is_admin:
+        q = q.filter(ValidationRecord.validated_by == current_user.id)
     if course_name:
         q = q.filter(ValidationRecord.course_name.ilike(f"%{course_name}%"))
 

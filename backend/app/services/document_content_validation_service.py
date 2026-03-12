@@ -422,9 +422,12 @@ class DocumentContentValidationService:
         """
         try:
             files = drive_service.list_files(folder_id)
+            names = [f.get('name', '') for f in files]
+            print(f"  📂 Archivos en {folder_id}: {names}")
             for f in files:
-                if f.get('name', '').startswith(MATRIX_FILE_PREFIX):
-                    return (f['id'], f['name'])
+                name = f.get('name', '')
+                if name.lower().startswith(MATRIX_FILE_PREFIX.lower()):
+                    return (f['id'], name)
             return None
         except Exception as e:
             print(f"Error buscando matriz: {e}")
@@ -925,26 +928,25 @@ class DocumentContentValidationService:
         Llama a Gemini para evaluar si el chunk de documento cubre el requisito.
         Retorna {'presente': 'Si'|'No', 'observacion': str}.
         """
-        prompt = f"""Eres un evaluador académico. Determina si el siguiente contenido de documentos universitarios cubre el requisito indicado, ya sea de forma EXPLÍCITA o IMPLÍCITA.
+        prompt = f"""Eres un evaluador académico universitario experto. Determina si el contenido del documento cubre el requisito indicado.
 
 SECCIÓN DEL CURSO: {section_name}
 REQUISITO A VERIFICAR: {requirement_text}
 AUTOR ESPERADO: {autor if autor else 'No especificado'}
 
-Un requisito se considera PRESENTE (Si) si:
-- El documento aborda el tema aunque use terminología diferente
-- El concepto está demostrado con ejemplos o ejercicios
-- El contenido implica el cumplimiento del requisito
+CRITERIOS:
+- PRESENTE (Si): el documento aborda el tema de forma explícita O implícita (diferente terminología, ejemplos prácticos, demostraciones, o evidencia clara del concepto).
+- AUSENTE (No): el tema no aparece, o aparece de forma tan superficial que no puede considerarse cubierto.
 
-Un requisito se considera AUSENTE (No) si:
-- El tema no aparece en ninguna forma
-- El contenido es insuficiente para cubrir el requisito
+REGLAS PARA LA OBSERVACIÓN:
+- Si PRESENTE: indica brevemente cómo o dónde se evidencia en el documento.
+- Si AUSENTE: indica qué falta específicamente y una recomendación concreta para mejorarlo.
 
-CONTENIDO DE LOS DOCUMENTOS:
+CONTENIDO DEL DOCUMENTO:
 {doc_chunk}
 
 Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
-{{"presente": "Si" o "No", "observacion": "Explicación de 1-2 oraciones"}}"""
+{{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones"}}"""
 
         target_model = model_name or GEMINI_MODEL
 
@@ -1076,15 +1078,22 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
             f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
         )
 
-        prompt = f"""Eres un evaluador académico riguroso. Analiza el siguiente contenido de un documento universitario y determina si cubre cada uno de los requisitos listados.
+        prompt = f"""Eres un evaluador académico universitario experto. Analiza el contenido del documento y determina con precisión si cada requisito está cubierto.
 
-SECCIÓN DEL CURSO: {section_name}
-TIPO DE DOCUMENTO: {group_name}
+CONTEXTO:
+- Sección del curso: {section_name}
+- Tipo de documento evaluado: {group_name}
 
-Un requisito se considera PRESENTE (Si) si el documento lo aborda, aunque sea con terminología diferente, mediante ejemplos, o de forma implícita.
-Un requisito se considera AUSENTE (No) si el tema no aparece en ninguna forma o el contenido es claramente insuficiente.
+CRITERIOS DE EVALUACIÓN:
+- PRESENTE (Si): el documento aborda el tema de forma explícita O implícita (diferente terminología, ejemplos, demostraciones prácticas, o el concepto queda claramente evidenciado).
+- AUSENTE (No): el tema NO aparece en ninguna forma, el contenido es insuficiente o existe pero es meramente superficial sin desarrollo real.
 
-REQUISITOS A EVALUAR:
+REGLAS PARA LA OBSERVACIÓN:
+- Si PRESENTE: indica brevemente DÓNDE o CÓMO se evidencia (ej. "Se desarrolla en la diapositiva 3 con ejemplos prácticos").
+- Si AUSENTE: indica QUÉ falta y UNA recomendación concreta para subsanarlo (ej. "No se menciona. Se recomienda agregar una sección explicando X con al menos un ejemplo").
+- Sé específico y accionable. Evita respuestas genéricas como "no se encontró".
+
+REQUISITOS A EVALUAR ({len(params)} en total):
 {reqs_list}
 
 CONTENIDO DEL DOCUMENTO:
@@ -1092,7 +1101,7 @@ CONTENIDO DEL DOCUMENTO:
 
 Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), con exactamente {len(params)} objetos en el mismo orden que los requisitos:
 [
-  {{"presente": "Si" o "No", "observacion": "Explicación breve de 1 oración"}},
+  {{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones"}},
   ...
 ]"""
 

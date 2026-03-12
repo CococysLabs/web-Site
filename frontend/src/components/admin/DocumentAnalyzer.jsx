@@ -2,7 +2,14 @@ import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import './DocumentAnalyzer.css';
 
-const DocumentAnalyzer = ({ folderId, folderName }) => {
+// userPermissions: null = admin (todo habilitado), objeto = permisos del estudiante
+const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
+  // Si userPermissions es null → admin (todo visible)
+  const canAnalyze          = userPermissions === null || userPermissions?.can_analyze !== false;
+  const canValidateStructure = userPermissions === null || userPermissions?.can_validate_structure !== false;
+  const canValidateContent   = userPermissions === null || userPermissions?.can_validate_content !== false;
+  // Curso completo requiere ambas validaciones
+  const canValidateCourse    = canValidateStructure && canValidateContent;
   const [folders, setFolders] = useState([]);
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -111,7 +118,9 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
   };
 
   // Helpers para detección de carpeta Semana y localización de la carpeta con el Excel
-  const isSemanaFolder = (name) => /semana[_\s]\d+/i.test(name || '');
+  const isSemanaFolder = (name) => /semana[_\s]?\d+/i.test(name || '');
+  // El folder actual es raíz de un curso si contiene subcarpetas Semana
+  const isCourseRoot = folders.some(f => isSemanaFolder(f.name));
   const getMatrixFolderId = () =>
     breadcrumbs.length >= 2 ? breadcrumbs[breadcrumbs.length - 2].id : breadcrumbs[0]?.id;
 
@@ -160,11 +169,14 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
   const handleValidateCourse = async () => {
     setValidatingCourse(true);
     setCourseValidationResult(null);
+    // Todos los IDs ancestros (del más cercano al más lejano) para localizar la matriz
+    const candidateFolderIds = breadcrumbs.slice(0, -1).map(c => c.id).reverse();
     try {
       const response = await api.post('/api/validation/validate-course', {
         course_folder_id: currentFolderId,
-        course_name: breadcrumbs[0]?.name || currentFolderId,
-        validation_type: 'both'
+        course_name: breadcrumbs[breadcrumbs.length - 1]?.name || currentFolderId,
+        validation_type: 'both',
+        candidate_folder_ids: candidateFolderIds
       });
       setCourseValidationResult(response.data);
       loadFolderHistory();
@@ -1207,9 +1219,8 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
         
         {/* Botones de validación */}
         <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginLeft: 'var(--spacing-md)', flexWrap: 'wrap' }}>
-          {/* Validar Estructura — solo en carpetas que NO sean Semana_X
-              (el Excel de matriz vive en el root del curso, no en cada Semana) */}
-          {!isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
+          {/* Validar Estructura — en carpetas intermedias (NO curso-raíz, NO Semana_X) */}
+          {canValidateStructure && !isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && !isCourseRoot && (
             <button
               className="btn-analyze"
               onClick={handleValidateStructure}
@@ -1226,7 +1237,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
           )}
 
           {/* Validar Contenido — solo dentro de carpetas Semana_X */}
-          {isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
+          {canValidateContent && isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
             <button
               className="btn-analyze"
               onClick={handleValidateContent}
@@ -1242,8 +1253,8 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
             </button>
           )}
 
-          {/* Validar Curso Completo — solo en la raíz del curso */}
-          {breadcrumbs.length === 1 && (
+          {/* Validar Curso Completo — solo cuando los subfolders son Semanas (raíz real del curso) */}
+          {canValidateCourse && isCourseRoot && (
             <button
               className="btn-analyze"
               onClick={handleValidateCourse}
@@ -1334,7 +1345,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
                     >
                       👁 Ver
                     </button>
-                    <button
+                    {canAnalyze && <button
                       className="btn-analyze"
                       onClick={() => handleAnalyze(file)}
                       disabled={analyzing === file.id}
@@ -1349,7 +1360,7 @@ const DocumentAnalyzer = ({ folderId, folderName }) => {
                       ) : (
                         <>🔍 Analizar</>
                       )}
-                    </button>
+                    </button>}
                   </div>
                 </div>
               ))}

@@ -2,7 +2,7 @@
 Schemas de Usuario
 """
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 import uuid
@@ -65,6 +65,8 @@ class UserResponse(UserBase):
     created_at: datetime
     is_teacher: Optional[bool] = False
     drive_folder_id: Optional[str] = None
+    drive_folder_name: Optional[str] = None
+    permissions: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
