@@ -6,7 +6,10 @@
       "Bash(docker compose build backend)",
       "Bash(docker compose up -d backend)",
       "Bash(docker compose build frontend)",
-      "Bash(docker compose up -d frontend)"
+      "Bash(docker compose up -d frontend)",
+      "Bash(docker compose:*)",
+      "Bash(docker exec:*)",
+      "Bash(dir /b \"d:\\\\RivaldoTJ\\\\Documents\\\\------------------------ Cococys ---------------------\\\\web-Site\")"
     ]
   }
 }
