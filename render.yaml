@@ -15,7 +15,6 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
-    branch: main
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
@@ -60,7 +59,6 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     rootDir: frontend
-    branch: main
     pullRequestPreviewsEnabled: true
     envVars:
       - key: VITE_API_URL
