@@ -1,0 +1,113 @@
+# ==================================
+# Docker Compose - COCOCYS System
+# Development Configuration
+# ==================================
+
+services:
+  # ============ Backend Service ============
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: cococys/backend:latest
+    container_name: cococys-backend
+    hostname: backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=info
+    volumes:
+      # Credenciales de Google Drive (solo lectura)
+      - ./backend/cococys-driv-105652f59c31.json:/app/cococys-driv-105652f59c31.json:ro
+      # Logs persistentes
+      - backend-logs:/app/logs
+      # Hot reload en desarrollo (comentar en producción)
+      - ./backend/app:/app/app:ro
+    networks:
+      - cococys-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    # Resource limits (ajustar según necesidades)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.cococys.service=backend"
+      - "com.cococys.environment=development"
+
+  # ============ Frontend Service ============
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+    image: cococys/frontend:latest
+    container_name: cococys-frontend
+    hostname: frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - cococys-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    labels:
+      - "com.cococys.service=frontend"
+      - "com.cococys.environment=development"
+
+# ============ Networks ============
+networks:
+  cococys-network:
+    driver: bridge
+    name: cococys-network
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+# ============ Volumes ============
+volumes:
+  backend-logs:
+    driver: local
+    name: cococys-backend-logs

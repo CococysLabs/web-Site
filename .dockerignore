@@ -1,0 +1,60 @@
+# ==================================
+# .dockerignore - Root Level
+# ==================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+!DOCKER.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Backups
+backups/
+*.backup
+*.bak
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env*
+!.env.example
+!.env.docker
+
+# Credentials
+*.json
+!package*.json
+*.pem
+*.key
+*.crt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS
+Thumbs.db
+.DS_Store
