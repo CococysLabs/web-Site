@@ -60,7 +60,7 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
       setFiles(response.data.files || []);
       // Cargar estado de validación de subcarpetas en background
       if (newFolders.length > 0) loadFolderHistory();
-    } catch (err) {
+    } catch (_err) {
       setError('Error al cargar contenido de la carpeta');
     }
     setLoading(false);
@@ -422,11 +422,10 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
       total_required, 
       total_found, 
       total_missing, 
-      compliance_percentage, 
-      found_documents, 
+      compliance_percentage,
+      found_documents,
       missing_documents,
-      status,
-      error 
+      error
     } = validationResult;
 
     return (
@@ -551,7 +550,6 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
       groups,
       documents_analyzed,
       report_generated,
-      report_name,
       report_link,
       gemini_enabled,
       excel_updated,

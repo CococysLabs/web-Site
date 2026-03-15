@@ -106,7 +106,7 @@ const AdminDashboard = () => {
       await api.post(`/api/auth/approve-user/${userId}`);
       loadDashboardData();
       showToast('success', 'Usuario aprobado exitosamente');
-    } catch (error) {
+    } catch (_error) {
       showToast('error', 'Error al aprobar usuario');
     }
   };
@@ -120,7 +120,7 @@ const AdminDashboard = () => {
           await api.delete(`/api/auth/reject-user/${userId}`);
           loadDashboardData();
           showToast('success', 'Usuario rechazado');
-        } catch (error) {
+        } catch (_error) {
           showToast('error', 'Error al rechazar usuario');
         }
       }
@@ -145,7 +145,7 @@ const AdminDashboard = () => {
         });
       });
       setSettingsForm(flat);
-    } catch (err) {
+    } catch (_err) {
       showToast('error', 'Error al cargar configuración');
     }
   };
@@ -183,7 +183,7 @@ const AdminDashboard = () => {
       ]);
       setReportStats(statsRes.data);
       setReportHistory(historyRes.data);
-    } catch (err) {
+    } catch (_err) {
       showToast('error', 'Error al cargar reportes');
     } finally {
       setReportLoading(false);
@@ -203,14 +203,14 @@ const AdminDashboard = () => {
       if (f.is_active !== '') params.set('is_active', f.is_active);
       const res = await api.get(`/api/auth/users?${params.toString()}`);
       setAllUsers(res.data);
-    } catch (err) {
+    } catch (_err) {
       showToast('error', 'Error al cargar usuarios');
     } finally {
       setUserLoading(false);
     }
   };
 
-  const handleToggleActive = async (userId, currentActive) => {
+  const handleToggleActive = async (userId, _currentActive) => {
     try {
       const res = await api.patch(`/api/auth/users/${userId}/toggle-active`);
       showToast('success', res.data.message);
@@ -260,7 +260,6 @@ const AdminDashboard = () => {
     const params = new URLSearchParams();
     params.set('days', reportFilter.days);
     if (reportFilter.type) params.set('type', reportFilter.type);
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     // Open in new tab with auth header via anchor trick via fetch + blob
     api.get(`/api/validation/export?${params.toString()}`, { responseType: 'blob' })
       .then(res => {
@@ -977,7 +976,7 @@ const AdminDashboard = () => {
                     <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginTop:8 }}>
                       {['.pdf', '.docx', '.pptx', '.xlsx'].map(ext => {
                         let currentExts = [];
-                        try { currentExts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch {}
+                        try { currentExts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
                         const checked = currentExts.includes(ext);
                         return (
                           <label key={ext} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:'0.875rem' }}>
