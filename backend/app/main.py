@@ -37,6 +37,16 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     """Inicializar base de datos al iniciar"""
+
+    # Credenciales de Google Drive desde variable base64 (Render/Cloud)
+    import os, base64
+    creds_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON_B64", "")
+    if creds_b64:
+        creds_path = os.getenv("GOOGLE_CREDENTIALS_FILE", "/tmp/google-credentials.json")
+        with open(creds_path, "wb") as f:
+            f.write(base64.b64decode(creds_b64))
+        print(f"✅ Google credentials escritas en {creds_path}")
+
     init_db()
 
     # Migraciones incrementales (columnas nuevas en tablas existentes)

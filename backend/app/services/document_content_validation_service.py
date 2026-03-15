@@ -87,6 +87,7 @@ class DocumentContentValidationService:
         # Claves que ya recibieron 429 en esta sesión (se resetean al reiniciar)
         self._exhausted_keys: set = set()
         # Proveedores alternativos
+        self._deepseek_key: Optional[str] = None
         self._groq_key: Optional[str] = None
         self._openrouter_key: Optional[str] = None
         self._init_gemini()
@@ -122,6 +123,12 @@ class DocumentContentValidationService:
             print(f"✅ Gemini ({GEMINI_MODEL}) listo — {total} clave{'s' if total > 1 else ''} disponible{'s' if total > 1 else ''}")
         else:
             print("⚠️  GEMINI_API_KEY no configurada — modo fallback (keyword matching)")
+
+        # ── DeepSeek como proveedor principal ────────────────────────────────
+        deepseek_key = getattr(settings, 'DEEPSEEK_API_KEY', '') or ''
+        if deepseek_key:
+            self._deepseek_key = deepseek_key.strip()
+            print("✅ DeepSeek configurado como proveedor PRINCIPAL de IA")
 
         # ── Groq como proveedor de respaldo ──────────────────────────────────
         groq_key = getattr(settings, 'GROQ_API_KEY', '') or ''
@@ -269,6 +276,94 @@ class DocumentContentValidationService:
                 continue
             except Exception as e:
                 print(f"  ⚠️  Groq ({groq_model}): {e}")
+
+        return None
+
+    def _call_deepseek_batch(
+        self,
+        params: List[Dict],
+        doc_snippet: str,
+        section_name: str,
+        group_name: str,
+    ) -> Optional[List[Dict[str, str]]]:
+        """
+        Llama a DeepSeek (compatible con OpenAI) para evaluar todos los
+        parámetros del grupo en una sola llamada.
+        Modelo: deepseek-chat (DeepSeek-V3) — rápido, barato, preciso.
+        """
+        import urllib.request
+        import urllib.error
+
+        reqs_list = "\n".join(
+            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
+        )
+
+        system_msg = (
+            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
+            "sin texto introductorio ni explicación. Tu respuesta debe ser "
+            f"un array JSON con exactamente {len(params)} elementos."
+        )
+
+        user_msg = (
+            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
+            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
+            f"Contenido del documento:\n{doc_snippet[:15_000]}\n\n"
+            f"Responde SOLO el array JSON (sin texto adicional):\n"
+            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
+        )
+
+        payload = json.dumps({
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": system_msg},
+                {"role": "user",   "content": user_msg},
+            ],
+            "temperature": 0.05,
+            "max_tokens": 2000,
+        }).encode("utf-8")
+
+        try:
+            req = urllib.request.Request(
+                "https://api.deepseek.com/v1/chat/completions",
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {self._deepseek_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            raw = data["choices"][0]["message"]["content"].strip()
+            raw = re.sub(r'^```json?\s*', '', raw)
+            raw = re.sub(r'\s*```$', '', raw)
+            parsed = json.loads(raw)
+
+            if not isinstance(parsed, list):
+                print("  ⚠️  DeepSeek: respuesta no es lista")
+                return None
+
+            results = []
+            for i, p in enumerate(params):
+                if i < len(parsed):
+                    item = parsed[i]
+                    results.append({
+                        'presente':    str(item.get('presente', 'No')),
+                        'observacion': str(item.get('observacion', '')),
+                    })
+                else:
+                    results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
+            print(f"  🤖 [MODELO: DeepSeek-V3] respondió — {len(results)} resultados")
+            return results
+
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")[:120]
+            print(f"  ⚠️  DeepSeek HTTP {e.code}: {body}")
+        except json.JSONDecodeError:
+            print("  ⚠️  DeepSeek: JSON inválido")
+        except Exception as e:
+            print(f"  ⚠️  DeepSeek: {e}")
 
         return None
 
@@ -1067,7 +1162,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         Retorna lista ordenada de {'presente', 'observacion'} por parámetro.
         Si Gemini falla, aplica fallback keyword por cada param.
         """
-        if not use_gemini or not self.enabled:
+        if not use_gemini and not self._deepseek_key:
             return [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
 
         # Truncar texto al máximo razonable para un solo prompt
@@ -1105,7 +1200,17 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
   ...
 ]"""
 
-        # ── Intentar con cada clave Gemini disponible (exponential backoff) ────
+        # ── Prioridad 1: DeepSeek ─────────────────────────────────────────────
+        if self._deepseek_key:
+            print("  🤖 Usando DeepSeek como proveedor principal...")
+            ds_results = self._call_deepseek_batch(
+                params, doc_snippet, section_name, group_name
+            )
+            if ds_results is not None:
+                return ds_results
+            print("  ⚠️  DeepSeek falló, intentando con Gemini...")
+
+        # ── Prioridad 2: Gemini con rotación de claves ────────────────────────
         available_keys = self._get_available_keys()
         target_model = model_name or GEMINI_MODEL
 
@@ -1179,18 +1284,18 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                         time.sleep(wait)
                         backoff *= 2   # doblar: 5 → 10 → 20 → 40s
 
-        # ── Respaldo 1: Groq ──────────────────────────────────────────────────
+        # ── Respaldo 3: Groq ──────────────────────────────────────────────────
         if self._groq_key:
-            print("  🔄 Intentando con Groq (proveedor alternativo)...")
+            print("  🔄 Intentando con Groq (respaldo)...")
             groq_results = self._call_groq_batch(
                 params, doc_snippet, section_name, group_name
             )
             if groq_results is not None:
                 return groq_results
 
-        # ── Respaldo 2: OpenRouter ────────────────────────────────────────────
+        # ── Respaldo 4: OpenRouter ────────────────────────────────────────────
         if self._openrouter_key:
-            print("  🔄 Intentando con OpenRouter (proveedor alternativo)...")
+            print("  🔄 Intentando con OpenRouter (respaldo)...")
             or_results = self._call_openrouter_batch(
                 params, doc_snippet, section_name, group_name
             )

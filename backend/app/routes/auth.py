@@ -8,8 +8,10 @@ from datetime import timedelta, datetime
 from typing import Optional
 import uuid
 
+from sqlalchemy import func
 from app.database import get_db
 from app.models.user import User
+from app.models.validation_record import ValidationRecord
 from app.schemas.user import UserCreate, UserResponse, UserLogin, Token
 from app.utils.auth import (
     get_password_hash,
@@ -311,6 +313,23 @@ async def get_all_users(
     total = query.count()
     users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
 
+    # Actividad por usuario: validaciones, última fecha, cumplimiento promedio
+    user_ids = [u.id for u in users]
+    activity_map = {}
+    if user_ids:
+        rows = (
+            db.query(
+                ValidationRecord.validated_by,
+                func.count(ValidationRecord.id).label("count"),
+                func.max(ValidationRecord.created_at).label("last_at"),
+                func.avg(ValidationRecord.compliance_percentage).label("avg_pct"),
+            )
+            .filter(ValidationRecord.validated_by.in_(user_ids))
+            .group_by(ValidationRecord.validated_by)
+            .all()
+        )
+        activity_map = {str(r.validated_by): r for r in rows}
+
     return {
         "users": [
             {
@@ -324,6 +343,11 @@ async def get_all_users(
                 "is_teacher": getattr(u, "is_teacher", False) or False,
                 "drive_folder_id": getattr(u, "drive_folder_id", None),
                 "created_at": u.created_at.isoformat() if u.created_at else None,
+                "activity": {
+                    "validation_count": activity_map[str(u.id)].count if str(u.id) in activity_map else 0,
+                    "last_validation_at": activity_map[str(u.id)].last_at.isoformat() if str(u.id) in activity_map and activity_map[str(u.id)].last_at else None,
+                    "avg_compliance": round(float(activity_map[str(u.id)].avg_pct), 1) if str(u.id) in activity_map and activity_map[str(u.id)].avg_pct is not None else None,
+                },
             }
             for u in users
         ],

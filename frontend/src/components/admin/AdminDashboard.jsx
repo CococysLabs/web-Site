@@ -1332,14 +1332,14 @@ const AdminDashboard = () => {
                   <table className="report-table">
                     <thead>
                       <tr>
-                        {['Usuario', 'Correo', 'Rol', 'Estado', 'Aprobado', 'Registrado', 'Docente', 'Acciones'].map(h => (
+                        {['Usuario', 'Correo', 'Rol', 'Estado', 'Aprobado', 'Registrado', 'Docente', 'Actividad', 'Acciones'].map(h => (
                           <th key={h}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {allUsers.users.length === 0 ? (
-                        <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No hay usuarios que coincidan</td></tr>
+                        <tr><td colSpan={9} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No hay usuarios que coincidan</td></tr>
                       ) : allUsers.users.map(u => (
                         <tr key={u.id}>
                           <td style={{ fontWeight: 500 }}>
@@ -1375,6 +1375,42 @@ const AdminDashboard = () => {
                             ) : (
                               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>—</span>
                             )}
+                          </td>
+                          <td style={{ minWidth: 140 }}>
+                            {(() => {
+                              const act = u.activity;
+                              const pct = act?.avg_compliance;
+                              const pctColor = pct == null ? 'var(--text-muted)' : pct >= 70 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#ef4444';
+                              const timeAgo = (iso) => {
+                                if (!iso) return null;
+                                const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+                                if (diff < 60) return 'hace un momento';
+                                if (diff < 3600) return `hace ${Math.floor(diff/60)} min`;
+                                if (diff < 86400) return `hace ${Math.floor(diff/3600)} h`;
+                                if (diff < 2592000) return `hace ${Math.floor(diff/86400)} días`;
+                                return new Date(iso).toLocaleDateString('es-ES');
+                              };
+                              if (!act || act.validation_count === 0) return (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Sin actividad</span>
+                              );
+                              return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                      📋 {act.validation_count} validacion{act.validation_count !== 1 ? 'es' : ''}
+                                    </span>
+                                    {pct != null && (
+                                      <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: `${pctColor}22`, color: pctColor }}>
+                                        {pct}%
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                                    🕐 {timeAgo(act.last_validation_at)}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: '6px' }}>

@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
+    # DeepSeek API (proveedor principal de IA — OpenAI-compatible)
+    DEEPSEEK_API_KEY: Optional[str] = None
     # Google Gemini API
     GEMINI_API_KEY: str
     GOOGLE_API_KEY: Optional[str] = None  # Alias para Gemini

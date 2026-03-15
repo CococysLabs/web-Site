@@ -1,0 +1,67 @@
+
+# ==============================================================
+# Render Blueprint — COCOCYS
+# Documentación: https://render.com/docs/blueprint-spec
+# ==============================================================
+
+services:
+
+  # ─────────────────────────────────────────
+  # Backend — FastAPI (Docker, Web Service)
+  # ─────────────────────────────────────────
+  - type: web
+    name: cococys-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false           # Ingresar manualmente en el dashboard
+      - key: SECRET_KEY
+        sync: false
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEYS
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # Credenciales de Google Drive en base64
+      # Generar con: base64 -w 0 cococys-driv-105652f59c31.json
+      - key: GOOGLE_CREDENTIALS_JSON_B64
+        sync: false
+      - key: GOOGLE_CREDENTIALS_FILE
+        value: /tmp/google-credentials.json
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        sync: false
+      - key: FRONTEND_URL
+        sync: false           # URL del frontend en Render (ej: https://cococys.onrender.com)
+      - key: HOST
+        value: "0.0.0.0"
+      - key: PORT
+        value: "8000"
+
+  # ─────────────────────────────────────────
+  # Frontend — React/Vite (Static Site)
+  # ─────────────────────────────────────────
+  - type: web
+    name: cococys-frontend
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    rootDir: frontend
+    branch: main
+    pullRequestPreviewsEnabled: true
+    envVars:
+      - key: VITE_API_URL
+        sync: false           # URL del backend (ej: https://cococys-backend.onrender.com)

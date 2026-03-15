@@ -1,73 +1,115 @@
-name: CI - Continuous Integration
+name: CI — Continuous Integration
 
 on:
   pull_request:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
   push:
-    branches:
-      - develop
-      - 'feature/**'
-      - 'hotfix/**'
-      - 'release/**'
+    branches: [develop, 'feature/**', 'hotfix/**', 'release/**']
+  workflow_call:   # permite ser llamado desde deploy-*.yml
 
 jobs:
-  lint-and-build:
-    name: Lint and Build
+  # ─────────────────────────────────────────────────────────────
+  # Frontend: lint + build
+  # ─────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend — Lint & Build
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
+      - name: Lint
         run: npm run lint
 
-      - name: Build project
+      - name: Build
         run: npm run build
+        env:
+          VITE_API_URL: http://localhost:8000
 
-      - name: Upload build artifacts
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
-          path: dist/
-          retention-days: 7
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 3
 
-  code-quality:
-    name: Code Quality Checks
+  # ─────────────────────────────────────────────────────────────
+  # Backend: instalar deps + verificar imports
+  # ─────────────────────────────────────────────────────────────
+  backend:
+    name: Backend — Deps & Import Check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
         with:
-          node-version: '20'
-          cache: 'npm'
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        run: npm ci
+        run: pip install -r requirements.txt
 
-      - name: Check for console.log statements
-        run: |
-          if grep -r "console\\.log" src/; then
-            echo "Warning: Found console.log statements in src/"
-            exit 0
-          fi
+      - name: Verify backend imports
+        run: python -c "import app.main; print('✅ Backend imports OK')"
+        env:
+          DATABASE_URL: postgresql+psycopg://ci:ci@localhost/ci
+          SECRET_KEY: ci-secret-key-not-used-in-production
+          GEMINI_API_KEY: ci-placeholder
+          GOOGLE_CREDENTIALS_FILE: ""
 
-      - name: Check bundle size
-        run: |
-          npm run build
-          du -sh dist/
+  # ─────────────────────────────────────────────────────────────
+  # Docker: verificar que las imágenes compilan
+  # ─────────────────────────────────────────────────────────────
+  docker-build:
+    name: Docker — Build Images
+    runs-on: ubuntu-latest
+    needs: [frontend, backend]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          tags: cococys/backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: cococys/frontend:ci
+          build-args: |
+            VITE_API_URL=http://localhost:8000
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
