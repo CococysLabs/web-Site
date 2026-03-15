@@ -46,6 +46,10 @@ async def startup_event():
         with open(creds_path, "wb") as f:
             f.write(base64.b64decode(creds_b64))
         print(f"✅ Google credentials escritas en {creds_path}")
+        # Reinicializar Drive (se importó antes de que existiera el archivo)
+        from app.services.drive_service import drive_service
+        drive_service._initialize_service()
+        print("✅ Google Drive service reinicializado")
 
     init_db()
 
