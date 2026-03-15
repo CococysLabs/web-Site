@@ -50,7 +50,7 @@ def main():
         else:
             print("🌐 Abriendo navegador para autorización...")
             print()
-            print("👉 Por favor, autoriza la aplicación en tu navegador")
+            print("Por favor, autoriza la aplicación en tu navegador")
             print()
             flow = InstalledAppFlow.from_client_secrets_file(
                 client_secret_file, SCOPES)
