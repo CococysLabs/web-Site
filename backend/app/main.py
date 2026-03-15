@@ -38,15 +38,36 @@ app.add_middleware(
 async def startup_event():
     """Inicializar base de datos al iniciar"""
 
-    # Credenciales de Google Drive desde variable base64 (Render/Cloud)
-    import os, base64
-    creds_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON_B64", "")
-    if creds_b64:
-        creds_path = os.getenv("GOOGLE_CREDENTIALS_FILE", "/tmp/google-credentials.json")
-        with open(creds_path, "wb") as f:
-            f.write(base64.b64decode(creds_b64))
-        print(f"✅ Google credentials escritas en {creds_path}")
-        # Reinicializar Drive (se importó antes de que existiera el archivo)
+    # Credenciales de Google Drive desde variable de entorno (Render/Cloud)
+    import os, base64, json as _json
+    creds_path = os.getenv("GOOGLE_CREDENTIALS_FILE", "/tmp/google-credentials.json")
+    written = False
+
+    # Opción 1: JSON plano (más simple, recomendado)
+    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
+    if creds_json:
+        try:
+            _json.loads(creds_json)  # validar que sea JSON válido
+            with open(creds_path, "w", encoding="utf-8") as f:
+                f.write(creds_json)
+            written = True
+            print(f"✅ Google credentials (JSON) escritas en {creds_path}")
+        except Exception as e:
+            print(f"⚠️  GOOGLE_CREDENTIALS_JSON inválido: {e}")
+
+    # Opción 2: Base64 (fallback)
+    if not written:
+        creds_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON_B64", "")
+        if creds_b64:
+            try:
+                with open(creds_path, "wb") as f:
+                    f.write(base64.b64decode(creds_b64))
+                written = True
+                print(f"✅ Google credentials (base64) escritas en {creds_path}")
+            except Exception as e:
+                print(f"⚠️  GOOGLE_CREDENTIALS_JSON_B64 inválido: {e}")
+
+    if written:
         from app.services.drive_service import drive_service
         drive_service._initialize_service()
         print("✅ Google Drive service reinicializado")
