@@ -986,7 +986,7 @@ const AdminDashboard = () => {
                               style={{ accentColor:'var(--cococys-orange)', width:16, height:16 }}
                               onChange={e => {
                                 let exts = [];
-                                try { exts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch {}
+                                try { exts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
                                 if (e.target.checked) {
                                   if (!exts.includes(ext)) exts.push(ext);
                                 } else {
