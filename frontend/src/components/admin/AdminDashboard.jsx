@@ -10,6 +10,7 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [stats, setStats] = useState({
     totalDocuments: 0,
     validDocuments: 0,
@@ -390,17 +391,20 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
+      {/* Sidebar overlay */}
+      <div className={`admin-sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
+
       {/* Sidebar */}
-      <aside className="admin-sidebar">
+      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <h2>COCOCYS</h2>
           <span className="role-badge admin">Admin</span>
         </div>
         
         <nav className="sidebar-nav">
-          <button 
+          <button
             className={activeTab === 'overview' ? 'active' : ''}
-            onClick={() => setActiveTab('overview')}
+            onClick={() => { setActiveTab('overview'); setSidebarOpen(false); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -408,9 +412,9 @@ const AdminDashboard = () => {
             Panel General
           </button>
           
-          <button 
+          <button
             className={activeTab === 'drive' ? 'active' : ''}
-            onClick={() => { setActiveTab('drive'); loadDriveFolders(); }}
+            onClick={() => { setActiveTab('drive'); loadDriveFolders(); setSidebarOpen(false); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -418,9 +422,9 @@ const AdminDashboard = () => {
             Google Drive
           </button>
           
-          <button 
+          <button
             className={activeTab === 'documents' ? 'active' : ''}
-            onClick={() => setActiveTab('documents')}
+            onClick={() => { setActiveTab('documents'); setSidebarOpen(false); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -430,7 +434,7 @@ const AdminDashboard = () => {
           
           <button
             className={activeTab === 'reports' ? 'active' : ''}
-            onClick={() => { setActiveTab('reports'); if (!reportStats) loadReports(); }}
+            onClick={() => { setActiveTab('reports'); if (!reportStats) loadReports(); setSidebarOpen(false); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -440,7 +444,7 @@ const AdminDashboard = () => {
 
           <button
             className={activeTab === 'users' ? 'active' : ''}
-            onClick={() => setActiveTab('users')}
+            onClick={() => { setActiveTab('users'); setSidebarOpen(false); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -453,7 +457,7 @@ const AdminDashboard = () => {
 
           <button
             className={activeTab === 'settings' ? 'active' : ''}
-            onClick={() => { setActiveTab('settings'); if (!systemSettings) loadSettings(); }}
+            onClick={() => { setActiveTab('settings'); if (!systemSettings) loadSettings(); setSidebarOpen(false); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -482,6 +486,17 @@ const AdminDashboard = () => {
 
       {/* Main Content */}
       <main className="admin-content">
+        {/* Mobile header with hamburger */}
+        <div className="admin-content-header">
+          <button className="admin-hamburger-btn" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Abrir menú">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        </div>
+
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="overview-tab">

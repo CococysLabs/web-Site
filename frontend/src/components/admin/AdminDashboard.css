@@ -787,14 +787,6 @@
    ======================================== */
 
 @media (max-width: 1024px) {
-  .admin-sidebar {
-    width: 240px;
-  }
-  
-  .admin-content {
-    margin-left: 240px;
-  }
-  
   .folders-grid {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   }
@@ -1283,5 +1275,132 @@
 @media (max-width: 768px) {
   .reports-stats-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ========================================
+   HAMBURGER BUTTON
+   ======================================== */
+
+.admin-hamburger-btn {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.5rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  box-shadow: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-hamburger-btn:hover {
+  background: var(--cococys-orange-subtle);
+  border-color: var(--cococys-orange);
+  color: var(--cococys-orange);
+  transform: none;
+}
+
+.admin-hamburger-btn svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+/* ========================================
+   SIDEBAR OVERLAY
+   ======================================== */
+
+.admin-sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 99;
+}
+
+.admin-sidebar-overlay.open {
+  display: block;
+}
+
+/* ========================================
+   RESPONSIVE BREAKPOINTS
+   ======================================== */
+
+@media (max-width: 968px) {
+  .admin-hamburger-btn {
+    display: flex;
+  }
+
+  .admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 100;
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.5);
+  }
+
+  .admin-content {
+    margin-left: 0 !important;
+    padding: 1.5rem;
+  }
+
+  .admin-content-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .page-header {
+    margin-bottom: 0;
+    flex: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-content {
+    padding: 1rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .stat-card {
+    padding: 1rem;
+    flex-direction: column;
+    text-align: center;
+    gap: 0.75rem;
+  }
+
+  .user-item {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .user-actions {
+    width: 100%;
+  }
+
+  .user-actions button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .folders-grid {
+    grid-template-columns: 1fr;
   }
 }
