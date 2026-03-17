@@ -1329,3 +1329,46 @@ button:focus-visible,
     display: none;
   }
 }
+
+/* ── Responsive improvements ── */
+@media (max-width: 768px) {
+  .document-analyzer {
+    padding: var(--spacing-md);
+  }
+
+  .breadcrumbs {
+    padding: var(--spacing-sm) var(--spacing-md);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .breadcrumbs::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .document-analyzer {
+    padding: var(--spacing-sm);
+  }
+
+  .folders-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: var(--spacing-sm);
+  }
+
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .action-buttons button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .folders-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

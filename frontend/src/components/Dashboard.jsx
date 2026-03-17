@@ -160,27 +160,19 @@ const Dashboard = () => {
 
           {/* ── Cuenta pendiente ── */}
           {!user?.is_approved && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', textAlign: 'center', gap: '1.5rem' }}>
-              <div style={{ width: 88, height: 88, borderRadius: '50%', background: 'rgba(245,158,11,0.12)', border: '2px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem' }}>
-                ⏳
-              </div>
+            <div className="pending-approval">
+              <div className="pending-icon">⏳</div>
               <div>
-                <h2 style={{ margin: '0 0 0.6rem', fontSize: '1.5rem' }}>Cuenta pendiente de aprobación</h2>
-                <p style={{ margin: 0, color: 'var(--color-text-secondary)', maxWidth: '400px', lineHeight: 1.7, fontSize: '0.95rem' }}>
+                <h2 className="pending-title">Cuenta pendiente de aprobación</h2>
+                <p className="pending-desc">
                   Un administrador está revisando tu solicitud de acceso. Te notificarán cuando tu cuenta sea activada.
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={() => window.location.reload()}
-                  style={{ padding: '10px 20px', borderRadius: '10px', background: 'rgba(255,140,66,0.1)', border: '1.5px solid rgba(255,140,66,0.4)', color: 'var(--color-primary)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}
-                >
+              <div className="pending-actions">
+                <button onClick={() => window.location.reload()} className="btn-verify">
                   🔄 Verificar estado
                 </button>
-                <button
-                  onClick={handleLogout}
-                  style={{ padding: '10px 20px', borderRadius: '10px', background: 'transparent', border: '1.5px solid var(--color-border)', color: 'var(--color-text-secondary)', cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem' }}
-                >
+                <button onClick={handleLogout} className="btn-logout-ghost">
                   Cerrar sesión
                 </button>
               </div>
@@ -194,10 +186,8 @@ const Dashboard = () => {
               {activeView === 'overview' && (
                 <div>
                   {/* Cards de acceso rápido */}
-                  <div style={{ marginBottom: '0.75rem' }}>
-                    <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Acceso rápido</p>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                  <p className="quick-access-label">Acceso rápido</p>
+                  <div className="feature-cards-grid">
                     {canViewDrive && (
                       <FeatureCard
                         icon={<svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>}
@@ -235,20 +225,20 @@ const Dashboard = () => {
                   </div>
 
                   {/* Perfil */}
-                  <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '16px', padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-                    <div style={{ width: 56, height: 56, borderRadius: '12px', background: 'linear-gradient(135deg,var(--color-primary),var(--color-accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '1.3rem', flexShrink: 0 }}>
+                  <div className="profile-strip">
+                    <div className="profile-strip-avatar">
                       {user?.nombre?.charAt(0)}{user?.apellidos?.charAt(0)}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: '0 0 3px', fontWeight: 700, fontSize: '1rem' }}>{user?.nombre} {user?.apellidos}</p>
-                      <p style={{ margin: '0 0 8px', fontSize: '0.82rem', color: 'var(--color-text-secondary)' }}>{user?.correo}</p>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        <span style={{ padding: '2px 10px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.25)' }}>✓ Activo</span>
-                        {isTeacher && <span style={{ padding: '2px 10px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>🏫 Docente</span>}
-                        {canViewDrive && <span style={{ padding: '2px 10px', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(255,140,66,0.12)', color: '#ff8c42', border: '1px solid rgba(255,140,66,0.25)' }}>📁 Drive</span>}
+                    <div className="profile-strip-info">
+                      <p className="profile-strip-name">{user?.nombre} {user?.apellidos}</p>
+                      <p className="profile-strip-email">{user?.correo}</p>
+                      <div className="profile-strip-badges">
+                        <span className="profile-badge active">✓ Activo</span>
+                        {isTeacher && <span className="profile-badge teacher">🏫 Docente</span>}
+                        {canViewDrive && <span className="profile-badge drive">📁 Drive</span>}
                       </div>
                     </div>
-                    <p style={{ margin: 0, fontSize: '0.77rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>
+                    <p className="profile-strip-since">
                       Desde {user?.created_at ? new Date(user.created_at).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }) : '—'}
                     </p>
                   </div>
@@ -257,12 +247,10 @@ const Dashboard = () => {
 
               {/* ── Mi Carpeta ── */}
               {activeView === 'mi-carpeta' && canViewDrive && (
-                <div style={{ paddingBottom: '2rem' }}>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h2 style={{ margin: 0 }}>📁 {user.drive_folder_name || 'Mi Carpeta'}</h2>
-                    <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
-                      Tu carpeta de Drive asignada por el administrador
-                    </p>
+                <div className="view-carpeta">
+                  <div className="view-header">
+                    <h2>📁 {user.drive_folder_name || 'Mi Carpeta'}</h2>
+                    <p>Tu carpeta de Drive asignada por el administrador</p>
                   </div>
                   <DocumentAnalyzer
                     folderId={user.drive_folder_id}
@@ -275,82 +263,75 @@ const Dashboard = () => {
               {/* ── Validaciones ── */}
               {activeView === 'validations' && (
                 <div>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h2 style={{ margin: 0 }}>Estado de Validaciones</h2>
-                    <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
-                      Cumplimiento del material académico validado por el equipo COCOCYS
-                    </p>
+                  <div className="view-header">
+                    <h2>Estado de Validaciones</h2>
+                    <p>Cumplimiento del material académico validado por el equipo COCOCYS</p>
                   </div>
 
                   {summaryLoading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 0', gap: '1rem', color: 'var(--color-text-secondary)' }}>
+                    <div className="view-loading">
                       <div className="spinner" style={{ width: 36, height: 36 }}></div>
                       <p style={{ margin: 0 }}>Cargando validaciones...</p>
                     </div>
                   ) : !validationSummary || validationSummary.courses.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '5rem 2rem', color: 'var(--color-text-secondary)' }}>
-                      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
+                    <div className="view-empty">
+                      <div className="view-empty-icon">📋</div>
                       <p style={{ margin: 0 }}>Aún no hay validaciones registradas</p>
                     </div>
                   ) : (
                     <div>
                       {/* Summary chips */}
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+                      <div className="summary-chips">
                         {[
                           { label: 'Total validaciones', value: validationSummary.total_validations, color: '#6366f1' },
                           { label: 'Cursos', value: validationSummary.courses.length, color: '#f59e0b' },
                           { label: 'Cumplimiento avg', value: `${Math.round(validationSummary.courses.reduce((s, c) => s + c.avg_compliance, 0) / (validationSummary.courses.length || 1))}%`, color: '#10b981' },
                           { label: 'Cursos compliant', value: validationSummary.courses.filter(c => c.status === 'compliant').length, color: '#22c55e' },
                         ].map((chip, i) => (
-                          <div key={i} style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: '120px' }}>
-                            <span style={{ fontSize: '1.4rem', fontWeight: 700, color: chip.color }}>{chip.value}</span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{chip.label}</span>
+                          <div key={i} className="summary-chip">
+                            <span className="summary-chip-value" style={{ color: chip.color }}>{chip.value}</span>
+                            <span className="summary-chip-label">{chip.label}</span>
                           </div>
                         ))}
                       </div>
 
                       {/* Course accordion */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div className="courses-accordion">
                         {validationSummary.courses.map((course, idx) => (
-                          <div key={idx} style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '14px', overflow: 'hidden' }}>
-                            <button
-                              onClick={() => setExpandedCourse(expandedCourse === idx ? null : idx)}
-                              style={{ width: '100%', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px', background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', textAlign: 'left' }}
-                            >
+                          <div key={idx} className="course-card">
+                            <button className="course-toggle" onClick={() => setExpandedCourse(expandedCourse === idx ? null : idx)}>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  📚 {course.course_name}
-                                </div>
-                                <div style={{ fontSize: '0.78rem', color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                                <div className="course-name">📚 {course.course_name}</div>
+                                <div className="course-meta">
                                   {course.total_weeks} semana(s) · {course.total_validations} validaciones
                                   {course.last_validated && ` · Última: ${new Date(course.last_validated).toLocaleDateString('es-ES')}`}
                                 </div>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                                <div style={{ width: 90, height: 7, background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
-                                  <div style={{ width: `${course.avg_compliance}%`, height: '100%', borderRadius: '999px', background: course.avg_compliance >= 70 ? '#10b981' : course.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }} />
+                              <div className="course-progress">
+                                <div className="progress-bar-wrap">
+                                  <div className="progress-bar-fill" style={{ width: `${course.avg_compliance}%`, background: course.avg_compliance >= 70 ? '#10b981' : course.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }} />
                                 </div>
-                                <span style={{ fontWeight: 700, minWidth: 38, fontSize: '0.875rem', color: course.avg_compliance >= 70 ? '#10b981' : course.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
+                                <span className="progress-pct" style={{ color: course.avg_compliance >= 70 ? '#10b981' : course.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
                                   {course.avg_compliance}%
                                 </span>
-                                <svg style={{ width: 16, height: 16, color: 'var(--color-text-secondary)', transform: expandedCourse === idx ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <svg className={`chevron-icon ${expandedCourse === idx ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                 </svg>
                               </div>
                             </button>
 
                             {expandedCourse === idx && (
-                              <div style={{ borderTop: '1px solid var(--color-border)', padding: '12px 20px 16px' }}>
+                              <div className="course-weeks">
                                 {course.weeks.map((w, widx) => (
-                                  <div key={widx} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '7px 0' }}>
-                                    <div style={{ width: '110px', fontSize: '0.82rem', fontWeight: 500, color: 'var(--color-text-primary)', flexShrink: 0 }}>{w.week}</div>
-                                    <div style={{ flex: 1, height: 7, background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
-                                      <div style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', background: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444', transition: 'width 0.5s ease' }} />
+                                  <div key={widx} className="week-row">
+                                    <div className="week-name">{w.week}</div>
+                                    <div className="week-progress">
+                                      <div className="progress-bar-fill" style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', background: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444', transition: 'width 0.5s ease' }} />
                                     </div>
-                                    <span style={{ minWidth: 38, textAlign: 'right', fontSize: '0.82rem', fontWeight: 700, flexShrink: 0, color: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
+                                    <span className="week-pct" style={{ color: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
                                       {w.avg_compliance}%
                                     </span>
-                                    <span style={{ padding: '2px 8px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 700, flexShrink: 0, background: w.status === 'compliant' ? 'rgba(16,185,129,0.12)' : w.status === 'partial' ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)', color: w.status === 'compliant' ? '#34d399' : w.status === 'partial' ? '#fbbf24' : '#f87171' }}>
+                                    <span className="week-status-badge" style={{ background: w.status === 'compliant' ? 'rgba(16,185,129,0.12)' : w.status === 'partial' ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)', color: w.status === 'compliant' ? '#34d399' : w.status === 'partial' ? '#fbbf24' : '#f87171' }}>
                                       {w.status === 'compliant' ? '✓' : w.status === 'partial' ? '~' : '✗'}
                                     </span>
                                   </div>
@@ -367,56 +348,54 @@ const Dashboard = () => {
 
               {/* ── Mi Curso (docente) ── */}
               {activeView === 'teacher' && isTeacher && (
-                <div style={{ paddingBottom: '2rem' }}>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h2 style={{ margin: 0 }}>Mi Curso — Estado de Validaciones</h2>
-                    <p style={{ margin: '4px 0 0', color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
-                      Resultados de validación del material académico de tu carpeta asignada
-                    </p>
+                <div className="teacher-charts">
+                  <div className="view-header">
+                    <h2>Mi Curso — Estado de Validaciones</h2>
+                    <p>Resultados de validación del material académico de tu carpeta asignada</p>
                   </div>
 
                   {teacherLoading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 0', gap: '1rem', color: 'var(--color-text-secondary)' }}>
+                    <div className="view-loading">
                       <div className="spinner" style={{ width: 36, height: 36 }}></div>
                       <p style={{ margin: 0 }}>Cargando datos de tu curso...</p>
                     </div>
                   ) : !teacherSummary || !teacherSummary.has_folder ? (
-                    <div style={{ textAlign: 'center', padding: '5rem 2rem', color: 'var(--color-text-secondary)' }}>
-                      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏫</div>
+                    <div className="view-empty">
+                      <div className="view-empty-icon">🏫</div>
                       <p style={{ margin: '0 0 4px' }}>No tienes una carpeta de Drive asignada.</p>
                       <p style={{ margin: 0, fontSize: '0.85rem' }}>Contacta al administrador para configurarla.</p>
                     </div>
                   ) : (
                     <>
                       {/* Resumen chips */}
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+                      <div className="summary-chips">
                         {[
                           { label: 'Total validaciones', value: teacherSummary.total, color: '#6366f1' },
                           { label: 'Cumplimiento avg', value: `${teacherSummary.avg_compliance}%`, color: teacherSummary.avg_compliance >= 70 ? '#10b981' : teacherSummary.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' },
                           { label: 'Semanas', value: teacherSummary.by_week?.length || 0, color: '#f59e0b' },
                         ].map((chip, i) => (
-                          <div key={i} style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: '120px' }}>
-                            <span style={{ fontSize: '1.4rem', fontWeight: 700, color: chip.color }}>{chip.value}</span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>{chip.label}</span>
+                          <div key={i} className="summary-chip">
+                            <span className="summary-chip-value" style={{ color: chip.color }}>{chip.value}</span>
+                            <span className="summary-chip-label">{chip.label}</span>
                           </div>
                         ))}
                       </div>
 
                       {/* Semanas */}
                       {teacherSummary.by_week?.length > 0 && (
-                        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '14px', padding: '1.25rem', marginBottom: '1.25rem' }}>
-                          <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 600 }}>Cumplimiento por Semana</h3>
+                        <div className="chart-card">
+                          <h3>Cumplimiento por Semana</h3>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {teacherSummary.by_week.map((w, i) => (
-                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{ width: '110px', fontSize: '0.82rem', fontWeight: 500, flexShrink: 0 }}>{w.week}</div>
-                                <div style={{ flex: 1, height: 7, background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
-                                  <div style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', background: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444', transition: 'width 0.5s ease' }} />
+                              <div key={i} className="week-row">
+                                <div className="week-name">{w.week}</div>
+                                <div className="week-progress">
+                                  <div className="progress-bar-fill" style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', background: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444', transition: 'width 0.5s ease' }} />
                                 </div>
-                                <span style={{ minWidth: 38, textAlign: 'right', fontSize: '0.82rem', fontWeight: 700, flexShrink: 0, color: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
+                                <span className="week-pct" style={{ color: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
                                   {w.avg_compliance}%
                                 </span>
-                                <span style={{ padding: '2px 8px', borderRadius: '8px', fontSize: '0.68rem', fontWeight: 700, flexShrink: 0, background: w.status === 'compliant' ? 'rgba(16,185,129,0.12)' : w.status === 'partial' ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)', color: w.status === 'compliant' ? '#34d399' : w.status === 'partial' ? '#fbbf24' : '#f87171' }}>
+                                <span className="week-status-badge" style={{ background: w.status === 'compliant' ? 'rgba(16,185,129,0.12)' : w.status === 'partial' ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)', color: w.status === 'compliant' ? '#34d399' : w.status === 'partial' ? '#fbbf24' : '#f87171' }}>
                                   {w.status === 'compliant' ? '✓ Cumple' : w.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
                                 </span>
                               </div>
@@ -427,19 +406,19 @@ const Dashboard = () => {
 
                       {/* Recientes */}
                       {teacherSummary.recent?.length > 0 && (
-                        <div style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', borderRadius: '14px', padding: '1.25rem' }}>
-                          <h3 style={{ margin: '0 0 1rem', fontSize: '0.9rem', fontWeight: 600 }}>Validaciones Recientes</h3>
+                        <div className="chart-card">
+                          <h3>Validaciones Recientes</h3>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             {teacherSummary.recent.map((r, i) => (
-                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 0', borderBottom: i < teacherSummary.recent.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-                                <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.7rem', fontWeight: 600, flexShrink: 0, background: r.validation_type === 'structure' ? 'rgba(139,92,246,0.15)' : 'rgba(16,185,129,0.15)', color: r.validation_type === 'structure' ? '#a78bfa' : '#34d399' }}>
+                              <div key={i} className="recent-row">
+                                <span className="recent-type-badge" style={{ background: r.validation_type === 'structure' ? 'rgba(139,92,246,0.15)' : 'rgba(16,185,129,0.15)', color: r.validation_type === 'structure' ? '#a78bfa' : '#34d399' }}>
                                   {r.validation_type === 'structure' ? '📋 Estructura' : '🧠 Contenido'}
                                 </span>
-                                <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.folder_name}</span>
-                                <span style={{ fontWeight: 700, fontSize: '0.875rem', flexShrink: 0, color: r.compliance_percentage >= 70 ? '#10b981' : r.compliance_percentage >= 40 ? '#f59e0b' : '#ef4444' }}>
+                                <span className="recent-name">{r.folder_name}</span>
+                                <span className="recent-pct" style={{ color: r.compliance_percentage >= 70 ? '#10b981' : r.compliance_percentage >= 40 ? '#f59e0b' : '#ef4444' }}>
                                   {r.compliance_percentage?.toFixed(1)}%
                                 </span>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>
+                                <span className="recent-date">
                                   {r.created_at ? new Date(r.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) : ''}
                                 </span>
                               </div>
@@ -461,49 +440,23 @@ const Dashboard = () => {
 
 /* Componente interno reutilizable */
 const FeatureCard = ({ icon, iconBg, title, desc, accent, border, onClick, href }) => {
-  const [hovered, setHovered] = useState(false);
-  const style = {
-    background: accent ? `linear-gradient(135deg, ${accent}, transparent)` : 'var(--color-bg-card)',
-    border: `1.5px solid ${border || 'var(--color-border)'}`,
-    borderRadius: '16px',
-    padding: '1.35rem',
-    textAlign: 'left',
-    cursor: 'pointer',
-    transition: 'transform 0.22s ease, box-shadow 0.22s ease',
-    display: 'block',
-    textDecoration: 'none',
-    color: 'inherit',
-    transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
-    boxShadow: hovered ? '0 8px 24px rgba(0,0,0,0.15)' : 'none',
-    width: '100%',
-    fontFamily: 'inherit',
+  const cardStyle = {
+    ...(accent ? { background: `linear-gradient(135deg, ${accent}, transparent)` } : {}),
+    ...(border ? { borderColor: border } : {}),
   };
 
   const inner = (
     <>
-      <div style={{ width: 46, height: 46, borderRadius: '12px', background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
-        {icon}
-      </div>
-      <p style={{ margin: '0 0 5px', fontSize: '1rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>{title}</p>
-      <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>{desc}</p>
+      <div className="feature-card-icon" style={{ background: iconBg }}>{icon}</div>
+      <p className="feature-card-title">{title}</p>
+      <p className="feature-card-desc">{desc}</p>
     </>
   );
 
   if (href) {
-    return (
-      <a href={href} target="_blank" rel="noopener noreferrer" style={style}
-        onMouseOver={() => setHovered(true)} onMouseOut={() => setHovered(false)}>
-        {inner}
-      </a>
-    );
+    return <a href={href} target="_blank" rel="noopener noreferrer" className="feature-card" style={cardStyle}>{inner}</a>;
   }
-
-  return (
-    <button style={style} onClick={onClick}
-      onMouseOver={() => setHovered(true)} onMouseOut={() => setHovered(false)}>
-      {inner}
-    </button>
-  );
+  return <button className="feature-card" style={cardStyle} onClick={onClick}>{inner}</button>;
 };
 
 export default Dashboard;
