@@ -32,10 +32,13 @@ def _normalize(name: str) -> str:
 
 
 def _is_semana_folder(name: str) -> bool:
-    # _normalize ya convierte a minúsculas y reemplaza _ por espacio.
-    # El separador es opcional (maneja "Semana6") y no hay $ final
-    # para aceptar nombres como "Semana_6 - Algoritmos".
     return bool(re.match(r'^semana\s?\d+', _normalize(name)))
+
+
+def _is_lab_folder(name: str) -> bool:
+    """Detecta carpetas de laboratorio: 6_Proyectos, 7_Practicas, 8_Tareas."""
+    norm = _normalize(name)
+    return any(k in norm for k in ('proyectos', 'practicas', 'tareas'))
 
 
 def _compliance_status(pct: float) -> str:
@@ -226,15 +229,19 @@ async def validate_course_batch(
             return int(m.group()) if m else 0
         semana_folders.sort(key=semana_num)
 
-        if not semana_folders:
+        # Carpetas de laboratorio
+        lab_folders = [f for f in all_subfolders if _is_lab_folder(f['name'])]
+        lab_folders.sort(key=lambda f: f['name'])
+
+        if not semana_folders and not lab_folders:
             return {
                 "success": False,
-                "error": "No se encontraron carpetas Semana_X en el curso",
+                "error": "No se encontraron carpetas Semana_X ni carpetas de laboratorio en el curso",
                 "course_name": request.course_name,
                 "total_weeks": 0
             }
 
-        print(f"\n📦 Validación en lote: '{request.course_name}' — {len(semana_folders)} semanas")
+        print(f"\n📦 Validación en lote: '{request.course_name}' — {len(semana_folders)} semanas, {len(lab_folders)} carpetas lab")
 
         # ── Estructura: se valida UNA VEZ en la carpeta raíz del curso ────────
         # El Excel "Matriz observaciones estructura.xlsx" vive en el root del
@@ -343,6 +350,75 @@ async def validate_course_batch(
 
         completed = len(semana_folders) - failed
 
+        # ── Carpetas Lab: Proyectos, Practicas, Tareas ────────────────────────
+        lab_results = []
+        lab_failed  = 0
+
+        if request.validation_type in ("content", "both") and lab_folders:
+            print(f"\n🔬 Validando {len(lab_folders)} carpeta(s) de laboratorio...")
+            candidates = [request.course_folder_id]
+            for fid in request.candidate_folder_ids:
+                if fid not in candidates:
+                    candidates.append(fid)
+
+            for folder in lab_folders:
+                lab_result = {
+                    "folder_id":             folder['id'],
+                    "folder_name":           folder['name'],
+                    "folder_type":           "lab",
+                    "content":               None,
+                    "compliance_percentage": 0.0,
+                    "status":                "unknown",
+                    "error":                 None,
+                }
+                try:
+                    content = document_content_validation_service.validate_folder_content(
+                        semana_folder_id     = folder['id'],
+                        semana_folder_name   = folder['name'],
+                        candidate_folder_ids = candidates,
+                        db                   = db
+                    )
+                    if content.get('success'):
+                        pct_c = content.get('compliance_percentage', 0) or 0
+                        lab_result["content"] = {
+                            "compliance_percentage": pct_c,
+                            "status":               _compliance_status(pct_c),
+                            "total_requirements":   content.get('total_requirements', 0),
+                            "present_count":        content.get('present_count', 0),
+                            "absent_count":         content.get('absent_count', 0),
+                            "groups":               content.get('groups', []),
+                            "is_lab":               True,
+                        }
+                        lab_result["compliance_percentage"] = round(pct_c, 1)
+                        lab_result["status"] = _compliance_status(pct_c)
+                        total_content_compliance += pct_c
+                        content_weeks_count += 1
+                        _save_record(
+                            db,
+                            folder_id    = folder['id'],
+                            folder_name  = folder['name'],
+                            course_name  = request.course_name,
+                            validation_type = "content",
+                            section_name = content.get('section'),
+                            compliance_percentage = pct_c,
+                            total_items   = content.get('total_requirements', 0) or 0,
+                            present_items = content.get('present_count', 0) or 0,
+                            missing_items = content.get('absent_count', 0) or 0,
+                            status        = _compliance_status(pct_c),
+                            results_json  = {k: v for k, v in content.items() if k != 'results'},
+                            documents_analyzed = content.get('documents_analyzed', []),
+                            validated_by  = current_user.id,
+                        )
+                    else:
+                        lab_result["content"] = {"error": content.get('error', 'Sin datos')}
+                except Exception as lab_err:
+                    print(f"  ❌ Error en {folder['name']}: {lab_err}")
+                    lab_result["error"] = str(lab_err)
+                    lab_failed += 1
+
+                lab_results.append(lab_result)
+                print(f"  {'✅' if not lab_result['error'] else '⚠️ '} {folder['name']}: {lab_result['compliance_percentage']}%")
+
         # Promedio global: si hay contenido, usar ese; si solo estructura, usar esa
         if content_weeks_count > 0:
             avg_compliance = round(total_content_compliance / content_weeks_count, 1)
@@ -357,12 +433,14 @@ async def validate_course_batch(
             "course_folder_id":   request.course_folder_id,
             "validation_type":    request.validation_type,
             "total_weeks":        len(semana_folders),
+            "total_lab_folders":  len(lab_folders),
             "completed":          completed,
-            "failed":             failed,
+            "failed":             failed + lab_failed,
             "average_compliance": avg_compliance,
             "overall_status":     _compliance_status(avg_compliance),
             "course_structure":   course_structure,
             "weeks":              weeks_results,
+            "lab_folders":        lab_results,
         }
 
     except Exception as e:

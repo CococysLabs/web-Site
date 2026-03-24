@@ -117,10 +117,12 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
     }
   };
 
-  // Helpers para detección de carpeta Semana y localización de la carpeta con el Excel
+  // Helpers para detección de tipos de carpeta
   const isSemanaFolder = (name) => /semana[_\s]?\d+/i.test(name || '');
-  // El folder actual es raíz de un curso si contiene subcarpetas Semana
-  const isCourseRoot = folders.some(f => isSemanaFolder(f.name));
+  const isLabFolder    = (name) => /proyectos?|practicas?|tareas?/i.test(name || '');
+  const isContentFolder = (name) => isSemanaFolder(name) || isLabFolder(name);
+  // El folder actual es raíz de un curso si contiene subcarpetas Semana o Lab
+  const isCourseRoot = folders.some(f => isSemanaFolder(f.name)) || folders.some(f => isLabFolder(f.name));
   const getMatrixFolderId = () =>
     breadcrumbs.length >= 2 ? breadcrumbs[breadcrumbs.length - 2].id : breadcrumbs[0]?.id;
 
@@ -729,10 +731,53 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
                               padding: '8px 16px',
                               fontSize: '0.8rem',
                               color: 'var(--text-secondary)',
-                              borderBottom: group.results?.length ? '1px solid var(--border-light)' : 'none',
+                              borderBottom: (group.descripcion || group.results?.length) ? '1px solid var(--border-light)' : 'none',
                             }}>
                               ✓ {group.present_count} presentes &nbsp;·&nbsp; ✗ {group.absent_count} ausentes &nbsp;·&nbsp; {group.total_params} requisitos
                             </div>
+
+                            {/* Análisis documental (solo carpetas lab) */}
+                            {(group.descripcion || group.enfoque || group.complejidad) && (
+                              <div style={{
+                                padding: '10px 16px',
+                                background: 'rgba(99,102,241,0.06)',
+                                borderBottom: group.results?.length ? '1px solid var(--border-light)' : 'none',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '6px',
+                              }}>
+                                <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>🔬 Análisis del Documento</p>
+                                {group.descripcion && (
+                                  <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                                    <strong>Descripción:</strong> {group.descripcion}
+                                  </p>
+                                )}
+                                {group.enfoque && (
+                                  <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-primary)' }}>
+                                    <strong>Enfoque:</strong> {group.enfoque}
+                                  </p>
+                                )}
+                                {group.complejidad && (
+                                  <p style={{ margin: 0, fontSize: '0.82rem' }}>
+                                    <strong>Complejidad:</strong>{' '}
+                                    <span style={{
+                                      padding: '2px 8px',
+                                      borderRadius: '6px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: 700,
+                                      background: group.complejidad.toLowerCase().includes('alta') || group.complejidad.toLowerCase().includes('avanzada')
+                                        ? 'rgba(239,68,68,0.12)' : group.complejidad.toLowerCase().includes('media') || group.complejidad.toLowerCase().includes('intermedia')
+                                        ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)',
+                                      color: group.complejidad.toLowerCase().includes('alta') || group.complejidad.toLowerCase().includes('avanzada')
+                                        ? '#ef4444' : group.complejidad.toLowerCase().includes('media') || group.complejidad.toLowerCase().includes('intermedia')
+                                        ? '#f59e0b' : '#10b981',
+                                    }}>
+                                      {group.complejidad}
+                                    </span>
+                                  </p>
+                                )}
+                              </div>
+                            )}
 
                             {/* Tabla de parámetros del grupo */}
                             {group.results && group.results.length > 0 && (
@@ -1234,8 +1279,8 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
             </button>
           )}
 
-          {/* Validar Contenido — solo dentro de carpetas Semana_X */}
-          {canValidateContent && isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
+          {/* Validar Contenido — Semana_X, 6_Proyectos, 7_Practicas, 8_Tareas */}
+          {canValidateContent && isContentFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
             <button
               className="btn-analyze"
               onClick={handleValidateContent}
@@ -1243,11 +1288,17 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
               style={{
                 background: validatingContent
                   ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
-                  : 'linear-gradient(135deg, #10b981, #059669)',
+                  : isLabFolder(breadcrumbs[breadcrumbs.length - 1]?.name)
+                    ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
+                    : 'linear-gradient(135deg, #10b981, #059669)',
                 whiteSpace: 'nowrap'
               }}
             >
-              {validatingContent ? '⏳ Analizando con IA...' : '🧠 Validar Contenido'}
+              {validatingContent
+                ? '⏳ Analizando con IA...'
+                : isLabFolder(breadcrumbs[breadcrumbs.length - 1]?.name)
+                  ? '🔬 Validar Laboratorio'
+                  : '🧠 Validar Contenido'}
             </button>
           )}
 

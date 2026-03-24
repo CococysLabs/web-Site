@@ -72,6 +72,35 @@ DOCUMENT_TYPE_HEADERS: set = {
     'reporte',
 }
 
+# Carpetas de laboratorio → nombre canónico de hoja en el Excel
+LAB_FOLDER_TYPES: Dict[str, str] = {
+    'proyectos': 'Proyectos',
+    'practicas': 'Practicas',
+    'tareas':    'Tareas',
+}
+
+# Descripción de cada tipo de carpeta lab para el prompt de IA
+LAB_FOLDER_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
+    'proyectos': {
+        'tipo':        'Proyecto Académico',
+        'descripcion': 'Trabajo integrador donde el estudiante desarrolla e implementa una solución completa a un problema real.',
+        'enfoque':     'Integración de conocimientos, diseño de soluciones, implementación práctica y documentación técnica.',
+        'complejidad': 'Alta — requiere planificación, implementación y entrega de un producto funcional.',
+    },
+    'practicas': {
+        'tipo':        'Práctica de Laboratorio',
+        'descripcion': 'Ejercicio guiado de aplicación de técnicas o herramientas en un entorno controlado.',
+        'enfoque':     'Aplicación directa de conceptos teóricos, experimentación y verificación de resultados.',
+        'complejidad': 'Media — sigue pasos definidos con espacio para experimentación.',
+    },
+    'tareas': {
+        'tipo':        'Tarea / Asignación',
+        'descripcion': 'Actividad de refuerzo y evaluación de comprensión de los conceptos vistos en clase.',
+        'enfoque':     'Consolidación de conocimiento, resolución de problemas y ejercicios de aplicación.',
+        'complejidad': 'Básica a media — centrada en comprensión y aplicación puntual de conceptos.',
+    },
+}
+
 
 class DocumentContentValidationService:
     """
@@ -500,11 +529,43 @@ class DocumentContentValidationService:
         Para otros tipos devuelve el nombre limpio (underscores → espacios).
         """
         normalized = self._normalize(folder_name)
-        # Sin $ final: acepta "Semana_6 - Algoritmos" → "semana 6 algoritmos" → "Semana 6"
         m = re.match(r'^semana\s*(\d+)', normalized)
         if m:
             return f"Semana {m.group(1)}"
         return folder_name.replace('_', ' ').replace('-', ' ').strip()
+
+    def _get_folder_type(self, folder_name: str) -> str:
+        """
+        Detecta el tipo de carpeta.
+        Retorna: 'semana' | 'proyectos' | 'practicas' | 'tareas' | 'unknown'
+        """
+        norm = self._normalize(folder_name)
+        if re.match(r'^semana\s*\d+', norm):
+            return 'semana'
+        for key in LAB_FOLDER_TYPES:
+            if key in norm:
+                return key
+        return 'unknown'
+
+    def get_lab_sheet(self, wb: openpyxl.Workbook, folder_type: str):
+        """
+        Obtiene la hoja del Excel correspondiente a una carpeta de laboratorio.
+        folder_type: 'proyectos' | 'practicas' | 'tareas'
+        Busca por nombre exacto, luego por coincidencia parcial.
+        """
+        sheet_name = LAB_FOLDER_TYPES.get(folder_type, '')
+        # Búsqueda exacta (case-insensitive)
+        for name in wb.sheetnames:
+            if self._normalize(name) == self._normalize(sheet_name):
+                print(f"  📋 Hoja lab '{name}' encontrada")
+                return wb[name]
+        # Búsqueda parcial
+        for name in wb.sheetnames:
+            if sheet_name.lower() in name.lower():
+                print(f"  📋 Hoja lab '{name}' encontrada (parcial)")
+                return wb[name]
+        print(f"  ⚠️  No se encontró hoja '{sheet_name}'. Hojas disponibles: {wb.sheetnames}")
+        return None
 
     # ──────────────────────────────────────────────────────────────────────────
     # Excel: localizar, leer y parsear
@@ -721,59 +782,49 @@ class DocumentContentValidationService:
     def parse_requirements_by_group(
         self,
         ws,
-        target_section: str,
+        target_section: Optional[str],
         col_map: Dict[str, int],
         header_row_idx: int
     ) -> List[Dict]:
         """
         Lee la hoja y agrupa los requisitos por tipo de documento (Presentación, Lectura, Video…).
 
+        target_section=None → lee TODOS los requisitos sin filtrar por sección.
+        Útil para hojas de Proyectos/Practicas/Tareas donde toda la hoja pertenece
+        al mismo tipo de carpeta.
+
         Estructura del Excel:
           Sección  | Sub-sección          | Aplica
           Semana 2 | Presentación         |        ← encabezado de grupo (sin Aplica)
           Semana 2 | Bienvenida           | Si     ← parámetro
-          Semana 2 | Agenda               | Si     ← parámetro
-          ...
           Semana 2 | Lectura              |        ← encabezado de grupo
           Semana 2 | Titulo               | Si     ← parámetro
-
-        Retorna lista de grupos:
-          [
-            {
-              'group_name': 'Presentación',
-              'params': [
-                {'row_idx': int, 'sub_seccion': str, 'autor': str},
-                ...
-              ]
-            },
-            ...
-          ]
         """
-        norm_target = self._normalize(target_section)
-        sec_col   = col_map.get('seccion')
-        sub_col   = col_map.get('sub_seccion')
+        norm_target = self._normalize(target_section) if target_section else None
+        sec_col    = col_map.get('seccion')
+        sub_col    = col_map.get('sub_seccion')
         aplica_col = col_map.get('aplica')
         autor_col  = col_map.get('autor')
 
-        if not sec_col or not sub_col:
+        if not sub_col:
             return []
 
         groups: List[Dict] = []
         current_group: Optional[Dict] = None
-        last_sec_val = None   # soporte para celdas combinadas (merged cells)
+        last_sec_val = None
 
         for row_idx in range(header_row_idx + 1, ws.max_row + 1):
-            sec_val = ws.cell(row=row_idx, column=sec_col).value
-            # Celdas combinadas: la primera celda del rango tiene valor;
-            # las siguientes son None → usar el último valor conocido.
-            if sec_val:
-                last_sec_val = sec_val
-            elif last_sec_val:
-                sec_val = last_sec_val
-            if not sec_val:
-                continue
-            if self._normalize(str(sec_val)) != norm_target:
-                continue
+            # Filtro por sección (si aplica)
+            if norm_target is not None and sec_col:
+                sec_val = ws.cell(row=row_idx, column=sec_col).value
+                if sec_val:
+                    last_sec_val = sec_val
+                elif last_sec_val:
+                    sec_val = last_sec_val
+                if not sec_val:
+                    continue
+                if self._normalize(str(sec_val)) != norm_target:
+                    continue
 
             sub_val = ws.cell(row=row_idx, column=sub_col).value
             if not sub_val or str(sub_val).strip() == '':
@@ -1555,6 +1606,130 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
 
         return updated
 
+    def _evaluate_lab_group_batch(
+        self,
+        params: List[Dict],
+        doc_text: str,
+        section_name: str,
+        group_name: str,
+        folder_type: str,
+        use_gemini: bool = True,
+        model_name: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, str]], Dict[str, str]]:
+        """
+        Evaluación enriquecida para carpetas Proyectos/Practicas/Tareas.
+        Retorna (requirements_results, document_analysis).
+
+        requirements_results: [{presente, observacion}, ...]
+        document_analysis: {descripcion, enfoque, complejidad}
+        """
+        lab_info = LAB_FOLDER_DESCRIPTIONS.get(folder_type, {})
+        tipo_doc  = lab_info.get('tipo', group_name)
+        max_chars = 15_000
+        doc_snippet = doc_text[:max_chars]
+
+        reqs_list = "\n".join(
+            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
+        )
+
+        prompt = f"""Eres un evaluador académico universitario experto. Analiza el contenido del documento y realiza DOS tareas:
+
+TAREA 1 — EVALUAR REQUISITOS:
+Determina si cada requisito de la lista está cubierto en el documento.
+
+TAREA 2 — ANALIZAR EL DOCUMENTO:
+Proporciona un análisis del documento con:
+- descripcion: qué cubre o desarrolla el documento (2-3 oraciones)
+- enfoque: enfoque pedagógico/técnico principal del documento (1-2 oraciones)
+- complejidad: nivel de complejidad ("Básica", "Intermedia" o "Avanzada") con justificación breve
+
+CONTEXTO:
+- Tipo de actividad: {tipo_doc}
+- Sección/carpeta: {section_name}
+- Tipo de documento: {group_name}
+
+CRITERIOS DE EVALUACIÓN DE REQUISITOS:
+- PRESENTE (Si): el documento aborda el tema de forma explícita O implícita.
+- AUSENTE (No): el tema NO aparece o es meramente superficial.
+
+REQUISITOS A EVALUAR ({len(params)} en total):
+{reqs_list}
+
+CONTENIDO DEL DOCUMENTO:
+{doc_snippet}
+
+Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta estructura exacta:
+{{
+  "requirements": [
+    {{"presente": "Si" o "No", "observacion": "Observación específica de 1-2 oraciones"}},
+    ...  ({len(params)} elementos en el mismo orden)
+  ],
+  "document_analysis": {{
+    "descripcion": "Descripción del documento (2-3 oraciones)",
+    "enfoque": "Enfoque pedagógico/técnico (1-2 oraciones)",
+    "complejidad": "Básica|Intermedia|Avanzada — justificación breve"
+  }}
+}}"""
+
+        empty_analysis = {'descripcion': '', 'enfoque': '', 'complejidad': ''}
+
+        def _parse_lab_response(raw: str) -> Tuple[Optional[List], Optional[Dict]]:
+            try:
+                data = json.loads(raw)
+                reqs = data.get('requirements', [])
+                analysis = data.get('document_analysis', {})
+                if isinstance(reqs, list) and len(reqs) == len(params):
+                    return reqs, analysis
+            except Exception:
+                pass
+            return None, None
+
+        # Prioridad 1: DeepSeek
+        if self._deepseek_key:
+            import urllib.request, urllib.error
+            payload = json.dumps({
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": 3000,
+            }).encode("utf-8")
+            try:
+                req = urllib.request.Request(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    data=payload,
+                    headers={"Authorization": f"Bearer {self._deepseek_key}", "Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=90) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                    content = result["choices"][0]["message"]["content"].strip()
+                    content = re.sub(r"^```json?\s*", "", content)
+                    content = re.sub(r"\s*```$", "", content)
+                    reqs, analysis = _parse_lab_response(content)
+                    if reqs:
+                        print(f"  🤖 [DeepSeek lab] respondió — complejidad: {analysis.get('complejidad','?')}")
+                        return [{'presente': str(r.get('presente', 'No')), 'observacion': str(r.get('observacion', ''))} for r in reqs], analysis or empty_analysis
+            except Exception as e:
+                print(f"  ⚠️  DeepSeek lab: {e}")
+
+        # Prioridad 2: Gemini
+        for key in self._get_available_keys():
+            try:
+                raw = self._call_gemini_raw(key, model_name or GEMINI_MODEL, prompt)
+                reqs, analysis = _parse_lab_response(raw)
+                if reqs:
+                    print(f"  🤖 [Gemini lab] respondió — complejidad: {analysis.get('complejidad','?')}")
+                    return [{'presente': str(r.get('presente', 'No')), 'observacion': str(r.get('observacion', ''))} for r in reqs], analysis or empty_analysis
+            except Exception as e:
+                if '429' in str(e) or 'quota' in str(e).lower():
+                    self._exhausted_keys.add(key)
+                    continue
+                break
+
+        # Fallback: keyword matching + sin análisis
+        fallback = [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
+        return fallback, empty_analysis
+
     # ──────────────────────────────────────────────────────────────────────────
     # Punto de entrada principal
     # ──────────────────────────────────────────────────────────────────────────
@@ -1579,7 +1754,12 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
         try:
             print(f"\n🧠 Iniciando validación de contenido: '{semana_folder_name}'")
 
-            # 0. Leer settings dinámicos desde BD (si db disponible)
+            # 0. Detectar tipo de carpeta
+            folder_type = self._get_folder_type(semana_folder_name)
+            is_lab = folder_type in LAB_FOLDER_TYPES
+            print(f"  🗂️  Tipo de carpeta: {folder_type}")
+
+            # 0b. Leer settings dinámicos desde BD (si db disponible)
             use_gemini = self.enabled
             active_model_name = GEMINI_MODEL
             if db is not None:
@@ -1617,14 +1797,34 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
             wb = self.read_workbook(matrix_file_id)
             if wb is None:
                 return {'success': False, 'error': 'No se pudo leer el Excel'}
-            ws = self.get_content_sheet(wb)
-            if ws is None:
-                return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones"'}
+
+            # 3b. Seleccionar hoja según tipo de carpeta
+            if is_lab:
+                ws = self.get_lab_sheet(wb, folder_type)
+                if ws is None:
+                    return {'success': False, 'error': f'No se encontró la hoja "{LAB_FOLDER_TYPES[folder_type]}" en la Matriz'}
+            else:
+                ws = self.get_content_sheet(wb)
+                if ws is None:
+                    return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones"'}
 
             header_row_idx, col_map = self._find_header_row(ws)
 
             # 4. Parsear requisitos AGRUPADOS por tipo de documento
             groups = self.parse_requirements_by_group(ws, section_name, col_map, header_row_idx)
+
+            # Para carpetas lab: si no hay resultados con la sección derivada,
+            # intentar con el nombre canónico del tipo (ej. "Proyectos")
+            if not groups and is_lab:
+                canonical = LAB_FOLDER_TYPES[folder_type]
+                print(f"  🔄 Sin resultados para '{section_name}', intentando con '{canonical}'...")
+                groups = self.parse_requirements_by_group(ws, canonical, col_map, header_row_idx)
+
+            # Último recurso para lab: leer TODA la hoja sin filtrar por sección
+            if not groups and is_lab:
+                print(f"  🔄 Leyendo todos los requisitos de la hoja (sin filtro de sección)...")
+                groups = self.parse_requirements_by_group(ws, None, col_map, header_row_idx)
+
             if not groups:
                 return {
                     'success': False,
@@ -1667,6 +1867,8 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                 absent_in_group  = 0
                 n = len(group['params'])
 
+                doc_analysis: Dict[str, str] = {}
+
                 if not file_found or not doc_text.strip():
                     # Sin archivo → todos ausentes
                     batch_evals = [
@@ -1677,21 +1879,28 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                         }
                         for _ in group['params']
                     ]
+                elif is_lab:
+                    print(f"    🔬 Batch lab ({folder_type}): {n} parámetros + análisis documental...")
+                    batch_evals, doc_analysis = self._evaluate_lab_group_batch(
+                        params       = group['params'],
+                        doc_text     = doc_text,
+                        section_name = section_name,
+                        group_name   = group['group_name'],
+                        folder_type  = folder_type,
+                        use_gemini   = use_gemini,
+                        model_name   = active_model_name,
+                    )
+                    time.sleep(4.5)
                 else:
                     print(f"    🤖 Batch Gemini: {n} parámetros en 1 llamada...")
                     batch_evals = self._evaluate_group_batch(
-                        params     = group['params'],
-                        doc_text   = doc_text,
+                        params       = group['params'],
+                        doc_text     = doc_text,
                         section_name = section_name,
-                        group_name = group['group_name'],
-                        use_gemini = use_gemini,
-                        model_name = active_model_name,
+                        group_name   = group['group_name'],
+                        use_gemini   = use_gemini,
+                        model_name   = active_model_name,
                     )
-                    # Pausa entre grupos para respetar límite de RPM del plan gratuito:
-                    # gemini-2.0-flash = 15 RPM → mínimo 4s entre llamadas.
-                    # Usamos 4.5s para tener margen y evitar ráfagas (burst).
-                    # Si la llamada fue a Groq (no Gemini), el sleep sigue siendo útil
-                    # para no saturar la API alternativa tampoco.
                     time.sleep(4.5)
 
                 for i, (param, eval_r) in enumerate(zip(group['params'], batch_evals), 1):
@@ -1706,7 +1915,7 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                         'autor':       param['autor'],
                         'presente':    eval_r['presente'],
                         'observacion': eval_r['observacion'],
-                        'row_idx':     param['row_idx'],   # fila en el Excel para write-back
+                        'row_idx':     param['row_idx'],
                     })
 
                 total_present += present_in_group
@@ -1714,17 +1923,25 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                 g_total = len(group['params'])
                 g_pct   = round(present_in_group / g_total * 100, 2) if g_total else 0
 
-                group_results.append({
-                    'group_name':           group['group_name'],
-                    'matched_file':         matched_name,
-                    'file_found':           file_found,
-                    'total_params':         g_total,
-                    'present_count':        present_in_group,
-                    'absent_count':         absent_in_group,
+                group_entry = {
+                    'group_name':            group['group_name'],
+                    'matched_file':          matched_name,
+                    'file_found':            file_found,
+                    'total_params':          g_total,
+                    'present_count':         present_in_group,
+                    'absent_count':          absent_in_group,
                     'compliance_percentage': g_pct,
-                    'results':              params_results,
-                })
-                print(f"  ✅ '{group['group_name']}': {present_in_group}/{g_total} ({g_pct}%)")
+                    'results':               params_results,
+                }
+                # Campos extra para carpetas lab
+                if is_lab and doc_analysis:
+                    group_entry['descripcion'] = doc_analysis.get('descripcion', '')
+                    group_entry['enfoque']     = doc_analysis.get('enfoque', '')
+                    group_entry['complejidad'] = doc_analysis.get('complejidad', '')
+
+                group_results.append(group_entry)
+                print(f"  ✅ '{group['group_name']}': {present_in_group}/{g_total} ({g_pct}%)"
+                      + (f" | complejidad: {doc_analysis.get('complejidad','')}" if is_lab and doc_analysis else ""))
 
             # 7. Estadísticas globales
             total_requirements = total_present + total_absent
@@ -1777,13 +1994,13 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
             return {
                 'success':               True,
                 'section':               section_name,
+                'folder_type':           folder_type,
+                'is_lab':                is_lab,
                 'total_requirements':    total_requirements,
                 'present_count':         total_present,
                 'absent_count':          total_absent,
                 'compliance_percentage': compliance_pct,
-                # NUEVO: desglose por grupo
                 'groups':                group_results,
-                # Compatibilidad hacia atrás (batch, history)
                 'results':               flat_results,
                 'documents_analyzed':    list(doc_texts.keys()),
                 'report_generated':      report_info is not None,
