@@ -883,6 +883,44 @@ class DocumentContentValidationService:
 
         return groups
 
+    def _parse_lab_sheet_raw(self, ws) -> List[Dict]:
+        """
+        Fallback robusto para hojas lab con estructura no estándar.
+        Lee TODAS las celdas con texto significativo sin depender
+        del mapeo de columnas (seccion / sub_seccion / aplica).
+        Devuelve un único grupo 'General' con todos los requisitos.
+        """
+        SKIP_NORMS = {
+            'si', 'no', 'aplica', 'sub seccion', 'seccion', 'autor',
+            'presente', 'observaciones', 'observacion', 'criterio',
+            'criterios', 'requisito', 'requisitos', 'nombre', 'fecha',
+            'calificacion', 'puntaje', 'nota', 'semana', 'sub-seccion',
+            'descripcion', 'descripción',
+        }
+        seen: set = set()
+        params: List[Dict] = []
+
+        for row_idx in range(1, min(ws.max_row + 1, 500)):
+            for col_idx in range(1, min(ws.max_column + 1, 20)):
+                val = ws.cell(row=row_idx, column=col_idx).value
+                if not val:
+                    continue
+                text = str(val).strip()
+                if len(text) < 8:            # saltar celdas muy cortas (Si, No, números…)
+                    continue
+                norm = self._normalize(text)
+                if norm in SKIP_NORMS:
+                    continue
+                if norm in seen:
+                    continue
+                seen.add(norm)
+                params.append({'row_idx': row_idx, 'sub_seccion': text, 'autor': ''})
+
+        if params:
+            print(f"  📋 Parsing raw: {len(params)} requisitos extraídos de la hoja")
+            return [{'group_name': 'General', 'params': params}]
+        return []
+
     # Pistas de tipo: qué MIME buscar para cada nombre de grupo
     _GROUP_TYPE_HINTS: Dict[str, List[str]] = {
         'presentacion':  ['presentationml'],
@@ -1808,22 +1846,34 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
                 if ws is None:
                     return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones"'}
 
-            header_row_idx, col_map = self._find_header_row(ws)
+            # _find_header_row puede fallar si la hoja lab tiene estructura distinta
+            try:
+                header_row_idx, col_map = self._find_header_row(ws)
+            except ValueError as hdr_err:
+                print(f"  ⚠️  No se detectaron encabezados estándar: {hdr_err}")
+                header_row_idx, col_map = 1, {}   # valores seguros para el fallback raw
 
             # 4. Parsear requisitos AGRUPADOS por tipo de documento
-            groups = self.parse_requirements_by_group(ws, section_name, col_map, header_row_idx)
+            groups: List[Dict] = []
+            if col_map:
+                groups = self.parse_requirements_by_group(ws, section_name, col_map, header_row_idx)
 
-            # Para carpetas lab: si no hay resultados con la sección derivada,
-            # intentar con el nombre canónico del tipo (ej. "Proyectos")
-            if not groups and is_lab:
-                canonical = LAB_FOLDER_TYPES[folder_type]
-                print(f"  🔄 Sin resultados para '{section_name}', intentando con '{canonical}'...")
-                groups = self.parse_requirements_by_group(ws, canonical, col_map, header_row_idx)
+                # Para carpetas lab: si no hay resultados con la sección derivada,
+                # intentar con el nombre canónico del tipo (ej. "Proyectos")
+                if not groups and is_lab:
+                    canonical = LAB_FOLDER_TYPES[folder_type]
+                    print(f"  🔄 Sin resultados para '{section_name}', intentando con '{canonical}'...")
+                    groups = self.parse_requirements_by_group(ws, canonical, col_map, header_row_idx)
 
-            # Último recurso para lab: leer TODA la hoja sin filtrar por sección
+                # Tercer intento: leer TODA la hoja sin filtrar por sección
+                if not groups and is_lab:
+                    print(f"  🔄 Leyendo todos los requisitos de la hoja (sin filtro de sección)...")
+                    groups = self.parse_requirements_by_group(ws, None, col_map, header_row_idx)
+
+            # Cuarto fallback: parsing raw (no depende de columnas estándar)
             if not groups and is_lab:
-                print(f"  🔄 Leyendo todos los requisitos de la hoja (sin filtro de sección)...")
-                groups = self.parse_requirements_by_group(ws, None, col_map, header_row_idx)
+                print(f"  🔄 Aplicando parsing raw de la hoja lab...")
+                groups = self._parse_lab_sheet_raw(ws)
 
             if not groups:
                 return {
@@ -1847,16 +1897,21 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
             total_absent  = 0
 
             for group in groups:
-                # 6a. Buscar el archivo correspondiente al tipo de documento
-                matched_file = self._match_file_to_group(
-                    group['group_name'], files_metadata, already_matched
-                )
-                file_found    = matched_file is not None
-                matched_name  = matched_file['name'] if matched_file else None
-                if matched_name:
-                    already_matched.add(matched_name)
-
-                doc_text = doc_texts.get(matched_name, '') if matched_name else ''
+                # 6a. Buscar el archivo correspondiente al tipo de documento.
+                # Para lab con grupo "General": usar TODOS los documentos concatenados.
+                if is_lab and self._normalize(group['group_name']) == 'general':
+                    doc_text   = '\n\n---\n\n'.join(doc_texts.values())
+                    file_found = len(doc_texts) > 0
+                    matched_name = f"{len(doc_texts)} documento(s)"
+                else:
+                    matched_file = self._match_file_to_group(
+                        group['group_name'], files_metadata, already_matched
+                    )
+                    file_found   = matched_file is not None
+                    matched_name = matched_file['name'] if matched_file else None
+                    if matched_name:
+                        already_matched.add(matched_name)
+                    doc_text = doc_texts.get(matched_name, '') if matched_name else ''
 
                 print(f"\n  📑 Grupo '{group['group_name']}' → "
                       f"{'archivo: ' + matched_name if file_found else '⚠️ sin archivo'}")
