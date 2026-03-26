@@ -614,15 +614,19 @@ class DocumentContentValidationService:
         print(f"⚠️  No se encontró la hoja 'Matriz observaciones'. Hojas disponibles: {wb.sheetnames}")
         return None
 
-    def _find_header_row(self, ws) -> Tuple[int, Dict[str, int]]:
+    def _find_header_row(self, ws, min_matches: int = 3) -> Tuple[int, Dict[str, int]]:
         """
         Escanea las primeras 5 filas para encontrar la fila de encabezados.
         Retorna (header_row_idx, col_map) con índices 1-based.
         col_map keys: 'seccion', 'sub_seccion', 'aplica', 'autor', 'presente', 'observaciones'
+
+        min_matches=2 permite detectar hojas lab con menos columnas estándar.
         """
         target_keywords = {
             'seccion', 'sub seccion', 'aplica', 'autor', 'presente', 'observaciones'
         }
+
+        best_row: Optional[Tuple[int, Dict, int]] = None  # (row_idx, col_map, match_count)
 
         for row_idx in range(1, 6):
             row_vals = []
@@ -631,7 +635,7 @@ class DocumentContentValidationService:
                 row_vals.append(self._normalize(str(val or '')))
 
             matches = sum(1 for v in row_vals if any(kw in v for kw in target_keywords))
-            if matches >= 3:
+            if matches >= min_matches:
                 col_map: Dict[str, int] = {}
                 for col_idx, norm_val in enumerate(row_vals, 1):
                     if not norm_val:
@@ -650,6 +654,25 @@ class DocumentContentValidationService:
                         col_map['observaciones'] = col_idx
                 print(f"📋 Encabezados encontrados en fila {row_idx}: {col_map}")
                 return (row_idx, col_map)
+            # Guardar la mejor fila aunque no alcance el mínimo
+            if best_row is None or matches > best_row[2]:
+                col_map_partial: Dict[str, int] = {}
+                for col_idx, norm_val in enumerate(row_vals, 1):
+                    if not norm_val:
+                        continue
+                    if 'sub' in norm_val and 'seccion' in norm_val:
+                        col_map_partial['sub_seccion'] = col_idx
+                    elif 'seccion' in norm_val:
+                        col_map_partial['seccion'] = col_idx
+                    elif norm_val.startswith('aplica'):
+                        col_map_partial['aplica'] = col_idx
+                    elif norm_val == 'autor':
+                        col_map_partial['autor'] = col_idx
+                    elif 'presente' in norm_val:
+                        col_map_partial['presente'] = col_idx
+                    elif 'observaci' in norm_val:
+                        col_map_partial['observaciones'] = col_idx
+                best_row = (row_idx, col_map_partial, matches)
 
         raise ValueError("No se encontró fila de encabezados en las primeras 5 filas del Excel")
 
@@ -841,19 +864,14 @@ class DocumentContentValidationService:
             sub_norm = self._normalize(sub_str)
 
             # ── Detección de encabezado de grupo ────────────────────────────
-            # El vocabulario es el criterio PRIMARIO (robusto ante cualquier
-            # variante de Aplica: 'Si', None, vacío, etc.).
-            #
-            # Dos patrones de Excel observados:
-            #   A) aplica='Si' en todas las filas (incluidos tipos de doc)
-            #   B) aplica=None en todas las filas
-            # En ambos casos el nombre de sub-sección identifica el tipo.
-            #
-            # Fallback: si el sub_seccion NO está en el vocabulario y aplica
-            # tampoco es 'si' (ej. aplica=None), lo tratamos como parámetro
-            # asumiendo que el Excel omite la columna Aplica.
-            if sub_norm in DOCUMENT_TYPE_HEADERS:
-                # Tipo de documento conocido → nuevo grupo
+            # Criterio 1: vocabulario de tipos de documento (Semana sheets)
+            # Criterio 2: patrón lab "Proyecto N", "Practica N", "Tarea N"
+            _is_lab_header = bool(
+                re.match(r'^(proyecto|practica|tarea)\s*\d*$', sub_norm)
+            )
+
+            if sub_norm in DOCUMENT_TYPE_HEADERS or _is_lab_header:
+                # Tipo de documento o encabezado de lab → nuevo grupo
                 current_group = {'group_name': sub_str, 'params': []}
                 groups.append(current_group)
             else:
@@ -911,6 +929,9 @@ class DocumentContentValidationService:
                 norm = self._normalize(text)
                 if norm in SKIP_NORMS:
                     continue
+                # Saltar encabezados de grupo lab ("Proyecto 1", "Practica 2"…)
+                if re.match(r'^(proyecto|practica|tarea)\s*\d*$', norm):
+                    continue
                 if norm in seen:
                     continue
                 seen.add(norm)
@@ -966,8 +987,9 @@ class DocumentContentValidationService:
 
         Prioridad:
           1. Coincidencia de nombre normalizado (p.ej. "Presentación" ↔ "Presentacion_S2.pptx")
-          2. Pista por MIME type según el nombre del grupo
-          3. Cualquier archivo soportado no asignado aún
+          2. Para grupos lab numerados ("Proyecto 1"): coincidencia por número en nombre de archivo
+          3. Pista por MIME type según el nombre del grupo
+          4. Cualquier archivo soportado no asignado aún (orden Drive → posición)
         """
         norm_group = self._normalize(group_name)
 
@@ -978,7 +1000,21 @@ class DocumentContentValidationService:
             if self._names_match(group_name, f['name']):
                 return f
 
-        # 2. Pista por MIME
+        # 2. Para grupos lab numerados ("Proyecto 1", "Practica 2", etc.)
+        #    Intentar match por número en el nombre del archivo
+        m_num = re.search(r'\d+', group_name)
+        is_lab_group = bool(re.match(r'^(proyecto|practica|tarea)\s*\d', norm_group))
+        if is_lab_group and m_num:
+            num = m_num.group()
+            for f in files_metadata:
+                if f['name'] in already_matched:
+                    continue
+                norm_fname = self._normalize(f['name'])
+                # Buscar el número como palabra/token en el nombre del archivo
+                if re.search(r'(?<![0-9])' + re.escape(num) + r'(?![0-9])', norm_fname):
+                    return f
+
+        # 3. Pista por MIME
         for hint_key, mime_frags in self._GROUP_TYPE_HINTS.items():
             if hint_key in norm_group:
                 for f in files_metadata:
@@ -989,15 +1025,12 @@ class DocumentContentValidationService:
                         return f
                 break   # intentar solo la primera pista que aplique
 
-        # 3. Cualquier archivo soportado disponible (no asignado aún)
-        #    Solo si no hay un match más específico.
+        # 4. Fallback posicional: cualquier archivo no asignado aún
+        #    (para lab: Proyecto 1 → 1er archivo, Proyecto 2 → 2do archivo, etc.)
         for f in files_metadata:
             if f['name'] not in already_matched:
                 return f
 
-        # Sin archivo exclusivo → el grupo reportará "no encontrado".
-        # Si la carpeta no tiene un archivo de Lectura, Video, etc.,
-        # es correcto decir que ese tipo de documento no existe.
         return None
 
     def download_and_extract_all_docs(
@@ -1846,9 +1879,12 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
                 if ws is None:
                     return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones"'}
 
-            # _find_header_row puede fallar si la hoja lab tiene estructura distinta
+            # _find_header_row puede fallar si la hoja lab tiene menos columnas estándar.
+            # Para lab usamos min_matches=2 (más leniente).
             try:
-                header_row_idx, col_map = self._find_header_row(ws)
+                header_row_idx, col_map = self._find_header_row(
+                    ws, min_matches=2 if is_lab else 3
+                )
             except ValueError as hdr_err:
                 print(f"  ⚠️  No se detectaron encabezados estándar: {hdr_err}")
                 header_row_idx, col_map = 1, {}   # valores seguros para el fallback raw
@@ -1898,8 +1934,9 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
 
             for group in groups:
                 # 6a. Buscar el archivo correspondiente al tipo de documento.
-                # Para lab con grupo "General": usar TODOS los documentos concatenados.
-                if is_lab and self._normalize(group['group_name']) == 'general':
+                # Caso especial: grupo "General" (viene del raw fallback) →
+                # concatenar TODOS los documentos de la carpeta.
+                if self._normalize(group['group_name']) == 'general':
                     doc_text   = '\n\n---\n\n'.join(doc_texts.values())
                     file_found = len(doc_texts) > 0
                     matched_name = f"{len(doc_texts)} documento(s)"
