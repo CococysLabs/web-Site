@@ -1181,3 +1181,260 @@
     padding: 1rem 1.25rem;
   }
 }
+
+/* ── Mi Perfil View ── */
+.profile-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.profile-account-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  flex-wrap: wrap;
+}
+
+.profile-account-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff8c42, #e57a32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.4rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.profile-account-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-account-info h3 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.profile-account-info p {
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.profile-account-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-badge.approved {
+  background: rgba(99, 102, 241, 0.12);
+  color: #818cf8;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.profile-account-since {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.profile-account-since-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.profile-account-since-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-transform: capitalize;
+}
+
+/* Permissions card */
+.profile-permissions-card,
+.profile-drive-card {
+  padding: 1.5rem;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+}
+
+.profile-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 1.25rem;
+  color: var(--color-text-primary);
+}
+
+.profile-section-title svg {
+  width: 18px;
+  height: 18px;
+  color: #ff8c42;
+  flex-shrink: 0;
+}
+
+.profile-permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.permission-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  transition: border-color 0.2s;
+}
+
+.permission-item.granted {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.permission-item.denied {
+  opacity: 0.55;
+}
+
+.permission-item-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+
+.permission-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.permission-item-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.permission-item-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.permission-item-status {
+  font-size: 0.8rem;
+  font-weight: 700;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.permission-item-status.granted {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.permission-item-status.denied {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.profile-no-perms {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 8px;
+}
+
+/* Drive card */
+.profile-drive-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.profile-drive-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.profile-drive-name {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.profile-drive-id {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-family: monospace;
+}
+
+.profile-drive-btn {
+  margin-left: auto;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #ff8c42, #e57a32);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.profile-drive-btn:hover {
+  opacity: 0.88;
+}
+
+@media (max-width: 640px) {
+  .profile-account-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-account-since {
+    align-items: flex-start;
+    margin-left: 0;
+  }
+
+  .profile-permissions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-drive-btn {
+    margin-left: 0;
+  }
+}

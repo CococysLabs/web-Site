@@ -555,6 +555,64 @@
   height: 16px;
 }
 
+/* Drive tab helpers */
+.folder-explore-btn {
+  width: 100%;
+}
+
+.folder-drive-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  background: transparent;
+  color: var(--cococys-orange);
+  border: 2px solid var(--cococys-orange);
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.folder-drive-link:hover {
+  background: var(--cococys-orange);
+  color: white;
+}
+
+.folder-drive-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.drive-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  margin-bottom: 24px;
+  background: transparent;
+  color: var(--cococys-orange);
+  border: 2px solid var(--cococys-orange);
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.drive-back-btn:hover {
+  background: var(--cococys-orange);
+  color: white;
+  transform: translateX(-4px);
+}
+
+.drive-back-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* Estados */
 .loading-state {
   display: flex;
@@ -992,6 +1050,113 @@
   border-color: rgba(239, 68, 68, 0.5);
   transform: none;
   box-shadow: none;
+}
+
+/* ─── User Config Modal ─────────────────────────────────────────────────────── */
+
+.user-config-modal {
+  max-width: 520px;
+  text-align: left;
+}
+
+.user-config-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.25rem;
+}
+
+.user-config-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--cococys-orange), var(--cococys-orange-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.user-config-name {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.user-config-email {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.user-config-section {
+  margin-bottom: 1rem;
+}
+
+.user-config-section-title {
+  margin: 0 0 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.user-config-section-divider {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.user-config-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.user-config-perms-title {
+  margin: 0 0 10px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.user-config-perm-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.user-config-perm-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.user-config-perm-desc {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.confirm-ok-orange {
+  padding: 0.625rem 1.5rem;
+  background: var(--cococys-orange);
+  border: 1px solid var(--cococys-orange);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-ok-orange:hover {
+  background: var(--cococys-orange-dark);
+  border-color: var(--cococys-orange-dark);
 }
 
 /* ─── Settings Tab ─────────────────────────────────────────────────────────── */

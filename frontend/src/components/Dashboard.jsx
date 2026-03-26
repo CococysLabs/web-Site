@@ -115,6 +115,13 @@ const Dashboard = () => {
               <span>Mi Curso</span>
             </button>
           )}
+
+          <button className={`nav-item ${activeView === 'profile' ? 'active' : ''}`} onClick={() => navTo('profile')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <span>Mi Perfil</span>
+          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -427,6 +434,121 @@ const Dashboard = () => {
                         </div>
                       )}
                     </>
+                  )}
+                </div>
+              )}
+              {/* ── Mi Perfil ── */}
+              {activeView === 'profile' && (
+                <div className="profile-view">
+                  <div className="view-header">
+                    <h2>Mi Perfil</h2>
+                    <p>Información de tu cuenta y permisos asignados</p>
+                  </div>
+
+                  {/* Account card */}
+                  <div className="profile-account-card">
+                    <div className="profile-account-avatar">
+                      {user?.nombre?.charAt(0)}{user?.apellidos?.charAt(0)}
+                    </div>
+                    <div className="profile-account-info">
+                      <h3>{user?.nombre} {user?.apellidos}</h3>
+                      <p>{user?.correo}</p>
+                      <div className="profile-account-badges">
+                        <span className="profile-badge active">✓ Cuenta activa</span>
+                        {isTeacher && <span className="profile-badge teacher">🏫 Docente</span>}
+                        {user?.is_approved && <span className="profile-badge approved">✓ Aprobado</span>}
+                      </div>
+                    </div>
+                    <div className="profile-account-since">
+                      <span className="profile-account-since-label">Miembro desde</span>
+                      <span className="profile-account-since-value">
+                        {user?.created_at
+                          ? new Date(user.created_at).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+                          : '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Permissions card */}
+                  <div className="profile-permissions-card">
+                    <h3 className="profile-section-title">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                      Permisos y Accesos
+                    </h3>
+                    <div className="profile-permissions-grid">
+                      {[
+                        {
+                          key: 'can_view_drive',
+                          icon: '📁',
+                          label: 'Explorador de Drive',
+                          desc: 'Navegar por la carpeta asignada',
+                          granted: !!user?.permissions?.can_view_drive,
+                        },
+                        {
+                          key: 'can_analyze',
+                          icon: '🔍',
+                          label: 'Analizar Documentos',
+                          desc: 'Analizar archivos individuales con IA',
+                          granted: !!user?.permissions?.can_analyze,
+                        },
+                        {
+                          key: 'can_validate_structure',
+                          icon: '📋',
+                          label: 'Validar Estructura',
+                          desc: 'Verificar estructura de carpetas y archivos',
+                          granted: !!user?.permissions?.can_validate_structure,
+                        },
+                        {
+                          key: 'can_validate_content',
+                          icon: '🧠',
+                          label: 'Validar Contenido (IA)',
+                          desc: 'Análisis profundo con inteligencia artificial',
+                          granted: !!user?.permissions?.can_validate_content,
+                        },
+                      ].map(({ icon, label, desc, granted }) => (
+                        <div key={label} className={`permission-item ${granted ? 'granted' : 'denied'}`}>
+                          <div className="permission-item-icon">{icon}</div>
+                          <div className="permission-item-info">
+                            <span className="permission-item-label">{label}</span>
+                            <span className="permission-item-desc">{desc}</span>
+                          </div>
+                          <div className={`permission-item-status ${granted ? 'granted' : 'denied'}`}>
+                            {granted ? '✓' : '✗'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {!Object.values(user?.permissions || {}).some(Boolean) && (
+                      <p className="profile-no-perms">
+                        Aún no tienes permisos asignados. Contacta al administrador para solicitar acceso.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Drive folder card */}
+                  {user?.drive_folder_id && (
+                    <div className="profile-drive-card">
+                      <h3 className="profile-section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                        Carpeta Asignada
+                      </h3>
+                      <div className="profile-drive-info">
+                        <div className="profile-drive-icon">📁</div>
+                        <div>
+                          <p className="profile-drive-name">{user.drive_folder_name || 'Carpeta sin nombre'}</p>
+                          <p className="profile-drive-id">ID: {user.drive_folder_id}</p>
+                        </div>
+                        {canViewDrive && (
+                          <button className="profile-drive-btn" onClick={() => navTo('mi-carpeta')}>
+                            Abrir carpeta →
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

@@ -295,43 +295,41 @@ const AdminDashboard = () => {
       {/* User config modal */}
       {userConfigModal && (
         <div className="admin-modal-overlay" onClick={() => setUserConfigModal(null)}>
-          <div className="admin-confirm-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', textAlign: 'left' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.9rem', flexShrink: 0 }}>
+          <div className="admin-confirm-modal user-config-modal" onClick={e => e.stopPropagation()}>
+            <div className="user-config-header">
+              <div className="user-config-avatar">
                 {userConfigModal.nombre?.[0]}{userConfigModal.apellidos?.[0]}
               </div>
               <div>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem' }}>{userConfigModal.nombre} {userConfigModal.apellidos}</p>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{userConfigModal.correo}</p>
+                <p className="user-config-name">{userConfigModal.nombre} {userConfigModal.apellidos}</p>
+                <p className="user-config-email">{userConfigModal.correo}</p>
               </div>
             </div>
 
             {/* Drive folder */}
-            <div style={{ marginBottom: '1rem' }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Carpeta de Google Drive asignada</p>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>ID de carpeta</label>
+            <div className="user-config-section">
+              <p className="user-config-section-title">Carpeta de Google Drive asignada</p>
+              <label className="user-config-label">ID de carpeta</label>
               <input
                 className="settings-input"
                 type="text"
                 placeholder="Ej: 1ABC...xyz"
                 value={userConfigForm.drive_folder_id}
                 onChange={e => setUserConfigForm(f => ({ ...f, drive_folder_id: e.target.value }))}
-                style={{ width: '100%', fontSize: '0.875rem', marginBottom: '8px', boxSizing: 'border-box' }}
               />
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Nombre de carpeta (opcional, visible al usuario)</label>
+              <label className="user-config-label" style={{ marginTop: 8 }}>Nombre de carpeta (opcional, visible al usuario)</label>
               <input
                 className="settings-input"
                 type="text"
                 placeholder="Ej: Sistemas Operativos 2025"
                 value={userConfigForm.drive_folder_name}
                 onChange={e => setUserConfigForm(f => ({ ...f, drive_folder_name: e.target.value }))}
-                style={{ width: '100%', fontSize: '0.875rem', boxSizing: 'border-box' }}
               />
             </div>
 
             {/* is_teacher toggle */}
-            <div style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-light)' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+            <div className="user-config-section user-config-section-divider">
+              <label className="user-config-perm-item">
                 <input
                   type="checkbox"
                   checked={userConfigForm.is_teacher}
@@ -344,14 +342,14 @@ const AdminDashboard = () => {
 
             {/* Permissions */}
             <div style={{ marginBottom: '1.25rem' }}>
-              <p style={{ margin: '0 0 10px', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Permisos de funcionalidades</p>
+              <p className="user-config-perms-title">Permisos de funcionalidades</p>
               {[
                 { key: 'can_view_drive', label: 'Ver explorador de Drive', desc: 'Puede navegar por su carpeta asignada' },
                 { key: 'can_analyze', label: 'Analizar documentos', desc: 'Puede usar el botón Analizar en archivos' },
                 { key: 'can_validate_structure', label: 'Validar estructura', desc: 'Puede ejecutar validación de estructura' },
-                { key: 'can_validate_content', label: 'Validar contenido (IA)', desc: 'Puede ejecutar validación de contenido con Gemini' },
+                { key: 'can_validate_content', label: 'Validar contenido (IA)', desc: 'Puede ejecutar validación de contenido con IA' },
               ].map(({ key, label, desc }) => (
-                <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginBottom: '10px' }}>
+                <label key={key} className="user-config-perm-item">
                   <input
                     type="checkbox"
                     checked={userConfigForm.permissions[key]}
@@ -359,8 +357,8 @@ const AdminDashboard = () => {
                     style={{ accentColor: 'var(--cococys-orange)', width: 15, height: 15, marginTop: 2, flexShrink: 0 }}
                   />
                   <div>
-                    <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{label}</span>
-                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{desc}</p>
+                    <span className="user-config-perm-label">{label}</span>
+                    <p className="user-config-perm-desc">{desc}</p>
                   </div>
                 </label>
               ))}
@@ -368,7 +366,7 @@ const AdminDashboard = () => {
 
             <div className="confirm-actions">
               <button className="confirm-cancel" onClick={() => setUserConfigModal(null)}>Cancelar</button>
-              <button className="confirm-ok" style={{ background: 'var(--cococys-orange)', borderColor: 'var(--cococys-orange)' }} onClick={saveUserConfig}>Guardar</button>
+              <button className="confirm-ok-orange" onClick={saveUserConfig}>Guardar</button>
             </div>
           </div>
         </div>
@@ -608,109 +606,50 @@ const AdminDashboard = () => {
                     <p>Verifica la configuración de GOOGLE_DRIVE_FOLDER_ID</p>
                   </div>
                 ) : (
-                  <div className="folders-grid"  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                  <div className="folders-grid">
                     {driveFolders.map((folder) => (
-                      <div 
-                        key={folder.id} 
+                      <div
+                        key={folder.id}
                         className="folder-card"
-                        style={{
-                          background: 'linear-gradient(135deg, rgba(255, 140, 66, 0.03) 0%, rgba(255, 140, 66, 0.08) 100%)',
-                          border: '2px solid var(--border-light, #e5e7eb)',
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                          cursor: 'pointer'
-                        }}
                         onClick={() => setSelectedFolder(folder)}
                       >
-                        <div className="folder-icon" style={{
-                          width: '64px',
-                          height: '64px',
-                          background: 'linear-gradient(135deg, var(--cococys-orange, #ff8c42), var(--cococys-orange-dark, #e57a32))',
-                          borderRadius: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginBottom: '16px'
-                        }}>
-                          <svg style={{ width: '40px', height: '40px' }} viewBox="0 0 24 24" fill="white">
+                        <div className="folder-icon">
+                          <svg viewBox="0 0 24 24" fill="white">
                             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
                           </svg>
                         </div>
                         <div className="folder-info">
-                          <h3 style={{ 
-                            fontSize: '1.125rem', 
-                            fontWeight: '600',
-                            color: 'var(--text-primary, #1a1a1a)',
-                            marginBottom: '8px'
-                          }}>
-                            {folder.name}
-                          </h3>
-                          <p className="folder-date" style={{
-                            fontSize: '0.875rem',
-                            color: 'var(--text-secondary, #6b7280)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px'
-                          }}>
-                            📅 {folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('es-ES', { 
-                              year: 'numeric', 
-                              month: 'short', 
-                              day: 'numeric' 
+                          <h3>{folder.name}</h3>
+                          <p className="folder-date">
+                            📅 {folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('es-ES', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
                             }) : 'Sin fecha'}
                           </p>
                         </div>
-                        <div className="folder-actions" style={{ marginTop: '16px' }}>
+                        <div className="folder-actions">
                           <button
-                            className="btn-primary"
-                            style={{
-                              width: '100%',
-                              padding: '12px',
-                              background: 'linear-gradient(135deg, var(--cococys-orange, #ff8c42), var(--cococys-orange-dark, #e57a32))',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '8px',
-                              fontWeight: '600',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '8px',
-                              transition: 'all 0.2s'
-                            }}
+                            className="btn-primary folder-explore-btn"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedFolder(folder);
                             }}
                           >
-                            <svg style={{ width: '18px', height: '18px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                             </svg>
                             Explorar Contenido
                           </button>
                           {folder.webViewLink && (
-                            <a 
-                              href={folder.webViewLink} 
-                              target="_blank" 
+                            <a
+                              href={folder.webViewLink}
+                              target="_blank"
                               rel="noopener noreferrer"
-                              style={{
-                                marginTop: '8px',
-                                padding: '10px',
-                                background: 'transparent',
-                                color: 'var(--cococys-orange, #ff8c42)',
-                                border: '2px solid var(--cococys-orange, #ff8c42)',
-                                borderRadius: '8px',
-                                fontWeight: '600',
-                                fontSize: '0.875rem',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                textDecoration: 'none',
-                                transition: 'all 0.2s'
-                              }}
+                              className="folder-drive-link"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
                               Abrir en Drive
@@ -724,38 +663,8 @@ const AdminDashboard = () => {
               </>
             ) : (
               <>
-                <button 
-                  onClick={() => setSelectedFolder(null)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '12px 20px',
-                    marginBottom: '24px',
-                    background: 'transparent',
-                    color: 'var(--cococys-orange, #ff8c42)',
-                    border: '2px solid var(--cococys-orange, #ff8c42)',
-                    borderRadius: '10px',
-                    fontWeight: '600',
-                    fontSize: '0.95rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.2)'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'var(--cococys-orange, #ff8c42)';
-                    e.currentTarget.style.color = 'white';
-                    e.currentTarget.style.transform = 'translateX(-4px)';
-                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.3)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = 'var(--cococys-orange, #ff8c42)';
-                    e.currentTarget.style.transform = 'translateX(0)';
-                    e.currentTarget.style.boxShadow = '0 1px 2px 0 rgba(0, 0, 0, 0.2)';
-                  }}
-                >
-                  <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <button className="drive-back-btn" onClick={() => setSelectedFolder(null)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
                   Volver a Materias
@@ -849,7 +758,7 @@ const AdminDashboard = () => {
                   </button>
                 </div>
 
-                {/* ── Gemini AI ── */}
+                {/* ── IA ── */}
                 <div className="settings-card">
                   <div className="settings-card-header">
                     <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)' }}>
@@ -858,14 +767,28 @@ const AdminDashboard = () => {
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Gemini AI</h3>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Inteligencia Artificial</h3>
                       <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Motor de análisis de contenido</p>
                     </div>
                   </div>
 
+                  {/* Provider chain info */}
+                  <div style={{ marginBottom:'1rem', padding:'10px 12px', background:'rgba(99,102,241,0.06)', border:'1px solid rgba(99,102,241,0.18)', borderRadius:'8px', fontSize:'0.78rem', color:'var(--text-secondary)', lineHeight:1.6 }}>
+                    <strong style={{ color:'var(--text-primary)', display:'block', marginBottom:4 }}>Cadena de proveedores activa:</strong>
+                    <span style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
+                      <span style={{ padding:'2px 8px', background:'rgba(16,185,129,0.15)', color:'#34d399', borderRadius:12, fontWeight:600 }}>1. DeepSeek</span>
+                      <span style={{ color:'var(--text-muted)' }}>→</span>
+                      <span style={{ padding:'2px 8px', background:'rgba(99,102,241,0.12)', color:'#818cf8', borderRadius:12 }}>2. Gemini (fallback)</span>
+                      <span style={{ color:'var(--text-muted)' }}>→</span>
+                      <span style={{ padding:'2px 8px', background:'rgba(245,158,11,0.12)', color:'#fbbf24', borderRadius:12 }}>3. Groq</span>
+                      <span style={{ color:'var(--text-muted)' }}>→</span>
+                      <span style={{ padding:'2px 8px', background:'rgba(107,114,128,0.12)', color:'#9ca3af', borderRadius:12 }}>4. Keywords</span>
+                    </span>
+                  </div>
+
                   <div className="settings-field">
-                    <label className="settings-label">Modelo de Gemini</label>
-                    <p className="settings-hint">Modelo a usar para la validación de contenido con IA</p>
+                    <label className="settings-label">Modelo de Gemini (fallback)</label>
+                    <p className="settings-hint">Modelo de Gemini utilizado cuando DeepSeek no está disponible</p>
                     <select
                       className="settings-input"
                       value={settingsForm.gemini_model || 'gemini-2.0-flash'}
@@ -879,7 +802,7 @@ const AdminDashboard = () => {
 
                   <div className="settings-field">
                     <label className="settings-label">Habilitar análisis con IA</label>
-                    <p className="settings-hint">Si está desactivado, se usa coincidencia de palabras clave</p>
+                    <p className="settings-hint">Si está desactivado, se usa coincidencia de palabras clave como último recurso</p>
                     <label className="toggle">
                       <input
                         type="checkbox"
