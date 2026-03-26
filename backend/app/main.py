@@ -16,14 +16,17 @@ app = FastAPI(
 )
 
 # Configurar CORS
-allow_origins = [
+# Filtramos valores None/vacíos para evitar que FastAPI rechace la lista
+_raw_origins = [
     settings.FRONTEND_URL,
+    "https://cococys-frontend.onrender.com",  # URL fija de Render como fallback
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5175",
     "http://localhost",
     "http://localhost:80",
 ]
+allow_origins = [o for o in _raw_origins if o and o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
