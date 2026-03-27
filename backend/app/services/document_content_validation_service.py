@@ -971,6 +971,139 @@ class DocumentContentValidationService:
             print(f"  📋 Parsing raw: {len(groups)} grupos, {total} requisitos")
         return groups
 
+    def _parse_lab_sheet_full(self, ws) -> Tuple[List[Dict], Dict[str, int]]:
+        """
+        Parser dedicado y completo para hojas Proyectos/Practicas/Tareas.
+
+        Hace en un solo paso:
+          1. Escanea toda la hoja para localizar las columnas de escritura
+             (Presente, Observaciones) — sin depender de _find_header_row.
+          2. Detecta la columna de criterios (primera columna con contenido).
+          3. Detecta la columna Aplica (si existe).
+          4. Agrupa criterios bajo encabezados "Proyecto N / Practica N / Tarea N".
+          5. Retorna (groups, write_cols) donde write_cols tiene las claves
+             'presente' y/o 'observaciones' con sus índices de columna 1-based.
+
+        Esto desacopla completamente el parsing lab del flujo de hojas Semana.
+        """
+        # ── Paso 1: localizar columnas de escritura en toda la hoja ──────────
+        write_cols: Dict[str, int] = {}
+        aplica_col: Optional[int] = None
+        criteria_col: Optional[int] = None   # columna principal con texto de criterios
+
+        # Escaneamos las primeras 15 filas buscando encabezados de columna
+        for r in range(1, min(ws.max_row + 1, 15)):
+            row_matched = False
+            for c in range(1, min(ws.max_column + 1, 30)):
+                raw = ws.cell(row=r, column=c).value
+                norm = self._normalize(str(raw or ''))
+                if not norm:
+                    continue
+                if 'presente' in norm and 'presente' not in write_cols:
+                    write_cols['presente'] = c
+                    row_matched = True
+                elif 'observaci' in norm and 'observaciones' not in write_cols:
+                    write_cols['observaciones'] = c
+                    row_matched = True
+                elif norm.startswith('aplica') and aplica_col is None:
+                    aplica_col = c
+            if row_matched and len(write_cols) >= 2:
+                break   # ambas columnas encontradas
+
+        print(f"  📝 Columnas de escritura detectadas: {write_cols} | aplica: {aplica_col}")
+
+        # ── Paso 2: detectar columna de criterios ────────────────────────────
+        # Es la primera columna (col. más a la izquierda) que contiene texto
+        # significativo en las primeras 30 filas (excluyendo columnas de escritura).
+        write_col_idxs = set(write_cols.values())
+        for r in range(1, min(ws.max_row + 1, 30)):
+            for c in range(1, min(ws.max_column + 1, 10)):
+                if c in write_col_idxs or c == aplica_col:
+                    continue
+                raw = ws.cell(row=r, column=c).value
+                if raw and str(raw).strip() and len(str(raw).strip()) >= 3:
+                    norm = self._normalize(str(raw))
+                    # Descartar filas de encabezado de tabla
+                    if any(kw in norm for kw in ('presente', 'observaci', 'aplica', 'autor')):
+                        continue
+                    criteria_col = c
+                    break
+            if criteria_col:
+                break
+
+        if criteria_col is None:
+            criteria_col = 1   # fallback: columna A
+        print(f"  📌 Columna de criterios: {criteria_col}")
+
+        # ── Paso 3: recorrer toda la hoja y agrupar ───────────────────────────
+        SKIP_NORMS = {
+            'si', 'no', 'aplica', 'sub seccion', 'seccion', 'sub-seccion',
+            'presente', 'observaciones', 'observacion', 'autor', 'criterio',
+            'criterios', 'requisito', 'requisitos', 'nombre', 'fecha',
+            'calificacion', 'puntaje', 'nota', 'descripcion',
+        }
+
+        groups: List[Dict] = []
+        current_group: Optional[Dict] = None
+        seen_in_group: set = set()   # (group_name, norm_criteria) → evitar duplicados
+
+        for r in range(1, ws.max_row + 1):
+            raw = ws.cell(row=r, column=criteria_col).value
+            if not raw or not str(raw).strip():
+                continue
+
+            text = str(raw).strip()
+            norm = self._normalize(text)
+
+            # Saltar encabezados de tabla y valores muy cortos
+            if norm in SKIP_NORMS or len(text) < 3:
+                continue
+
+            # ── Encabezado de grupo ("Proyecto 1", "Practica 2", "Tarea 3") ──
+            if re.match(r'^(proyecto|practica|tarea)\s*\d*$', norm):
+                current_group = {'group_name': text, 'params': []}
+                groups.append(current_group)
+                seen_in_group = set()
+                continue
+
+            # ── Verificar columna Aplica ──────────────────────────────────────
+            if aplica_col:
+                aplica_val = ws.cell(row=r, column=aplica_col).value
+                if self._normalize(str(aplica_val or '')) == 'no':
+                    continue   # explícitamente excluido
+
+            # ── Criterio de evaluación ────────────────────────────────────────
+            if len(text) < 5:
+                continue
+
+            group_key = current_group['group_name'] if current_group else 'General'
+            dedup_key = (group_key, norm)
+            if dedup_key in seen_in_group:
+                continue
+            seen_in_group.add(dedup_key)
+
+            if current_group is None:
+                current_group = {'group_name': 'General', 'params': []}
+                groups.append(current_group)
+
+            current_group['params'].append({
+                'row_idx':     r,
+                'sub_seccion': text,
+                'autor':       '',
+            })
+
+        groups = [g for g in groups if g['params']]
+        total = sum(len(g['params']) for g in groups)
+        print(f"  📋 Lab sheet full: {len(groups)} grupos, {total} criterios")
+        for g in groups:
+            print(f"     📑 '{g['group_name']}': {len(g['params'])} criterios")
+            for p in g['params'][:3]:   # muestra los primeros 3 para debug
+                print(f"        · [{p['row_idx']}] {p['sub_seccion']}")
+            if len(g['params']) > 3:
+                print(f"        … +{len(g['params'])-3} más")
+
+        return groups, write_cols
+
     # Pistas de tipo: qué MIME buscar para cada nombre de grupo
     _GROUP_TYPE_HINTS: Dict[str, List[str]] = {
         'presentacion':  ['presentationml'],
@@ -1898,53 +2031,49 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
             if wb is None:
                 return {'success': False, 'error': 'No se pudo leer el Excel'}
 
-            # 3b. Seleccionar hoja según tipo de carpeta
+            # 3b. Seleccionar hoja y parsear requisitos según tipo de carpeta
+            groups: List[Dict] = []
+            col_map: Dict[str, int] = {}
+
             if is_lab:
+                # ── Hojas Proyectos / Practicas / Tareas ─────────────────────
                 ws = self.get_lab_sheet(wb, folder_type)
                 if ws is None:
-                    return {'success': False, 'error': f'No se encontró la hoja "{LAB_FOLDER_TYPES[folder_type]}" en la Matriz'}
+                    return {
+                        'success': False,
+                        'error': f'No se encontró la hoja "{LAB_FOLDER_TYPES[folder_type]}" en la Matriz. '
+                                 f'Hojas disponibles: {wb.sheetnames}'
+                    }
+                # Parser dedicado: detecta columnas y agrupa en un solo paso
+                groups, col_map = self._parse_lab_sheet_full(ws)
+
+                if not groups:
+                    return {
+                        'success': False,
+                        'error': (f'No se encontraron criterios en la hoja '
+                                  f'"{LAB_FOLDER_TYPES[folder_type]}". '
+                                  f'Verifica que la hoja tenga encabezados de grupo '
+                                  f'(ej. "Proyecto 1") y criterios de evaluación.')
+                    }
             else:
+                # ── Hoja Semana (flujo original) ──────────────────────────────
                 ws = self.get_content_sheet(wb)
                 if ws is None:
                     return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones"'}
 
-            # _find_header_row puede fallar si la hoja lab tiene menos columnas estándar.
-            # Para lab usamos min_matches=2 (más leniente).
-            try:
-                header_row_idx, col_map = self._find_header_row(
-                    ws, min_matches=2 if is_lab else 3
-                )
-            except ValueError as hdr_err:
-                print(f"  ⚠️  No se detectaron encabezados estándar: {hdr_err}")
-                header_row_idx, col_map = 1, {}   # valores seguros para el fallback raw
+                try:
+                    header_row_idx, col_map = self._find_header_row(ws)
+                except ValueError as hdr_err:
+                    print(f"  ⚠️  No se detectaron encabezados estándar: {hdr_err}")
+                    return {'success': False, 'error': f'Error leyendo encabezados del Excel: {hdr_err}'}
 
-            # 4. Parsear requisitos AGRUPADOS por tipo de documento
-            groups: List[Dict] = []
-            if col_map:
+                # 4. Parsear requisitos agrupados por tipo de documento
                 groups = self.parse_requirements_by_group(ws, section_name, col_map, header_row_idx)
-
-                # Para carpetas lab: si no hay resultados con la sección derivada,
-                # intentar con el nombre canónico del tipo (ej. "Proyectos")
-                if not groups and is_lab:
-                    canonical = LAB_FOLDER_TYPES[folder_type]
-                    print(f"  🔄 Sin resultados para '{section_name}', intentando con '{canonical}'...")
-                    groups = self.parse_requirements_by_group(ws, canonical, col_map, header_row_idx)
-
-                # Tercer intento: leer TODA la hoja sin filtrar por sección
-                if not groups and is_lab:
-                    print(f"  🔄 Leyendo todos los requisitos de la hoja (sin filtro de sección)...")
-                    groups = self.parse_requirements_by_group(ws, None, col_map, header_row_idx)
-
-            # Cuarto fallback: parsing raw (no depende de columnas estándar)
-            if not groups and is_lab:
-                print(f"  🔄 Aplicando parsing raw de la hoja lab...")
-                groups = self._parse_lab_sheet_raw(ws)
-
-            if not groups:
-                return {
-                    'success': False,
-                    'error': f'No se encontraron requisitos para la sección "{section_name}"'
-                }
+                if not groups:
+                    return {
+                        'success': False,
+                        'error': f'No se encontraron requisitos para la sección "{section_name}"'
+                    }
 
             # 5. Descargar y extraer texto de TODOS los documentos de la carpeta
             doc_texts, files_metadata = self.download_and_extract_all_docs(semana_folder_id)
