@@ -829,7 +829,11 @@ class DocumentContentValidationService:
         aplica_col = col_map.get('aplica')
         autor_col  = col_map.get('autor')
 
-        if not sub_col:
+        # Para hojas lab de una sola columna (Proyectos/Practicas/Tareas), la columna
+        # "Sección" contiene tanto los encabezados de grupo ("Proyecto 1") como los
+        # criterios ("Titulo Proyecto"). Si no hay sub_seccion, usar seccion como fallback.
+        effective_sub_col = sub_col or sec_col
+        if not effective_sub_col:
             return []
 
         groups: List[Dict] = []
@@ -849,7 +853,7 @@ class DocumentContentValidationService:
                 if self._normalize(str(sec_val)) != norm_target:
                     continue
 
-            sub_val = ws.cell(row=row_idx, column=sub_col).value
+            sub_val = ws.cell(row=row_idx, column=effective_sub_col).value
             if not sub_val or str(sub_val).strip() == '':
                 continue
             sub_str = str(sub_val).strip()
@@ -904,43 +908,68 @@ class DocumentContentValidationService:
     def _parse_lab_sheet_raw(self, ws) -> List[Dict]:
         """
         Fallback robusto para hojas lab con estructura no estándar.
-        Lee TODAS las celdas con texto significativo sin depender
-        del mapeo de columnas (seccion / sub_seccion / aplica).
-        Devuelve un único grupo 'General' con todos los requisitos.
+        Lee la primera columna significativa de cada fila.
+        Detecta encabezados de grupo ("Proyecto 1", "Practica 2"…) y crea
+        grupos separados — igual que parse_requirements_by_group pero sin
+        depender del mapeo de columnas.
         """
         SKIP_NORMS = {
             'si', 'no', 'aplica', 'sub seccion', 'seccion', 'autor',
             'presente', 'observaciones', 'observacion', 'criterio',
             'criterios', 'requisito', 'requisitos', 'nombre', 'fecha',
             'calificacion', 'puntaje', 'nota', 'semana', 'sub-seccion',
-            'descripcion', 'descripción',
+            'descripcion', 'descripcion',
         }
-        seen: set = set()
-        params: List[Dict] = []
+
+        groups: List[Dict] = []
+        current_group: Optional[Dict] = None
+        seen_params: set = set()
 
         for row_idx in range(1, min(ws.max_row + 1, 500)):
-            for col_idx in range(1, min(ws.max_column + 1, 20)):
+            # Leer la primera celda no vacía de la fila (columna más a la izquierda)
+            row_text = None
+            row_col  = None
+            for col_idx in range(1, min(ws.max_column + 1, 5)):
                 val = ws.cell(row=row_idx, column=col_idx).value
-                if not val:
-                    continue
-                text = str(val).strip()
-                if len(text) < 8:            # saltar celdas muy cortas (Si, No, números…)
-                    continue
-                norm = self._normalize(text)
-                if norm in SKIP_NORMS:
-                    continue
-                # Saltar encabezados de grupo lab ("Proyecto 1", "Practica 2"…)
-                if re.match(r'^(proyecto|practica|tarea)\s*\d*$', norm):
-                    continue
-                if norm in seen:
-                    continue
-                seen.add(norm)
-                params.append({'row_idx': row_idx, 'sub_seccion': text, 'autor': ''})
+                if val and str(val).strip():
+                    row_text = str(val).strip()
+                    row_col  = col_idx
+                    break
+            if not row_text:
+                continue
 
-        if params:
-            print(f"  📋 Parsing raw: {len(params)} requisitos extraídos de la hoja")
-            return [{'group_name': 'General', 'params': params}]
-        return []
+            norm = self._normalize(row_text)
+
+            # Saltar palabras clave de encabezado de tabla
+            if norm in SKIP_NORMS or len(row_text) < 4:
+                continue
+
+            # ── Encabezado de grupo lab ("Proyecto 1", "Practica 2"…) ──
+            if re.match(r'^(proyecto|practica|tarea)\s*\d*$', norm):
+                current_group = {'group_name': row_text, 'params': []}
+                groups.append(current_group)
+                continue
+
+            # ── Criterio de evaluación ──────────────────────────────────
+            if len(row_text) < 8 or norm in seen_params:
+                continue
+            seen_params.add(norm)
+
+            if current_group is None:
+                current_group = {'group_name': 'General', 'params': []}
+                groups.append(current_group)
+
+            current_group['params'].append({
+                'row_idx':    row_idx,
+                'sub_seccion': row_text,
+                'autor':      '',
+            })
+
+        groups = [g for g in groups if g['params']]
+        if groups:
+            total = sum(len(g['params']) for g in groups)
+            print(f"  📋 Parsing raw: {len(groups)} grupos, {total} requisitos")
+        return groups
 
     # Pistas de tipo: qué MIME buscar para cada nombre de grupo
     _GROUP_TYPE_HINTS: Dict[str, List[str]] = {
