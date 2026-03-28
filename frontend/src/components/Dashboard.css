@@ -1438,3 +1438,27 @@
     margin-left: 0;
   }
 }
+
+/* ── Feature card color variants (compound selector beats .feature-card base) ── */
+.feature-card.feature-card--orange {
+  background: linear-gradient(135deg, rgba(255,140,66,0.15), transparent);
+  border-color: rgba(255,140,66,0.3);
+}
+.feature-card.feature-card--indigo {
+  background: linear-gradient(135deg, rgba(99,102,241,0.12), transparent);
+  border-color: rgba(99,102,241,0.25);
+}
+.feature-card.feature-card--green {
+  background: linear-gradient(135deg, rgba(16,185,129,0.12), transparent);
+  border-color: rgba(16,185,129,0.25);
+}
+.feature-card.feature-card--red {
+  background: linear-gradient(135deg, rgba(239,68,68,0.12), transparent);
+  border-color: rgba(239,68,68,0.25);
+}
+
+/* ── Feature card icon variants ── */
+.feature-card-icon.feature-card-icon--orange { background: linear-gradient(135deg, #ff8c42, #e57a32); }
+.feature-card-icon.feature-card-icon--indigo { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+.feature-card-icon.feature-card-icon--green  { background: linear-gradient(135deg, #10b981, #059669); }
+.feature-card-icon.feature-card-icon--red    { background: linear-gradient(135deg, #ef4444, #dc2626); }

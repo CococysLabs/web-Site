@@ -14,7 +14,7 @@ from app.models.system_setting import SystemSetting
 DEFAULT_SETTINGS: Dict[str, Dict[str, Any]] = {
     # Google Drive
     "drive_root_folder_id": {
-        "value": "",
+        "value": "1Zr0uo96b8Nyj97wxzOt17yCdqfgxbWbl",
         "value_type": "string",
         "category": "drive",
         "label": "Carpeta raíz de Google Drive",

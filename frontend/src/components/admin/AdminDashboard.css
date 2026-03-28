@@ -3,35 +3,7 @@
    Color Primario: #ff8c42 (Naranja institucional)
    =================================== */
 
-/* Variables Globales */
-:root {
-  --cococys-orange: #ff8c42;
-  --cococys-orange-dark: #e57a32;
-  --cococys-orange-light: #ffaa6f;
-  --cococys-orange-subtle: rgba(255, 140, 66, 0.08);
-  
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-light: #64748b;
-
-  --bg-primary: #0f172a;
-  --bg-card: #1e293b;
-  --bg-secondary: #0f172a;
-
-  --border-light: #334155;
-  --border-medium: #475569;
-  
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  
-  --transition-fast: 150ms ease;
-  --transition-normal: 250ms ease;
-}
+/* Variables resolved from index.css :root — no local :root needed */
 
 /* Layout Principal */
 .admin-dashboard {
@@ -1220,7 +1192,7 @@
 .settings-input {
   width: 100%;
   padding: 10px 14px;
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   color: var(--text-primary);
@@ -1391,7 +1363,7 @@
 }
 
 .report-count-badge {
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   padding: 2px 10px;
   border-radius: 12px;
   font-size: 0.8rem;
@@ -1569,3 +1541,121 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Settings card icon color variants ── */
+.settings-card-icon--drive      { background: linear-gradient(135deg, #4285F4, #34A853); }
+.settings-card-icon--ai         { background: linear-gradient(135deg, #8B5CF6, #6D28D9); }
+.settings-card-icon--users      { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.settings-card-icon--validation { background: linear-gradient(135deg, var(--cococys-orange), var(--cococys-orange-dark)); }
+
+/* ── Settings card header typography ── */
+.settings-card-title    { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary); }
+.settings-card-subtitle { margin: 0; font-size: 0.75rem; color: var(--text-muted); }
+
+/* ── Settings save button ── */
+.settings-save-btn {
+  margin-top: 8px;
+  padding: 10px 20px;
+  font-size: 0.875rem;
+}
+
+/* ── Range labels row ── */
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ── Toggle label value text ── */
+.toggle-value { font-size: 0.875rem; color: var(--text-primary); }
+
+/* ── File extension list ── */
+.ext-list  { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.ext-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.875rem; }
+
+/* ── AI provider chain info box ── */
+.provider-chain-info {
+  margin-bottom: 1rem;
+  padding: 10px 12px;
+  background: rgba(99,102,241,0.06);
+  border: 1px solid rgba(99,102,241,0.18);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.provider-chain-title {
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.provider-chain-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.provider-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+}
+
+.provider-badge--primary { background: rgba(16,185,129,0.15);  color: #34d399;  font-weight: 600; }
+.provider-badge--info    { background: rgba(99,102,241,0.12);  color: #818cf8; }
+.provider-badge--warning { background: rgba(245,158,11,0.12);  color: #fbbf24; }
+.provider-badge--muted   { background: rgba(107,114,128,0.12); color: #9ca3af; }
+
+.provider-chain-arrow { color: var(--text-muted); }
+
+/* ── Drive tab info notice ── */
+.drive-info-notice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--cococys-orange-subtle);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.drive-info-notice svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* ── Reports tab header ── */
+.reports-tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.reports-tab-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+}
+
+/* ── Checkbox accent colors ── */
+.checkbox-green  { accent-color: #10b981; width: 16px; height: 16px; }
+.checkbox-orange { accent-color: var(--cococys-orange); width: 15px; height: 15px; margin-top: 2px; flex-shrink: 0; }

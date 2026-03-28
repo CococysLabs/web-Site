@@ -1246,80 +1246,70 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
         </div>
       )}
 
-      {/* Breadcrumbs y botón de validación */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--spacing-lg)' }}>
-        <div className="breadcrumbs" style={{ flex: 1, marginBottom: 0 }}>
-          {breadcrumbs.map((crumb, index) => (
-            <button
-              key={crumb.id}
-              onClick={() => navigateToBreadcrumb(index)}
-              disabled={index === breadcrumbs.length - 1}
-            >
-              {index === 0 ? '🏠' : ''} {crumb.name}
-            </button>
-          ))}
-        </div>
-        
-        {/* Botones de validación */}
-        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginLeft: 'var(--spacing-md)', flexWrap: 'wrap' }}>
-          {/* Validar Estructura — en carpetas intermedias (NO curso-raíz, NO Semana_X) */}
-          {canValidateStructure && !isSemanaFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && !isCourseRoot && (
-            <button
-              className="btn-analyze"
-              onClick={handleValidateStructure}
-              disabled={validating}
-              style={{
-                background: validating
-                  ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
-                  : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {validating ? '⏳ Validando...' : '📋 Validar Estructura'}
-            </button>
-          )}
-
-          {/* Validar Contenido — Semana_X, 6_Proyectos, 7_Practicas, 8_Tareas */}
-          {canValidateContent && isContentFolder(breadcrumbs[breadcrumbs.length - 1]?.name) && (
-            <button
-              className="btn-analyze"
-              onClick={handleValidateContent}
-              disabled={validatingContent}
-              style={{
-                background: validatingContent
-                  ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
-                  : isLabFolder(breadcrumbs[breadcrumbs.length - 1]?.name)
-                    ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
-                    : 'linear-gradient(135deg, #10b981, #059669)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {validatingContent
-                ? '⏳ Analizando con IA...'
-                : isLabFolder(breadcrumbs[breadcrumbs.length - 1]?.name)
-                  ? '🔬 Validar Laboratorio'
-                  : '🧠 Validar Contenido'}
-            </button>
-          )}
-
-          {/* Validar Curso Completo — solo cuando los subfolders son Semanas (raíz real del curso) */}
-          {canValidateCourse && isCourseRoot && (
-            <button
-              className="btn-analyze"
-              onClick={handleValidateCourse}
-              disabled={validatingCourse}
-              style={{
-                background: validatingCourse
-                  ? 'linear-gradient(135deg, #9ca3af, #6b7280)'
-                  : 'linear-gradient(135deg, #f59e0b, #d97706)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {validatingCourse ? '⏳ Validando curso...' : '📦 Validar Curso Completo'}
-            </button>
-          )}
-        </div>
+      {/* Breadcrumbs */}
+      <div className="breadcrumbs">
+        {breadcrumbs.map((crumb, index) => (
+          <button
+            key={crumb.id}
+            onClick={() => navigateToBreadcrumb(index)}
+            disabled={index === breadcrumbs.length - 1}
+          >
+            {index === 0 ? '🏠' : ''} {crumb.name}
+          </button>
+        ))}
       </div>
+
+      {/* Toolbar de validaciones — solo se muestra cuando hay acciones disponibles */}
+      {(() => {
+        const currentName = breadcrumbs[breadcrumbs.length - 1]?.name;
+        const showStructure = canValidateStructure && !isSemanaFolder(currentName) && !isCourseRoot;
+        const showContent   = canValidateContent && isContentFolder(currentName);
+        const showCourse    = canValidateCourse && isCourseRoot;
+        const isLab         = isLabFolder(currentName);
+        if (!showStructure && !showContent && !showCourse) return null;
+        return (
+          <div className="validation-toolbar">
+            <span className="validation-toolbar-label">Acciones</span>
+            <div className="validation-toolbar-divider" />
+
+            {showStructure && (
+              <button
+                className="btn-validate btn-validate--structure"
+                onClick={handleValidateStructure}
+                disabled={validating}
+              >
+                {validating
+                  ? <><svg className="btn-analyze-icon" viewBox="0 0 24 24" fill="white"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg> Validando...</>
+                  : '📋 Validar Estructura'}
+              </button>
+            )}
+
+            {showContent && (
+              <button
+                className={`btn-validate ${isLab ? 'btn-validate--lab' : 'btn-validate--content'}`}
+                onClick={handleValidateContent}
+                disabled={validatingContent}
+              >
+                {validatingContent
+                  ? <><svg className="btn-analyze-icon" viewBox="0 0 24 24" fill="white"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg> Analizando con IA...</>
+                  : isLab ? '🔬 Validar Laboratorio' : '🧠 Validar Contenido'}
+              </button>
+            )}
+
+            {showCourse && (
+              <button
+                className="btn-validate btn-validate--course"
+                onClick={handleValidateCourse}
+                disabled={validatingCourse}
+              >
+                {validatingCourse
+                  ? <><svg className="btn-analyze-icon" viewBox="0 0 24 24" fill="white"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg> Validando curso...</>
+                  : '📦 Validar Curso Completo'}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="analyzer-content">
         {/* Sección de Carpetas */}

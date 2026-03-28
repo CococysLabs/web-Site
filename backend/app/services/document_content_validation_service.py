@@ -1907,6 +1907,8 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
         empty_analysis = {'descripcion': '', 'enfoque': '', 'complejidad': ''}
 
         def _parse_lab_response(raw: str) -> Tuple[Optional[List], Optional[Dict]]:
+            raw = re.sub(r"^```json?\s*", "", raw.strip())
+            raw = re.sub(r"\s*```$", "", raw)
             try:
                 data = json.loads(raw)
                 reqs = data.get('requirements', [])
@@ -1917,9 +1919,16 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
                 pass
             return None, None
 
-        # Prioridad 1: DeepSeek
+        def _pack(reqs: List, analysis: Optional[Dict]) -> Tuple[List[Dict], Dict]:
+            return (
+                [{'presente': str(r.get('presente', 'No')), 'observacion': str(r.get('observacion', ''))} for r in reqs],
+                analysis or empty_analysis,
+            )
+
+        import urllib.request, urllib.error
+
+        # ── Prioridad 1: DeepSeek ─────────────────────────────────────────────
         if self._deepseek_key:
-            import urllib.request, urllib.error
             payload = json.dumps({
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
@@ -1934,32 +1943,74 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
                     method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=90) as resp:
-                    result = json.loads(resp.read().decode("utf-8"))
-                    content = result["choices"][0]["message"]["content"].strip()
-                    content = re.sub(r"^```json?\s*", "", content)
-                    content = re.sub(r"\s*```$", "", content)
-                    reqs, analysis = _parse_lab_response(content)
-                    if reqs:
-                        print(f"  🤖 [DeepSeek lab] respondió — complejidad: {analysis.get('complejidad','?')}")
-                        return [{'presente': str(r.get('presente', 'No')), 'observacion': str(r.get('observacion', ''))} for r in reqs], analysis or empty_analysis
+                    content = json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]["content"].strip()
+                reqs, analysis = _parse_lab_response(content)
+                if reqs:
+                    print(f"  🤖 [DeepSeek lab] respondió — complejidad: {(analysis or {}).get('complejidad','?')}")
+                    return _pack(reqs, analysis)
+                print("  ⚠️  DeepSeek lab: respuesta vacía o formato inesperado")
             except Exception as e:
                 print(f"  ⚠️  DeepSeek lab: {e}")
 
-        # Prioridad 2: Gemini
-        for key in self._get_available_keys():
-            try:
-                raw = self._call_gemini_raw(key, model_name or GEMINI_MODEL, prompt)
-                reqs, analysis = _parse_lab_response(raw)
-                if reqs:
-                    print(f"  🤖 [Gemini lab] respondió — complejidad: {analysis.get('complejidad','?')}")
-                    return [{'presente': str(r.get('presente', 'No')), 'observacion': str(r.get('observacion', ''))} for r in reqs], analysis or empty_analysis
-            except Exception as e:
-                if '429' in str(e) or 'quota' in str(e).lower():
-                    self._exhausted_keys.add(key)
-                    continue
-                break
+        # ── Prioridad 2: Gemini con rotación de keys y retry RPM ──────────────
+        MAX_RPM_RETRIES = 4
+        target_model = model_name or GEMINI_MODEL
 
-        # Fallback: keyword matching + sin análisis
+        for key in self._get_available_keys():
+            short_key = key[:8] + '...'
+            backoff = 5.0
+
+            for rpm_attempt in range(MAX_RPM_RETRIES + 1):
+                try:
+                    raw = self._call_gemini_raw(key, target_model, prompt)
+                    reqs, analysis = _parse_lab_response(raw)
+                    if reqs:
+                        key_idx = self._api_keys.index(key) + 1 if key in self._api_keys else '?'
+                        print(f"  🤖 [Gemini lab / Key #{key_idx}] respondió — complejidad: {(analysis or {}).get('complejidad','?')}")
+                        return _pack(reqs, analysis)
+                    # Respuesta malformada → no reintentamos esta key
+                    break
+
+                except Exception as e:
+                    err_str = str(e)
+                    if '429' in err_str or 'quota' in err_str.lower():
+                        # Distinguir cuota agotada (limit=0) de burst RPM
+                        if 'limit' in err_str.lower() and ('0' in err_str or 'exhausted' in err_str.lower()):
+                            self._exhausted_keys.add(key)
+                            remaining = len([k for k in self._api_keys if k not in self._exhausted_keys])
+                            print(f"  ⚠️  Cuota Gemini agotada ({short_key}) → rotando ({remaining} key(s) restante(s))")
+                            break  # siguiente key
+                        else:
+                            if rpm_attempt >= MAX_RPM_RETRIES:
+                                self._exhausted_keys.add(key)
+                                print(f"  ⚠️  Key ({short_key}) sin respuesta tras {MAX_RPM_RETRIES} reintentos RPM → rotando")
+                                break
+                            wait = min(backoff, 60.0)
+                            print(f"  ⏳ RPM excedido ({short_key}) — esperando {wait:.0f}s (intento {rpm_attempt + 1}/{MAX_RPM_RETRIES})...")
+                            time.sleep(wait)
+                            backoff *= 2
+                    else:
+                        print(f"  ⚠️  Gemini lab ({short_key}): {e}")
+                        break  # error no RPM → siguiente key
+
+        # ── Prioridad 3: Groq ─────────────────────────────────────────────────
+        if self._groq_key:
+            print("  🔄 [lab] Intentando con Groq (respaldo)...")
+            groq_results = self._call_groq_batch(params, doc_snippet, section_name, group_name)
+            if groq_results is not None:
+                print(f"  🤖 [Groq lab] respondió — {len(groq_results)} resultados")
+                return groq_results, empty_analysis
+
+        # ── Prioridad 4: OpenRouter ───────────────────────────────────────────
+        if self._openrouter_key:
+            print("  🔄 [lab] Intentando con OpenRouter (respaldo)...")
+            or_results = self._call_openrouter_batch(params, doc_snippet, section_name, group_name)
+            if or_results is not None:
+                print(f"  🤖 [OpenRouter lab] respondió — {len(or_results)} resultados")
+                return or_results, empty_analysis
+
+        # ── Último recurso: keyword matching ──────────────────────────────────
+        print("  ⚠️  [lab] Todos los proveedores fallaron — usando keywords")
         fallback = [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
         return fallback, empty_analysis
 

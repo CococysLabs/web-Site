@@ -347,52 +347,129 @@
 }
 
 /* ========================================
-   BOTÓN ANALIZAR MEJORADO
+   SISTEMA DE BOTONES
    ======================================== */
 
-.btn-analyze {
+/* ── Base compartida para todos los botones de acción ── */
+.btn-analyze,
+.btn-validate {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  background: linear-gradient(135deg, var(--cococys-orange), var(--cococys-orange-dark));
-  color: white;
-  font-size: 0.875rem;
+  gap: 6px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
   font-weight: 600;
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-normal);
-  box-shadow: var(--shadow-md);
   white-space: nowrap;
+  letter-spacing: 0.01em;
+  position: relative;
+  overflow: hidden;
 }
 
-.btn-analyze:hover {
-  background: linear-gradient(135deg, var(--cococys-orange-dark), #d66a22);
-  box-shadow: var(--shadow-lg);
+.btn-analyze::after,
+.btn-validate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0);
+  transition: background var(--transition-fast);
+}
+
+.btn-analyze:hover::after,
+.btn-validate:hover::after {
+  background: rgba(255,255,255,0.08);
+}
+
+.btn-analyze:active::after,
+.btn-validate:active::after {
+  background: rgba(0,0,0,0.1);
+}
+
+.btn-analyze:disabled,
+.btn-validate:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.btn-analyze:not(:disabled):hover,
+.btn-validate:not(:disabled):hover {
   transform: translateY(-2px);
 }
 
-.btn-analyze:active {
+.btn-analyze:not(:disabled):active,
+.btn-validate:not(:disabled):active {
   transform: translateY(0);
-  box-shadow: var(--shadow-sm);
 }
 
-.btn-analyze:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
+/* ── Analizar documento (naranja institucional) ── */
+.btn-analyze {
+  background: linear-gradient(135deg, var(--cococys-orange), var(--cococys-orange-dark));
+  color: white;
+  box-shadow: 0 2px 8px rgba(255,140,66,0.35);
 }
 
-/* Botón secundario para vista previa */
+.btn-analyze:not(:disabled):hover {
+  box-shadow: 0 4px 14px rgba(255,140,66,0.45);
+}
+
+/* ── Validar Estructura (violeta) ── */
+.btn-validate--structure {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  box-shadow: 0 2px 8px rgba(139,92,246,0.35);
+}
+
+.btn-validate--structure:not(:disabled):hover {
+  box-shadow: 0 4px 14px rgba(139,92,246,0.45);
+}
+
+/* ── Validar Contenido Semana (verde esmeralda) ── */
+.btn-validate--content {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  box-shadow: 0 2px 8px rgba(16,185,129,0.35);
+}
+
+.btn-validate--content:not(:disabled):hover {
+  box-shadow: 0 4px 14px rgba(16,185,129,0.45);
+}
+
+/* ── Validar Laboratorio (azul índigo) ── */
+.btn-validate--lab {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.35);
+}
+
+.btn-validate--lab:not(:disabled):hover {
+  box-shadow: 0 4px 14px rgba(99,102,241,0.45);
+}
+
+/* ── Validar Curso Completo (ámbar dorado) ── */
+.btn-validate--course {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  box-shadow: 0 2px 8px rgba(245,158,11,0.35);
+}
+
+.btn-validate--course:not(:disabled):hover {
+  box-shadow: 0 4px 14px rgba(245,158,11,0.45);
+}
+
+/* ── Ver / Vista previa (ghost) ── */
 .btn-preview {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 7px 14px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   font-weight: 500;
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
@@ -413,10 +490,42 @@
   transform: translateY(0);
 }
 
+/* ── Toolbar de validaciones ── */
+.validation-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.validation-toolbar-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.validation-toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-light);
+  margin: 0 4px;
+}
+
+/* ── Spinner integrado en botón ── */
 .btn-analyze-icon {
-  width: 16px;
-  height: 16px;
-  animation: spin 1s linear infinite;
+  width: 15px;
+  height: 15px;
+  animation: spin 0.9s linear infinite;
+  flex-shrink: 0;
 }
 
 @keyframes spin {

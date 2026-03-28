@@ -317,7 +317,7 @@ const AdminDashboard = () => {
                 value={userConfigForm.drive_folder_id}
                 onChange={e => setUserConfigForm(f => ({ ...f, drive_folder_id: e.target.value }))}
               />
-              <label className="user-config-label" style={{ marginTop: 8 }}>Nombre de carpeta (opcional, visible al usuario)</label>
+              <label className="user-config-label">Nombre de carpeta (opcional, visible al usuario)</label>
               <input
                 className="settings-input"
                 type="text"
@@ -334,14 +334,14 @@ const AdminDashboard = () => {
                   type="checkbox"
                   checked={userConfigForm.is_teacher}
                   onChange={e => setUserConfigForm(f => ({ ...f, is_teacher: e.target.checked }))}
-                  style={{ accentColor: '#10b981', width: 16, height: 16 }}
+                  className="checkbox-green"
                 />
-                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Habilitar vista de docente (Mi Curso)</span>
+                <span>Habilitar vista de docente (Mi Curso)</span>
               </label>
             </div>
 
             {/* Permissions */}
-            <div style={{ marginBottom: '1.25rem' }}>
+            <div>
               <p className="user-config-perms-title">Permisos de funcionalidades</p>
               {[
                 { key: 'can_view_drive', label: 'Ver explorador de Drive', desc: 'Puede navegar por su carpeta asignada' },
@@ -354,7 +354,7 @@ const AdminDashboard = () => {
                     type="checkbox"
                     checked={userConfigForm.permissions[key]}
                     onChange={e => setUserConfigForm(f => ({ ...f, permissions: { ...f.permissions, [key]: e.target.checked } }))}
-                    style={{ accentColor: 'var(--cococys-orange)', width: 15, height: 15, marginTop: 2, flexShrink: 0 }}
+                    className="checkbox-orange"
                   />
                   <div>
                     <span className="user-config-perm-label">{label}</span>
@@ -571,21 +571,9 @@ const AdminDashboard = () => {
               <>
                 <div style={{ marginBottom: '2rem' }}>
                   <h1>📚 Recursos Educativos COCOCYS</h1>
-                  <p className="subtitle">
-                    📁 2025 - Segundo Semestre
-                  </p>
-                  <div style={{ 
-                    display: 'flex', 
-                    gap: '8px', 
-                    alignItems: 'center',
-                    marginTop: '12px',
-                    padding: '12px',
-                    background: 'var(--cococys-orange-subtle, rgba(255, 140, 66, 0.08))',
-                    borderRadius: '8px',
-                    fontSize: '0.9rem',
-                    color: 'var(--text-secondary, #6b7280)'
-                  }}>
-                    <svg style={{ width: '20px', height: '20px', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <p className="subtitle">📁 2025 - Segundo Semestre</p>
+                  <div className="drive-info-notice">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span>Selecciona una materia para explorar y analizar sus documentos</span>
@@ -725,14 +713,14 @@ const AdminDashboard = () => {
                 {/* ── Google Drive ── */}
                 <div className="settings-card">
                   <div className="settings-card-header">
-                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#4285F4,#34A853)' }}>
+                    <div className="settings-card-icon settings-card-icon--drive">
                       <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Google Drive</h3>
-                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Carpeta raíz del sistema</p>
+                      <h3 className="settings-card-title">Google Drive</h3>
+                      <p className="settings-card-subtitle">Carpeta raíz del sistema</p>
                     </div>
                   </div>
 
@@ -749,8 +737,8 @@ const AdminDashboard = () => {
                   </div>
 
                   <button
-                    className="btn-primary"
-                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='drive'?0.7:1 }}
+                    className="btn-primary settings-save-btn"
+                    style={{ opacity: savingSettings==='drive'?0.7:1 }}
                     onClick={() => saveSettings('drive')}
                     disabled={savingSettings === 'drive'}
                   >
@@ -761,28 +749,28 @@ const AdminDashboard = () => {
                 {/* ── IA ── */}
                 <div className="settings-card">
                   <div className="settings-card-header">
-                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)' }}>
+                    <div className="settings-card-icon settings-card-icon--ai">
                       <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Inteligencia Artificial</h3>
-                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Motor de análisis de contenido</p>
+                      <h3 className="settings-card-title">Inteligencia Artificial</h3>
+                      <p className="settings-card-subtitle">Motor de análisis de contenido</p>
                     </div>
                   </div>
 
                   {/* Provider chain info */}
-                  <div style={{ marginBottom:'1rem', padding:'10px 12px', background:'rgba(99,102,241,0.06)', border:'1px solid rgba(99,102,241,0.18)', borderRadius:'8px', fontSize:'0.78rem', color:'var(--text-secondary)', lineHeight:1.6 }}>
-                    <strong style={{ color:'var(--text-primary)', display:'block', marginBottom:4 }}>Cadena de proveedores activa:</strong>
-                    <span style={{ display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
-                      <span style={{ padding:'2px 8px', background:'rgba(16,185,129,0.15)', color:'#34d399', borderRadius:12, fontWeight:600 }}>1. DeepSeek</span>
-                      <span style={{ color:'var(--text-muted)' }}>→</span>
-                      <span style={{ padding:'2px 8px', background:'rgba(99,102,241,0.12)', color:'#818cf8', borderRadius:12 }}>2. Gemini (fallback)</span>
-                      <span style={{ color:'var(--text-muted)' }}>→</span>
-                      <span style={{ padding:'2px 8px', background:'rgba(245,158,11,0.12)', color:'#fbbf24', borderRadius:12 }}>3. Groq</span>
-                      <span style={{ color:'var(--text-muted)' }}>→</span>
-                      <span style={{ padding:'2px 8px', background:'rgba(107,114,128,0.12)', color:'#9ca3af', borderRadius:12 }}>4. Keywords</span>
+                  <div className="provider-chain-info">
+                    <strong className="provider-chain-title">Cadena de proveedores activa:</strong>
+                    <span className="provider-chain-list">
+                      <span className="provider-badge provider-badge--primary">1. DeepSeek</span>
+                      <span className="provider-chain-arrow">→</span>
+                      <span className="provider-badge provider-badge--info">2. Gemini (fallback)</span>
+                      <span className="provider-chain-arrow">→</span>
+                      <span className="provider-badge provider-badge--warning">3. Groq</span>
+                      <span className="provider-chain-arrow">→</span>
+                      <span className="provider-badge provider-badge--muted">4. Keywords</span>
                     </span>
                   </div>
 
@@ -810,15 +798,15 @@ const AdminDashboard = () => {
                         onChange={e => handleSettingChange('gemini_enabled', e.target.checked ? 'true' : 'false')}
                       />
                       <span className="toggle-track"><span className="toggle-thumb"></span></span>
-                      <span style={{ fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                      <span className="toggle-value">
                         {settingsForm.gemini_enabled === 'true' ? 'Habilitado' : 'Deshabilitado'}
                       </span>
                     </label>
                   </div>
 
                   <button
-                    className="btn-primary"
-                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='ai'?0.7:1 }}
+                    className="btn-primary settings-save-btn"
+                    style={{ opacity: savingSettings==='ai'?0.7:1 }}
                     onClick={() => saveSettings('ai')}
                     disabled={savingSettings === 'ai'}
                   >
@@ -829,14 +817,14 @@ const AdminDashboard = () => {
                 {/* ── Usuarios ── */}
                 <div className="settings-card">
                   <div className="settings-card-header">
-                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
+                    <div className="settings-card-icon settings-card-icon--users">
                       <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Gestión de Usuarios</h3>
-                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Registro y sesiones</p>
+                      <h3 className="settings-card-title">Gestión de Usuarios</h3>
+                      <p className="settings-card-subtitle">Registro y sesiones</p>
                     </div>
                   </div>
 
@@ -850,7 +838,7 @@ const AdminDashboard = () => {
                         onChange={e => handleSettingChange('auto_approve_users', e.target.checked ? 'true' : 'false')}
                       />
                       <span className="toggle-track"><span className="toggle-thumb"></span></span>
-                      <span style={{ fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                      <span className="toggle-value">
                         {settingsForm.auto_approve_users === 'true' ? 'Automático' : 'Requiere aprobación manual'}
                       </span>
                     </label>
@@ -865,14 +853,14 @@ const AdminDashboard = () => {
                       value={settingsForm.jwt_session_minutes || 30}
                       onChange={e => handleSettingChange('jwt_session_minutes', e.target.value)}
                     />
-                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'var(--text-muted)', marginTop:4 }}>
+                    <div className="range-labels">
                       <span>5 min</span><span>480 min (8h)</span>
                     </div>
                   </div>
 
                   <button
-                    className="btn-primary"
-                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='users'?0.7:1 }}
+                    className="btn-primary settings-save-btn"
+                    style={{ opacity: savingSettings==='users'?0.7:1 }}
                     onClick={() => saveSettings('users')}
                     disabled={savingSettings === 'users'}
                   >
@@ -883,14 +871,14 @@ const AdminDashboard = () => {
                 {/* ── Validación ── */}
                 <div className="settings-card">
                   <div className="settings-card-header">
-                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))' }}>
+                    <div className="settings-card-icon settings-card-icon--validation">
                       <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Criterios de Validación</h3>
-                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Umbrales y tipos de archivo</p>
+                      <h3 className="settings-card-title">Criterios de Validación</h3>
+                      <p className="settings-card-subtitle">Umbrales y tipos de archivo</p>
                     </div>
                   </div>
 
@@ -903,7 +891,7 @@ const AdminDashboard = () => {
                       value={settingsForm.compliance_threshold || 70}
                       onChange={e => handleSettingChange('compliance_threshold', e.target.value)}
                     />
-                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'var(--text-muted)', marginTop:4 }}>
+                    <div className="range-labels">
                       <span>0%</span><span>100%</span>
                     </div>
                   </div>
@@ -911,13 +899,13 @@ const AdminDashboard = () => {
                   <div className="settings-field">
                     <label className="settings-label">Extensiones de archivo permitidas</label>
                     <p className="settings-hint">Tipos de documento aceptados para análisis</p>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginTop:8 }}>
+                    <div className="ext-list">
                       {['.pdf', '.docx', '.pptx', '.xlsx'].map(ext => {
                         let currentExts = [];
                         try { currentExts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
                         const checked = currentExts.includes(ext);
                         return (
-                          <label key={ext} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:'0.875rem' }}>
+                          <label key={ext} className="ext-label">
                             <input
                               type="checkbox"
                               checked={checked}
@@ -933,7 +921,7 @@ const AdminDashboard = () => {
                                 handleSettingChange('allowed_file_extensions', JSON.stringify(exts));
                               }}
                             />
-                            <code style={{ background:'var(--bg-secondary)', padding:'2px 8px', borderRadius:4 }}>{ext}</code>
+                            <code style={{ background:'var(--bg-primary)', padding:'2px 8px', borderRadius:4 }}>{ext}</code>
                           </label>
                         );
                       })}
@@ -941,8 +929,8 @@ const AdminDashboard = () => {
                   </div>
 
                   <button
-                    className="btn-primary"
-                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='validation'?0.7:1 }}
+                    className="btn-primary settings-save-btn"
+                    style={{ opacity: savingSettings==='validation'?0.7:1 }}
                     onClick={() => saveSettings('validation')}
                     disabled={savingSettings === 'validation'}
                   >
@@ -959,15 +947,14 @@ const AdminDashboard = () => {
         {activeTab === 'reports' && (
           <div className="reports-tab">
             {/* Header + Filtros */}
-            <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="reports-tab-header">
               <div>
                 <h1>Reportes de Validaciones</h1>
                 <p className="subtitle">Estadísticas e historial de validaciones del sistema.</p>
               </div>
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="reports-tab-actions">
                 <select
-                  className="settings-input"
-                  style={{ width: 'auto', padding: '8px 12px', fontSize: '0.875rem' }}
+                  className="settings-input filter-select"
                   value={reportFilter.type}
                   onChange={e => {
                     const f = { ...reportFilter, type: e.target.value };
@@ -981,8 +968,7 @@ const AdminDashboard = () => {
                   <option value="content">Solo Contenido</option>
                 </select>
                 <select
-                  className="settings-input"
-                  style={{ width: 'auto', padding: '8px 12px', fontSize: '0.875rem' }}
+                  className="settings-input filter-select"
                   value={reportFilter.days}
                   onChange={e => {
                     const f = { ...reportFilter, days: parseInt(e.target.value) };
@@ -997,8 +983,7 @@ const AdminDashboard = () => {
                   <option value="365">Último año</option>
                 </select>
                 <button
-                  className="btn-primary"
-                  style={{ padding: '8px 16px', fontSize: '0.875rem' }}
+                  className="btn-primary settings-save-btn"
                   onClick={() => { setHistoryPage(0); loadReports(reportFilter, 0); }}
                   disabled={reportLoading}
                 >

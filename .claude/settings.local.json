@@ -9,7 +9,22 @@
       "Bash(docker compose up -d frontend)",
       "Bash(docker compose:*)",
       "Bash(docker exec:*)",
-      "Bash(dir /b \"d:\\\\RivaldoTJ\\\\Documents\\\\------------------------ Cococys ---------------------\\\\web-Site\")"
+      "Bash(dir /b \"d:\\\\RivaldoTJ\\\\Documents\\\\------------------------ Cococys ---------------------\\\\web-Site\")",
+      "Bash(npm run:*)",
+      "Bash(node -e \":*)",
+      "Bash(npx --yes eslint src/components/admin/AdminDashboard.jsx --no-eslintrc -c '{\"\"\"\"parser\"\"\"\": \"\"\"\"@babel/eslint-parser\"\"\"\",\"\"\"\"parserOptions\"\"\"\":{\"\"\"\"requireConfigFile\"\"\"\":false,\"\"\"\"babelOptions\"\"\"\":{\"\"\"\"presets\"\"\"\":[\"\"\"\"@babel/preset-react\"\"\"\"]}},\"\"\"\"plugins\"\"\"\":[\"\"\"\"react\"\"\"\"],\"\"\"\"rules\"\"\"\":{\"\"\"\"no-undef\"\"\"\":\"\"\"\"off\"\"\"\",\"\"\"\"react/jsx-no-undef\"\"\"\":\"\"\"\"off\"\"\"\"}}')",
+      "Bash(npx eslint:*)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/services/document_content_validation_service.py''\\).read\\(\\)\\); print\\(''✅ Sintaxis OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/services/document_content_validation_service.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''OK''\\)\")",
+      "Bash(rm \"frontend/src/components/admin/AdminDashboard-old.css\" \"frontend/src/components/admin/DocumentAnalyzer-old.css\")",
+      "Bash(ls frontend/src/components/admin/*.css)",
+      "Bash(find /d/RivaldoTJ/Documents/*/web-Site/backend/app -type f \\\\\\(-name *ai* -o -name *llm* -o -name *provider* \\\\\\))",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:80)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/health)",
+      "Bash(curl -s http://localhost/api/auth/login -X POST -H \"Content-Type: application/json\" -d '{\"\"\"\"correo\"\"\"\":\"\"\"\"test@test.com\"\"\"\",\"\"\"\"contrasena\"\"\"\":\"\"\"\"test\"\"\"\"}')",
+      "Bash(curl -s http://localhost/)",
+      "Bash(curl -s http://localhost/api/auth/me -H \"Authorization: Bearer invalid\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)\\)\")"
     ]
   }
 }

@@ -68,6 +68,8 @@ const Dashboard = () => {
 
   const navTo = (view) => { setActiveView(view); setSidebarOpen(false); };
 
+  const ccls = (v) => v >= 70 ? 'success' : v >= 40 ? 'warning' : 'danger';
+
   return (
     <div className="dashboard-container">
       <div className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
@@ -198,17 +200,15 @@ const Dashboard = () => {
                     {canViewDrive && (
                       <FeatureCard
                         icon={<svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>}
-                        iconBg="linear-gradient(135deg,#ff8c42,#e57a32)"
+                        colorVariant="orange"
                         title="Mi Carpeta"
                         desc={user.drive_folder_name || 'Explorar carpeta asignada'}
-                        accent="rgba(255,140,66,0.18)"
-                        border="rgba(255,140,66,0.35)"
                         onClick={() => navTo('mi-carpeta')}
                       />
                     )}
                     <FeatureCard
                       icon={<svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                      iconBg="linear-gradient(135deg,#6366f1,#4f46e5)"
+                      colorVariant="indigo"
                       title="Validaciones"
                       desc={validationSummary ? `${validationSummary.total_validations} validaciones registradas` : 'Estado del material académico'}
                       onClick={() => navTo('validations')}
@@ -216,7 +216,7 @@ const Dashboard = () => {
                     {isTeacher && (
                       <FeatureCard
                         icon={<svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5z" /></svg>}
-                        iconBg="linear-gradient(135deg,#10b981,#059669)"
+                        colorVariant="green"
                         title="Mi Curso"
                         desc="Historial de validaciones de tu materia"
                         onClick={() => { navTo('teacher'); if (!teacherSummary) loadTeacherSummary(); }}
@@ -224,7 +224,7 @@ const Dashboard = () => {
                     )}
                     <FeatureCard
                       icon={<svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-                      iconBg="linear-gradient(135deg,#ef4444,#dc2626)"
+                      colorVariant="red"
                       title="Canal YouTube"
                       desc="Videos y tutoriales de COCOCYS"
                       href="https://www.youtube.com/@COCOCYSECYS"
@@ -277,8 +277,8 @@ const Dashboard = () => {
 
                   {summaryLoading ? (
                     <div className="view-loading">
-                      <div className="spinner" style={{ width: 36, height: 36 }}></div>
-                      <p style={{ margin: 0 }}>Cargando validaciones...</p>
+                      <div className="spinner"></div>
+                      <p className="m-0">Cargando validaciones...</p>
                     </div>
                   ) : !validationSummary || validationSummary.courses.length === 0 ? (
                     <div className="view-empty">
@@ -290,13 +290,13 @@ const Dashboard = () => {
                       {/* Summary chips */}
                       <div className="summary-chips">
                         {[
-                          { label: 'Total validaciones', value: validationSummary.total_validations, color: '#6366f1' },
-                          { label: 'Cursos', value: validationSummary.courses.length, color: '#f59e0b' },
-                          { label: 'Cumplimiento avg', value: `${Math.round(validationSummary.courses.reduce((s, c) => s + c.avg_compliance, 0) / (validationSummary.courses.length || 1))}%`, color: '#10b981' },
-                          { label: 'Cursos compliant', value: validationSummary.courses.filter(c => c.status === 'compliant').length, color: '#22c55e' },
+                          { label: 'Total validaciones', value: validationSummary.total_validations, cls: 'chip--info' },
+                          { label: 'Cursos', value: validationSummary.courses.length, cls: 'chip--warning' },
+                          { label: 'Cumplimiento avg', value: `${Math.round(validationSummary.courses.reduce((s, c) => s + c.avg_compliance, 0) / (validationSummary.courses.length || 1))}%`, cls: 'chip--success' },
+                          { label: 'Cursos compliant', value: validationSummary.courses.filter(c => c.status === 'compliant').length, cls: 'chip--ok' },
                         ].map((chip, i) => (
-                          <div key={i} className="summary-chip">
-                            <span className="summary-chip-value" style={{ color: chip.color }}>{chip.value}</span>
+                          <div key={i} className={`summary-chip ${chip.cls}`}>
+                            <span className="summary-chip-value">{chip.value}</span>
                             <span className="summary-chip-label">{chip.label}</span>
                           </div>
                         ))}
@@ -316,9 +316,9 @@ const Dashboard = () => {
                               </div>
                               <div className="course-progress">
                                 <div className="progress-bar-wrap">
-                                  <div className="progress-bar-fill" style={{ width: `${course.avg_compliance}%`, background: course.avg_compliance >= 70 ? '#10b981' : course.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }} />
+                                  <div className={`progress-bar-fill fill--${ccls(course.avg_compliance)}`} style={{ width: `${course.avg_compliance}%` }} />
                                 </div>
-                                <span className="progress-pct" style={{ color: course.avg_compliance >= 70 ? '#10b981' : course.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
+                                <span className={`progress-pct text-${ccls(course.avg_compliance)}`}>
                                   {course.avg_compliance}%
                                 </span>
                                 <svg className={`chevron-icon ${expandedCourse === idx ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -333,12 +333,10 @@ const Dashboard = () => {
                                   <div key={widx} className="week-row">
                                     <div className="week-name">{w.week}</div>
                                     <div className="week-progress">
-                                      <div className="progress-bar-fill" style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', background: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444', transition: 'width 0.5s ease' }} />
+                                      <div className={`progress-bar-fill fill--${ccls(w.avg_compliance)}`} style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', transition: 'width 0.5s ease' }} />
                                     </div>
-                                    <span className="week-pct" style={{ color: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
-                                      {w.avg_compliance}%
-                                    </span>
-                                    <span className="week-status-badge" style={{ background: w.status === 'compliant' ? 'rgba(16,185,129,0.12)' : w.status === 'partial' ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)', color: w.status === 'compliant' ? '#34d399' : w.status === 'partial' ? '#fbbf24' : '#f87171' }}>
+                                    <span className={`week-pct text-${ccls(w.avg_compliance)}`}>{w.avg_compliance}%</span>
+                                    <span className={`week-status-badge status-badge status-badge--${w.status === 'compliant' ? 'compliant' : w.status === 'partial' ? 'partial' : 'absent'}`}>
                                       {w.status === 'compliant' ? '✓' : w.status === 'partial' ? '~' : '✗'}
                                     </span>
                                   </div>
@@ -363,26 +361,26 @@ const Dashboard = () => {
 
                   {teacherLoading ? (
                     <div className="view-loading">
-                      <div className="spinner" style={{ width: 36, height: 36 }}></div>
-                      <p style={{ margin: 0 }}>Cargando datos de tu curso...</p>
+                      <div className="spinner"></div>
+                      <p className="m-0">Cargando datos de tu curso...</p>
                     </div>
                   ) : !teacherSummary || !teacherSummary.has_folder ? (
                     <div className="view-empty">
                       <div className="view-empty-icon">🏫</div>
                       <p style={{ margin: '0 0 4px' }}>No tienes una carpeta de Drive asignada.</p>
-                      <p style={{ margin: 0, fontSize: '0.85rem' }}>Contacta al administrador para configurarla.</p>
+                      <p className="m-0" style={{ fontSize: '0.85rem' }}>Contacta al administrador para configurarla.</p>
                     </div>
                   ) : (
                     <>
                       {/* Resumen chips */}
                       <div className="summary-chips">
                         {[
-                          { label: 'Total validaciones', value: teacherSummary.total, color: '#6366f1' },
-                          { label: 'Cumplimiento avg', value: `${teacherSummary.avg_compliance}%`, color: teacherSummary.avg_compliance >= 70 ? '#10b981' : teacherSummary.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' },
-                          { label: 'Semanas', value: teacherSummary.by_week?.length || 0, color: '#f59e0b' },
+                          { label: 'Total validaciones', value: teacherSummary.total, cls: 'chip--info' },
+                          { label: 'Cumplimiento avg', value: `${teacherSummary.avg_compliance}%`, cls: `chip--${ccls(teacherSummary.avg_compliance)}` },
+                          { label: 'Semanas', value: teacherSummary.by_week?.length || 0, cls: 'chip--warning' },
                         ].map((chip, i) => (
-                          <div key={i} className="summary-chip">
-                            <span className="summary-chip-value" style={{ color: chip.color }}>{chip.value}</span>
+                          <div key={i} className={`summary-chip ${chip.cls}`}>
+                            <span className="summary-chip-value">{chip.value}</span>
                             <span className="summary-chip-label">{chip.label}</span>
                           </div>
                         ))}
@@ -392,17 +390,15 @@ const Dashboard = () => {
                       {teacherSummary.by_week?.length > 0 && (
                         <div className="chart-card">
                           <h3>Cumplimiento por Semana</h3>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div className="flex-col-gap">
                             {teacherSummary.by_week.map((w, i) => (
                               <div key={i} className="week-row">
                                 <div className="week-name">{w.week}</div>
                                 <div className="week-progress">
-                                  <div className="progress-bar-fill" style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', background: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444', transition: 'width 0.5s ease' }} />
+                                  <div className={`progress-bar-fill fill--${ccls(w.avg_compliance)}`} style={{ width: `${w.avg_compliance}%`, height: '100%', borderRadius: '999px', transition: 'width 0.5s ease' }} />
                                 </div>
-                                <span className="week-pct" style={{ color: w.avg_compliance >= 70 ? '#10b981' : w.avg_compliance >= 40 ? '#f59e0b' : '#ef4444' }}>
-                                  {w.avg_compliance}%
-                                </span>
-                                <span className="week-status-badge" style={{ background: w.status === 'compliant' ? 'rgba(16,185,129,0.12)' : w.status === 'partial' ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)', color: w.status === 'compliant' ? '#34d399' : w.status === 'partial' ? '#fbbf24' : '#f87171' }}>
+                                <span className={`week-pct text-${ccls(w.avg_compliance)}`}>{w.avg_compliance}%</span>
+                                <span className={`week-status-badge status-badge status-badge--${w.status === 'compliant' ? 'compliant' : w.status === 'partial' ? 'partial' : 'absent'}`}>
                                   {w.status === 'compliant' ? '✓ Cumple' : w.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
                                 </span>
                               </div>
@@ -418,11 +414,11 @@ const Dashboard = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                             {teacherSummary.recent.map((r, i) => (
                               <div key={i} className="recent-row">
-                                <span className="recent-type-badge" style={{ background: r.validation_type === 'structure' ? 'rgba(139,92,246,0.15)' : 'rgba(16,185,129,0.15)', color: r.validation_type === 'structure' ? '#a78bfa' : '#34d399' }}>
+                                <span className={`recent-type-badge status-badge ${r.validation_type === 'structure' ? 'status-badge--structure' : 'status-badge--content'}`}>
                                   {r.validation_type === 'structure' ? '📋 Estructura' : '🧠 Contenido'}
                                 </span>
                                 <span className="recent-name">{r.folder_name}</span>
-                                <span className="recent-pct" style={{ color: r.compliance_percentage >= 70 ? '#10b981' : r.compliance_percentage >= 40 ? '#f59e0b' : '#ef4444' }}>
+                                <span className={`recent-pct text-${ccls(r.compliance_percentage)}`}>
                                   {r.compliance_percentage?.toFixed(1)}%
                                 </span>
                                 <span className="recent-date">
@@ -561,24 +557,27 @@ const Dashboard = () => {
 };
 
 /* Componente interno reutilizable */
-const FeatureCard = ({ icon, iconBg, title, desc, accent, border, onClick, href }) => {
-  const cardStyle = {
+const FeatureCard = ({ icon, iconBg, title, desc, accent, border, onClick, href, colorVariant }) => {
+  const cardCls = `feature-card${colorVariant ? ` feature-card--${colorVariant}` : ''}`;
+  const iconCls = `feature-card-icon${colorVariant ? ` feature-card-icon--${colorVariant}` : ''}`;
+  const cardStyle = colorVariant ? {} : {
     ...(accent ? { background: `linear-gradient(135deg, ${accent}, transparent)` } : {}),
     ...(border ? { borderColor: border } : {}),
   };
+  const iconStyle = colorVariant ? {} : (iconBg ? { background: iconBg } : {});
 
   const inner = (
     <>
-      <div className="feature-card-icon" style={{ background: iconBg }}>{icon}</div>
+      <div className={iconCls} style={iconStyle}>{icon}</div>
       <p className="feature-card-title">{title}</p>
       <p className="feature-card-desc">{desc}</p>
     </>
   );
 
   if (href) {
-    return <a href={href} target="_blank" rel="noopener noreferrer" className="feature-card" style={cardStyle}>{inner}</a>;
+    return <a href={href} target="_blank" rel="noopener noreferrer" className={cardCls} style={cardStyle}>{inner}</a>;
   }
-  return <button className="feature-card" style={cardStyle} onClick={onClick}>{inner}</button>;
+  return <button className={cardCls} style={cardStyle} onClick={onClick}>{inner}</button>;
 };
 
 export default Dashboard;
