@@ -16,6 +16,17 @@ const Dashboard = () => {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [expandedCourse, setExpandedCourse] = useState(null);
 
+  // Personal API keys state
+  const [personalKeys, setPersonalKeys]       = useState(null);
+  const [newPersonalKey, setNewPersonalKey]   = useState({ gemini: '', deepseek: '', groq: '', openrouter: '' });
+  const [keyLoading, setKeyLoading]           = useState({});
+
+  // Historial personal
+  const [myHistory, setMyHistory]       = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyPage, setHistoryPage]   = useState(0);
+  const HISTORY_PAGE_SIZE = 15;
+
   const [teacherSummary, setTeacherSummary] = useState(null);
   const [teacherLoading, setTeacherLoading] = useState(false);
 
@@ -60,13 +71,63 @@ const Dashboard = () => {
     navigate('/login');
   };
 
+  const loadMyHistory = async (page = 0) => {
+    setHistoryLoading(true);
+    try {
+      const res = await api.get(`/api/validation/history?limit=${HISTORY_PAGE_SIZE}&offset=${page * HISTORY_PAGE_SIZE}`);
+      setMyHistory(res.data);
+      setHistoryPage(page);
+    } catch { /* ignore */ } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const loadPersonalKeys = async () => {
+    try {
+      const res = await api.get('/api/auth/me/api-keys');
+      setPersonalKeys(res.data);
+    } catch { /* ignore */ }
+  };
+
+  const addPersonalKey = async (provider) => {
+    const keyVal = newPersonalKey[provider]?.trim();
+    if (!keyVal) return;
+    setKeyLoading(prev => ({ ...prev, [provider]: true }));
+    try {
+      await api.post(`/api/auth/me/api-keys/${provider}/add`, { key: keyVal });
+      setNewPersonalKey(prev => ({ ...prev, [provider]: '' }));
+      await loadPersonalKeys();
+    } catch (err) {
+      console.error('Error adding key:', err);
+    } finally {
+      setKeyLoading(prev => ({ ...prev, [provider]: false }));
+    }
+  };
+
+  const removePersonalKey = async (provider, index) => {
+    setKeyLoading(prev => ({ ...prev, [`${provider}_${index}`]: true }));
+    try {
+      await api.delete(`/api/auth/me/api-keys/${provider}/${index}`);
+      await loadPersonalKeys();
+    } catch (err) {
+      console.error('Error removing key:', err);
+    } finally {
+      setKeyLoading(prev => ({ ...prev, [`${provider}_${index}`]: false }));
+    }
+  };
+
   const formatTime = (date) =>
     date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   const formatDate = (date) =>
     date.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  const navTo = (view) => { setActiveView(view); setSidebarOpen(false); };
+  const navTo = (view) => {
+    setActiveView(view);
+    setSidebarOpen(false);
+    if (view === 'profile' && !personalKeys) loadPersonalKeys();
+    if (view === 'history' && !myHistory) loadMyHistory(0);
+  };
 
   const ccls = (v) => v >= 70 ? 'success' : v >= 40 ? 'warning' : 'danger';
 
@@ -106,6 +167,13 @@ const Dashboard = () => {
             {validationSummary?.total_validations > 0 && (
               <span className="nav-badge">{validationSummary.total_validations}</span>
             )}
+          </button>
+
+          <button className={`nav-item ${activeView === 'history' ? 'active' : ''}`} onClick={() => navTo('history')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Mi Historial</span>
           </button>
 
           {isTeacher && (
@@ -433,6 +501,103 @@ const Dashboard = () => {
                   )}
                 </div>
               )}
+              {/* ── Mi Historial ── */}
+              {activeView === 'history' && (
+                <div className="history-view">
+                  <div className="view-header">
+                    <h2>Mi Historial de Validaciones</h2>
+                    <p>Todas las validaciones que has ejecutado en el sistema</p>
+                  </div>
+
+                  {historyLoading && !myHistory && (
+                    <div className="loading-state"><div className="spinner"></div><p>Cargando historial...</p></div>
+                  )}
+
+                  {myHistory && (
+                    <>
+                      {myHistory.records?.length === 0 ? (
+                        <div className="history-empty">
+                          <div className="history-empty-icon">📋</div>
+                          <p>Aún no has ejecutado ninguna validación.</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="history-table-wrap">
+                            <table className="history-table">
+                              <thead>
+                                <tr>
+                                  <th>Fecha</th>
+                                  <th>Tipo</th>
+                                  <th>Carpeta / Sección</th>
+                                  <th>Curso</th>
+                                  <th>Cumplimiento</th>
+                                  <th>Estado</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {myHistory.records.map(r => {
+                                  const pct = r.compliance_percentage ?? 0;
+                                  const statusCls = pct >= 70 ? 'success' : pct >= 40 ? 'warning' : 'danger';
+                                  return (
+                                    <tr key={r.id}>
+                                      <td className="history-date">
+                                        {new Date(r.created_at).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })}
+                                      </td>
+                                      <td>
+                                        <span className={`status-badge status-badge--${r.validation_type === 'content' ? 'content' : 'structure'}`}>
+                                          {r.validation_type === 'content' ? '🧠 Contenido' : '📋 Estructura'}
+                                        </span>
+                                      </td>
+                                      <td className="history-folder">
+                                        <span className="history-folder-name">{r.folder_name}</span>
+                                        {r.section_name && <span className="history-section">{r.section_name}</span>}
+                                      </td>
+                                      <td className="history-course">{r.course_name || '—'}</td>
+                                      <td>
+                                        <div className="history-pct-wrap">
+                                          <span className={`history-pct history-pct--${statusCls}`}>{pct.toFixed(1)}%</span>
+                                          <div className="history-bar">
+                                            <div className={`history-bar-fill history-bar-fill--${statusCls}`} style={{ width: `${pct}%` }} />
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td>
+                                        <span className={`status-badge ${statusCls}`}>
+                                          {pct >= 70 ? '✓ Cumple' : pct >= 40 ? '⚠ Parcial' : '✗ Bajo'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Paginación */}
+                          {myHistory.total > HISTORY_PAGE_SIZE && (
+                            <div className="history-pagination">
+                              <button
+                                className="history-page-btn"
+                                disabled={historyPage === 0 || historyLoading}
+                                onClick={() => loadMyHistory(historyPage - 1)}
+                              >← Anterior</button>
+                              <span className="history-page-info">
+                                {historyPage + 1} / {Math.ceil(myHistory.total / HISTORY_PAGE_SIZE)}
+                              </span>
+                              <button
+                                className="history-page-btn"
+                                disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= myHistory.total || historyLoading}
+                                onClick={() => loadMyHistory(historyPage + 1)}
+                              >Siguiente →</button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* ── Mi Perfil ── */}
               {activeView === 'profile' && (
                 <div className="profile-view">
@@ -543,6 +708,78 @@ const Dashboard = () => {
                             Abrir carpeta →
                           </button>
                         )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* API Keys personales */}
+                  {user?.permissions?.can_validate_content && (
+                    <div className="profile-apikeys-card">
+                      <h3 className="profile-section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                        Mis API Keys
+                      </h3>
+                      <p className="profile-apikeys-desc">
+                        Agrega tus propias API keys para que tus análisis usen tu cuota personal.
+                        Si tienes keys aquí, tus validaciones <strong>no consumen</strong> las keys del sistema.
+                        Solo se muestran los primeros 8 caracteres.
+                      </p>
+                      <div className="profile-apikeys-grid">
+                        {[
+                          { provider: 'gemini',      label: 'Gemini',      color: '#4285F4', hint: 'Múltiples keys se rotan automáticamente' },
+                          { provider: 'deepseek',    label: 'DeepSeek',    color: '#ff8c42', hint: 'Primera key disponible' },
+                          { provider: 'groq',        label: 'Groq',        color: '#F55036', hint: 'Llama 3 — alta velocidad' },
+                          { provider: 'openrouter',  label: 'OpenRouter',  color: '#7C3AED', hint: 'Acceso a múltiples modelos gratuitos' },
+                        ].map(({ provider, label, color, hint }) => {
+                          const info = personalKeys?.[provider];
+                          const keys = info?.keys || [];
+                          return (
+                            <div key={provider} className="profile-apikey-card">
+                              <div className="profile-apikey-header" style={{ borderLeftColor: color }}>
+                                <span className="profile-apikey-label" style={{ color }}>{label}</span>
+                                <span className="profile-apikey-count">{info?.key_count ?? 0} key{(info?.key_count ?? 0) !== 1 ? 's' : ''}</span>
+                              </div>
+                              <p className="profile-apikey-hint">{hint}</p>
+                              {keys.length > 0 && (
+                                <div className="profile-apikey-list">
+                                  {keys.map((k, i) => (
+                                    <div key={i} className="profile-apikey-chip">
+                                      <code className="profile-apikey-value">{k}</code>
+                                      <button
+                                        className="profile-apikey-remove"
+                                        disabled={!!keyLoading[`${provider}_${i}`]}
+                                        onClick={() => removePersonalKey(provider, i)}
+                                        title="Eliminar"
+                                      >
+                                        {keyLoading[`${provider}_${i}`] ? '⏳' : '×'}
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="profile-apikey-add-row">
+                                <input
+                                  type="password"
+                                  className="profile-apikey-input"
+                                  placeholder="Pegar API key..."
+                                  value={newPersonalKey[provider]}
+                                  onChange={e => setNewPersonalKey(prev => ({ ...prev, [provider]: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === 'Enter') addPersonalKey(provider); }}
+                                />
+                                <button
+                                  className="profile-apikey-add-btn"
+                                  disabled={!newPersonalKey[provider]?.trim() || !!keyLoading[provider]}
+                                  onClick={() => addPersonalKey(provider)}
+                                  style={{ background: color }}
+                                >
+                                  {keyLoading[provider] ? '⏳' : '+ Agregar'}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

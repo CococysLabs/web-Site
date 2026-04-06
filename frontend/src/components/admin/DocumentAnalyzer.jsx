@@ -24,10 +24,12 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
   // Validación de contenido con IA
   const [validatingContent, setValidatingContent] = useState(false);
   const [contentValidationResult, setContentValidationResult] = useState(null);
+  const [contentJobProgress, setContentJobProgress] = useState('');
 
   // Validación de curso completo (lote)
   const [validatingCourse, setValidatingCourse] = useState(false);
   const [courseValidationResult, setCourseValidationResult] = useState(null);
+  const [courseJobProgress, setCourseJobProgress] = useState('');
 
   // Error inline (reemplaza alert())
   const [error, setError] = useState(null);
@@ -126,9 +128,30 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
   const getMatrixFolderId = () =>
     breadcrumbs.length >= 2 ? breadcrumbs[breadcrumbs.length - 2].id : breadcrumbs[0]?.id;
 
+  const pollJob = async (jobId, onProgress, onDone, onError) => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.get(`/api/validation/jobs/${jobId}`);
+        const job = res.data;
+        if (job.progress) onProgress(job.progress);
+        if (job.status === 'completed') {
+          clearInterval(interval);
+          onDone(job.result);
+        } else if (job.status === 'failed') {
+          clearInterval(interval);
+          onError(job.error || 'Error desconocido en la validación');
+        }
+      } catch (err) {
+        clearInterval(interval);
+        onError('Error consultando estado del job');
+      }
+    }, 2500);
+  };
+
   const handleValidateContent = async () => {
     setValidatingContent(true);
     setContentValidationResult(null);
+    setContentJobProgress('Iniciando análisis...');
     const currentCrumb = breadcrumbs[breadcrumbs.length - 1];
     // Todos los IDs de la jerarquía excepto la carpeta Semana actual (del más cercano al más lejano)
     const candidateFolderIds = breadcrumbs.slice(0, -1).map(c => c.id).reverse();
@@ -139,12 +162,27 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
         matrix_folder_id: getMatrixFolderId(),
         candidate_folder_ids: candidateFolderIds
       });
-      setContentValidationResult(response.data);
-      loadFolderHistory();
+      // API ahora retorna job_id — hacer polling
+      const { job_id } = response.data;
+      pollJob(
+        job_id,
+        (progress) => setContentJobProgress(progress),
+        (result) => {
+          setContentValidationResult(result);
+          setContentJobProgress('');
+          setValidatingContent(false);
+          loadFolderHistory();
+        },
+        (err) => {
+          setError(`Error en validación: ${err}`);
+          setContentJobProgress('');
+          setValidatingContent(false);
+        }
+      );
     } catch (err) {
-      setError(`Error al validar contenido: ${err.response?.data?.detail || err.message}`);
-    } finally {
+      setError(`Error al iniciar validación: ${err.response?.data?.detail || err.message}`);
       setValidatingContent(false);
+      setContentJobProgress('');
     }
   };
 
@@ -159,7 +197,6 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
         course_name: breadcrumbs[0]?.name,
       });
       setValidationResult(response.data);
-      // Refrescar badges
       loadFolderHistory();
     } catch (err) {
       setError(`Error al validar estructura: ${err.response?.data?.detail || err.message}`);
@@ -171,7 +208,7 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
   const handleValidateCourse = async () => {
     setValidatingCourse(true);
     setCourseValidationResult(null);
-    // Todos los IDs ancestros (del más cercano al más lejano) para localizar la matriz
+    setCourseJobProgress('Iniciando...');
     const candidateFolderIds = breadcrumbs.slice(0, -1).map(c => c.id).reverse();
     try {
       const response = await api.post('/api/validation/validate-course', {
@@ -180,12 +217,26 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
         validation_type: 'both',
         candidate_folder_ids: candidateFolderIds
       });
-      setCourseValidationResult(response.data);
-      loadFolderHistory();
+      const { job_id } = response.data;
+      pollJob(
+        job_id,
+        (progress) => setCourseJobProgress(progress),
+        (result) => {
+          setCourseValidationResult(result);
+          setCourseJobProgress('');
+          setValidatingCourse(false);
+          loadFolderHistory();
+        },
+        (err) => {
+          setError(`Error en validación: ${err}`);
+          setCourseJobProgress('');
+          setValidatingCourse(false);
+        }
+      );
     } catch (err) {
-      setError(`Error al validar curso: ${err.response?.data?.detail || err.message}`);
-    } finally {
+      setError(`Error al iniciar validación: ${err.response?.data?.detail || err.message}`);
       setValidatingCourse(false);
+      setCourseJobProgress('');
     }
   };
 
@@ -555,6 +606,8 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
       report_link,
       gemini_enabled,
       excel_updated,
+      cached,
+      cached_at,
       error
     } = contentValidationResult;
 
@@ -589,6 +642,11 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
                 {gemini_enabled === false && ' · Modo básico (sin Gemini)'}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                {cached && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: '#f59e0b', fontWeight: 600, padding: '3px 10px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '6px' }}>
+                    ⚡ Resultado del caché {cached_at ? `· ${new Date(cached_at).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}` : ''}
+                  </span>
+                )}
                 {excel_updated && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
                     ✅ Matriz actualizada en Drive
@@ -807,8 +865,35 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
                                             {r.presente === 'Si' ? '✓ Si' : '✗ No'}
                                           </span>
                                         </td>
-                                        <td style={{ ...tdStyle, color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.82rem' }}>
-                                          {r.observacion}
+                                        <td style={{ ...tdStyle, fontSize: '0.82rem' }}>
+                                          {r.confidence != null && (
+                                            <span style={{
+                                              display: 'inline-block', marginBottom: '4px',
+                                              padding: '1px 6px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600,
+                                              background: r.confidence >= 0.75 ? 'rgba(16,185,129,0.12)' : r.confidence >= 0.5 ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)',
+                                              color: r.confidence >= 0.75 ? '#10b981' : r.confidence >= 0.5 ? '#f59e0b' : '#ef4444',
+                                              border: `1px solid ${r.confidence >= 0.75 ? 'rgba(16,185,129,0.3)' : r.confidence >= 0.5 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                                            }} title="Confianza de la IA">
+                                              ⬡ {Math.round(r.confidence * 100)}%
+                                            </span>
+                                          )}
+                                          {r.observacion && (
+                                            <p style={{ margin: 0, color: 'var(--text-secondary)', fontStyle: 'italic' }}>{r.observacion}</p>
+                                          )}
+                                          {r.sugerencia && r.presente !== 'Si' && (
+                                            <p style={{
+                                              margin: '5px 0 0',
+                                              padding: '4px 8px',
+                                              background: 'rgba(245,158,11,0.08)',
+                                              border: '1px solid rgba(245,158,11,0.25)',
+                                              borderRadius: '5px',
+                                              color: '#f59e0b',
+                                              fontSize: '0.78rem',
+                                              fontStyle: 'normal',
+                                            }}>
+                                              💡 {r.sugerencia}
+                                            </p>
+                                          )}
                                         </td>
                                       </tr>
                                     ))}
@@ -847,8 +932,28 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
                                   {r.presente === 'Si' ? '✓ Si' : '✗ No'}
                                 </span>
                               </td>
-                              <td style={{ ...tdStyle, color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.875rem' }}>
-                                {r.observacion}
+                              <td style={{ ...tdStyle, fontSize: '0.875rem' }}>
+                                {r.confidence != null && (
+                                  <span style={{
+                                    display: 'inline-block', marginBottom: '4px',
+                                    padding: '1px 6px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600,
+                                    background: r.confidence >= 0.75 ? 'rgba(16,185,129,0.12)' : r.confidence >= 0.5 ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)',
+                                    color: r.confidence >= 0.75 ? '#10b981' : r.confidence >= 0.5 ? '#f59e0b' : '#ef4444',
+                                    border: `1px solid ${r.confidence >= 0.75 ? 'rgba(16,185,129,0.3)' : r.confidence >= 0.5 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                                  }} title="Confianza de la IA">
+                                    ⬡ {Math.round(r.confidence * 100)}%
+                                  </span>
+                                )}
+                                {r.observacion && (
+                                  <p style={{ margin: 0, color: 'var(--text-secondary)', fontStyle: 'italic' }}>{r.observacion}</p>
+                                )}
+                                {r.sugerencia && r.presente !== 'Si' && (
+                                  <p style={{
+                                    margin: '5px 0 0', padding: '4px 8px',
+                                    background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+                                    borderRadius: '5px', color: '#f59e0b', fontSize: '0.78rem',
+                                  }}>💡 {r.sugerencia}</p>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -1197,6 +1302,7 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
   const renderAILoadingOverlay = () => {
     if (!validatingContent && !validatingCourse) return null;
     const isCourse = validatingCourse;
+    const progress = isCourse ? courseJobProgress : contentJobProgress;
     return (
       <div className="ai-loading-overlay">
         <div className="ai-loading-card">
@@ -1206,17 +1312,20 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
           <h3 className="ai-loading-title">
             {isCourse ? '📦 Validando Curso Completo...' : '🧠 Validando Contenido con IA...'}
           </h3>
+          {progress && (
+            <p className="ai-loading-progress">{progress}</p>
+          )}
           <p className="ai-loading-desc">
             {isCourse
-              ? 'Analizando todas las semanas del curso. Esto puede tardar varios minutos según la cantidad de semanas.'
-              : 'Evaluando los requisitos de contenido con inteligencia artificial. Esto puede tardar entre 30 y 90 segundos.'}
+              ? 'El análisis corre en background — puedes navegar libremente mientras esperas.'
+              : 'Evaluando requisitos con IA en background. Puedes seguir navegando.'}
           </p>
           <div className="ai-loading-hint">
             <span className="ai-loading-badge">Gemini</span>
             <span className="ai-loading-badge groq">Groq</span>
             <span className="ai-loading-badge openrouter">OpenRouter</span>
           </div>
-          <p className="ai-loading-warn">Por favor, no cierre ni recargue esta página.</p>
+          <p className="ai-loading-warn">El resultado aparecerá aquí automáticamente al terminar.</p>
         </div>
       </div>
     );

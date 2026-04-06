@@ -3,6 +3,7 @@ Rutas de autenticación
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 from typing import Optional
@@ -20,6 +21,7 @@ from app.utils.auth import (
     get_current_active_user
 )
 from app.config import settings
+from app.utils.audit import log_action
 
 router = APIRouter()
 
@@ -194,7 +196,11 @@ async def approve_user(
     user.approved_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
-    
+
+    log_action(db, "user.approve", user_id=current_user.id, user_email=current_user.correo,
+               target_type="user", target_id=str(user.id),
+               details={"target_email": user.correo, "target_name": f"{user.nombre} {user.apellidos}"})
+
     return {
         "message": "Usuario aprobado exitosamente",
         "user": {
@@ -274,6 +280,12 @@ async def update_user_config(
 
     db.commit()
     db.refresh(user)
+
+    log_action(db, "user.update_config", user_id=current_user.id, user_email=current_user.correo,
+               target_type="user", target_id=str(user_id),
+               details={"target_email": user.correo, "changes": {k: body[k] for k in body if k != "permissions"},
+                        "permissions": body.get("permissions", {})})
+
     return {
         "message": "Configuración actualizada",
         "drive_folder_id": user.drive_folder_id,
@@ -378,6 +390,11 @@ async def toggle_user_active(
     user.is_active = not user.is_active
     db.commit()
     db.refresh(user)
+
+    log_action(db, "user.toggle_active", user_id=current_user.id, user_email=current_user.correo,
+               target_type="user", target_id=str(user.id),
+               details={"target_email": user.correo, "new_state": user.is_active})
+
     return {"message": f"Usuario {'activado' if user.is_active else 'desactivado'} exitosamente", "is_active": user.is_active}
 
 
@@ -410,7 +427,96 @@ async def reject_user(
             detail="No se puede eliminar un administrador"
         )
     
+    target_info = {"target_email": user.correo, "target_name": f"{user.nombre} {user.apellidos}"}
     db.delete(user)
     db.commit()
-    
+
+    log_action(db, "user.reject", user_id=current_user.id, user_email=current_user.correo,
+               target_type="user", target_id=str(user_id), details=target_info)
+
     return {"message": "Usuario rechazado y eliminado exitosamente"}
+
+
+# ─── API Keys personales del usuario ─────────────────────────────────────────
+
+VALID_PROVIDERS = {"gemini", "deepseek", "groq", "openrouter"}
+
+
+class PersonalApiKeyRequest(BaseModel):
+    key: str
+
+
+@router.get("/me/api-keys")
+async def get_my_api_keys(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retorna las API keys personales del usuario (obfuscadas)."""
+    raw: dict = getattr(current_user, "personal_api_keys", None) or {}
+    result = {}
+    for provider in VALID_PROVIDERS:
+        keys = raw.get(provider, [])
+        result[provider] = {
+            "key_count": len(keys),
+            "keys": [k[:8] + "..." if len(k) > 8 else k for k in keys],
+        }
+    return result
+
+
+@router.post("/me/api-keys/{provider}/add")
+async def add_my_api_key(
+    provider: str,
+    body: PersonalApiKeyRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Agrega una API key personal para el proveedor indicado."""
+    if provider not in VALID_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Proveedor inválido. Válidos: {VALID_PROVIDERS}")
+    key_val = body.key.strip()
+    if not key_val:
+        raise HTTPException(status_code=400, detail="La key no puede estar vacía")
+
+    raw: dict = dict(getattr(current_user, "personal_api_keys", None) or {})
+    keys = list(raw.get(provider, []))
+    if key_val in keys:
+        raise HTTPException(status_code=400, detail="Esa key ya está registrada")
+    keys.append(key_val)
+    raw[provider] = keys
+
+    from sqlalchemy.dialects.postgresql import JSONB as pg_JSONB
+    db.query(User).filter(User.id == current_user.id).update(
+        {"personal_api_keys": raw}, synchronize_session=False
+    )
+    db.commit()
+    log_action(db, "api_key.add", user_id=current_user.id, user_email=current_user.correo,
+               target_type="api_key", target_id=provider,
+               details={"provider": provider, "key_count": len(keys)})
+    return {"message": f"Key de {provider} agregada correctamente", "key_count": len(keys)}
+
+
+@router.delete("/me/api-keys/{provider}/{index}")
+async def remove_my_api_key(
+    provider: str,
+    index: int,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Elimina la API key personal en la posición dada."""
+    if provider not in VALID_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Proveedor inválido")
+
+    raw: dict = dict(getattr(current_user, "personal_api_keys", None) or {})
+    keys = list(raw.get(provider, []))
+    if index < 0 or index >= len(keys):
+        raise HTTPException(status_code=400, detail="Índice fuera de rango")
+
+    keys.pop(index)
+    raw[provider] = keys
+    db.query(User).filter(User.id == current_user.id).update(
+        {"personal_api_keys": raw}, synchronize_session=False
+    )
+    db.commit()
+    log_action(db, "api_key.delete", user_id=current_user.id, user_email=current_user.correo,
+               target_type="api_key", target_id=provider,
+               details={"provider": provider, "key_count": len(keys)})
+    return {"message": f"Key de {provider} eliminada", "key_count": len(keys)}

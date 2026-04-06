@@ -175,6 +175,124 @@ class DocumentContentValidationService:
     # Multi-key rotation & proveedores alternativos
     # ──────────────────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _batch_prompt(params: list, section_name: str, group_name: str, doc_snippet: str,
+                      max_chars: int = 12_000) -> tuple:
+        """
+        Genera (system_msg, user_msg) para evaluación batch de requisitos.
+        Formato JSON de respuesta:
+        [
+          {"presente":"Si","observacion":"cómo se evidencia","confidence":0.95},
+          {"presente":"No","observacion":"qué falta","sugerencia":"acción concreta","confidence":0.80}
+        ]
+        confidence: 0.0–1.0 — certeza del modelo sobre su evaluación.
+        """
+        reqs_list = "\n".join(f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params))
+        system_msg = (
+            "Eres un evaluador académico experto. SOLO responde con JSON válido, "
+            "sin texto introductorio ni explicación. Tu respuesta debe ser "
+            f"un array JSON con exactamente {len(params)} elementos."
+        )
+        user_msg = (
+            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
+            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
+            f"Contenido del documento:\n{doc_snippet[:max_chars]}\n\n"
+            "Para cada requisito responde con un objeto JSON que incluya:\n"
+            '- "presente": "Si" o "No"\n'
+            '- "observacion": cómo se evidencia (si presente) o qué falta (si ausente)\n'
+            '- "confidence": número entre 0.0 y 1.0 indicando tu certeza\n'
+            '- "sugerencia": (solo si ausente) acción concreta de 1 oración para incluirlo\n\n'
+            "Ejemplo:\n"
+            '[{"presente":"Si","observacion":"Se explica en la diapositiva 3","confidence":0.95},\n'
+            ' {"presente":"No","observacion":"No se menciona","sugerencia":"Agregar sección de objetivos","confidence":0.82}]\n\n'
+            f"Responde SOLO el array JSON ({len(params)} elementos, sin texto extra):"
+        )
+        return system_msg, user_msg
+
+    @staticmethod
+    def _parse_batch_item(item: dict, fallback_observacion: str = '') -> dict:
+        """Normaliza un elemento de respuesta batch al formato interno."""
+        presente = str(item.get('presente', 'No'))
+        raw_conf = item.get('confidence', None)
+        try:
+            confidence = round(float(raw_conf), 3) if raw_conf is not None else None
+        except (TypeError, ValueError):
+            confidence = None
+        return {
+            'presente':    presente,
+            'observacion': str(item.get('observacion', fallback_observacion)),
+            'sugerencia':  str(item.get('sugerencia', '')) if presente != 'Si' else '',
+            'confidence':  confidence,
+        }
+
+    def _reload_keys_from_db(self, db, user_id=None) -> None:
+        """
+        Carga las API keys para esta validación con la siguiente prioridad:
+          1. Keys personales del usuario (si user_id dado y tiene keys)
+          2. Keys del sistema en BD  (settings admin)
+          3. Keys del entorno (.env)
+        Las keys personales SUSTITUYEN completamente a las del sistema/entorno
+        para ese proveedor — garantizando que cada usuario usa solo sus propias keys.
+        """
+        if db is None:
+            return
+        try:
+            from app.services.settings_service import settings_service
+            from app.models.user import User
+
+            # Leer keys personales del usuario
+            user_personal: dict = {}
+            if user_id is not None:
+                try:
+                    u = db.query(User).filter(User.id == user_id).first()
+                    user_personal = (getattr(u, "personal_api_keys", None) or {}) if u else {}
+                except Exception:
+                    pass
+
+            def _prefer_personal(provider: str, system_keys: list, env_key: str | None) -> list:
+                """
+                Si el usuario tiene keys personales para este proveedor → usarlas en exclusiva.
+                Si no → mezclar env + sistema (comportamiento anterior).
+                """
+                personal = [k.strip() for k in user_personal.get(provider, []) if k.strip()]
+                if personal:
+                    print(f"    🔑 Usando {len(personal)} key(s) personal(es) de usuario para {provider}")
+                    return personal
+                merged = list(env_key and [env_key] or [])
+                for k in system_keys:
+                    k = k.strip()
+                    if k and k not in merged:
+                        merged.append(k)
+                return merged
+
+            # ── Gemini ──────────────────────────────────────────────────────────
+            db_gemini = settings_service.get_json("gemini_api_keys", db, default=[]) or []
+            env_gemini = self._api_keys[0] if self._api_keys else None
+            merged_gemini = _prefer_personal("gemini", db_gemini, env_gemini)
+            self._api_keys = merged_gemini
+            self.enabled = len(merged_gemini) > 0
+            if merged_gemini:
+                import google.generativeai as genai
+                genai.configure(api_key=merged_gemini[0])
+
+            # ── DeepSeek ────────────────────────────────────────────────────────
+            db_deepseek = settings_service.get_json("deepseek_api_keys", db, default=[]) or []
+            merged_deepseek = _prefer_personal("deepseek", db_deepseek, self._deepseek_key)
+            self._deepseek_key = merged_deepseek[0] if merged_deepseek else None
+
+            # ── Groq ────────────────────────────────────────────────────────────
+            db_groq = settings_service.get_json("groq_api_keys", db, default=[]) or []
+            merged_groq = _prefer_personal("groq", db_groq, self._groq_key)
+            self._groq_key = merged_groq[0] if merged_groq else None
+
+            # ── OpenRouter ──────────────────────────────────────────────────────
+            db_openrouter = settings_service.get_json("openrouter_api_keys", db, default=[]) or []
+            merged_openrouter = _prefer_personal("openrouter", db_openrouter, self._openrouter_key)
+            self._openrouter_key = merged_openrouter[0] if merged_openrouter else None
+
+        except Exception as e:
+            print(f"  ⚠️  Error recargando keys desde BD: {e}")
+
     def _get_available_keys(self) -> List[str]:
         """Retorna las claves Gemini que aún no han sido marcadas como agotadas."""
         return [k for k in self._api_keys if k not in self._exhausted_keys]
@@ -213,23 +331,7 @@ class DocumentContentValidationService:
         import urllib.request
         import urllib.error
 
-        reqs_list = "\n".join(
-            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
-        )
-
-        system_msg = (
-            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
-            "sin texto introductorio ni explicación. Tu respuesta debe ser "
-            f"un array JSON con exactamente {len(params)} elementos."
-        )
-
-        user_msg = (
-            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
-            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
-            f"Contenido del documento:\n{doc_snippet[:12_000]}\n\n"
-            f"Responde SOLO el array JSON (sin texto adicional):\n"
-            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
-        )
+        system_msg, user_msg = self._batch_prompt(params, section_name, group_name, doc_snippet, 12_000)
 
         # Intentar con modelos Groq en orden de preferencia
         groq_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
@@ -241,8 +343,8 @@ class DocumentContentValidationService:
                     {"role": "system", "content": system_msg},
                     {"role": "user",   "content": user_msg},
                 ],
-                "temperature": 0.05,
-                "max_tokens": 2000,
+                "temperature": getattr(self, '_req_temperature', 0.05),
+                "max_tokens":  getattr(self, '_req_max_tokens', 2000),
             }).encode("utf-8")
 
             try:
@@ -276,11 +378,9 @@ class DocumentContentValidationService:
                     results = []
                     for i, p in enumerate(params):
                         if i < len(parsed):
-                            item = parsed[i]
-                            results.append({
-                                "presente":    str(item.get("presente", "No")),
-                                "observacion": f"[Groq] {item.get('observacion', '')}",
-                            })
+                            parsed_item = self._parse_batch_item(parsed[i], '')
+                            parsed_item['observacion'] = f"[Groq] {parsed_item['observacion']}"
+                            results.append(parsed_item)
                         else:
                             results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
 
@@ -323,23 +423,7 @@ class DocumentContentValidationService:
         import urllib.request
         import urllib.error
 
-        reqs_list = "\n".join(
-            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
-        )
-
-        system_msg = (
-            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
-            "sin texto introductorio ni explicación. Tu respuesta debe ser "
-            f"un array JSON con exactamente {len(params)} elementos."
-        )
-
-        user_msg = (
-            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
-            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
-            f"Contenido del documento:\n{doc_snippet[:15_000]}\n\n"
-            f"Responde SOLO el array JSON (sin texto adicional):\n"
-            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
-        )
+        system_msg, user_msg = self._batch_prompt(params, section_name, group_name, doc_snippet, 15_000)
 
         payload = json.dumps({
             "model": "deepseek-chat",
@@ -347,8 +431,8 @@ class DocumentContentValidationService:
                 {"role": "system", "content": system_msg},
                 {"role": "user",   "content": user_msg},
             ],
-            "temperature": 0.05,
-            "max_tokens": 2000,
+            "temperature": getattr(self, '_req_temperature', 0.05),
+            "max_tokens":  getattr(self, '_req_max_tokens', 2000),
         }).encode("utf-8")
 
         try:
@@ -376,11 +460,7 @@ class DocumentContentValidationService:
             results = []
             for i, p in enumerate(params):
                 if i < len(parsed):
-                    item = parsed[i]
-                    results.append({
-                        'presente':    str(item.get('presente', 'No')),
-                        'observacion': str(item.get('observacion', '')),
-                    })
+                    results.append(self._parse_batch_item(parsed[i]))
                 else:
                     results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
             print(f"  🤖 [MODELO: DeepSeek-V3] respondió — {len(results)} resultados")
@@ -412,23 +492,7 @@ class DocumentContentValidationService:
         import urllib.request
         import urllib.error
 
-        reqs_list = "\n".join(
-            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
-        )
-
-        system_msg = (
-            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
-            "sin texto introductorio ni explicación. Tu respuesta debe ser "
-            f"un array JSON con exactamente {len(params)} elementos."
-        )
-
-        user_msg = (
-            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
-            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
-            f"Contenido del documento:\n{doc_snippet[:12_000]}\n\n"
-            f"Responde SOLO el array JSON (sin texto adicional):\n"
-            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
-        )
+        system_msg, user_msg = self._batch_prompt(params, section_name, group_name, doc_snippet, 12_000)
 
         openrouter_models = [
             "meta-llama/llama-3.1-8b-instruct:free",
@@ -442,8 +506,8 @@ class DocumentContentValidationService:
                     {"role": "system", "content": system_msg},
                     {"role": "user",   "content": user_msg},
                 ],
-                "temperature": 0.05,
-                "max_tokens": 2000,
+                "temperature": getattr(self, '_req_temperature', 0.05),
+                "max_tokens":  getattr(self, '_req_max_tokens', 2000),
             }).encode("utf-8")
 
             try:
@@ -478,11 +542,9 @@ class DocumentContentValidationService:
                     results = []
                     for i, p in enumerate(params):
                         if i < len(parsed):
-                            item = parsed[i]
-                            results.append({
-                                "presente":    str(item.get("presente", "No")),
-                                "observacion": f"[OpenRouter] {item.get('observacion', '')}",
-                            })
+                            parsed_item = self._parse_batch_item(parsed[i])
+                            parsed_item['observacion'] = f"[OpenRouter] {parsed_item['observacion']}"
+                            results.append(parsed_item)
                         else:
                             results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
 
@@ -571,19 +633,41 @@ class DocumentContentValidationService:
     # Excel: localizar, leer y parsear
     # ──────────────────────────────────────────────────────────────────────────
 
+    REVISION_FOLDER = "revision de material"
+
+    def _find_revision_subfolder(self, folder_id: str) -> Optional[str]:
+        """Busca la carpeta '0. Revision de Material' (o similar) dentro de folder_id."""
+        try:
+            subfolders = drive_service.list_folders(folder_id)
+            for sf in subfolders:
+                if self.REVISION_FOLDER in self._normalize(sf.get('name', '')):
+                    return sf['id']
+        except Exception:
+            pass
+        return None
+
     def find_matrix_file(self, folder_id: str) -> Optional[Tuple[str, str]]:
         """
         Busca el Excel 'Matriz observaciones*.xlsx' en la carpeta indicada.
+        Primero busca dentro de '0. Revision de Material'; si no, busca en folder_id.
         Retorna (file_id, file_name) o None.
         """
         try:
-            files = drive_service.list_files(folder_id)
+            search_id = self._find_revision_subfolder(folder_id) or folder_id
+            files = drive_service.list_files(search_id)
             names = [f.get('name', '') for f in files]
-            print(f"  📂 Archivos en {folder_id}: {names}")
+            print(f"  📂 Archivos en {search_id}: {names}")
             for f in files:
                 name = f.get('name', '')
                 if name.lower().startswith(MATRIX_FILE_PREFIX.lower()):
                     return (f['id'], name)
+            # Fallback: si buscamos en subfolder y no encontramos, intentar en raíz
+            if search_id != folder_id:
+                files = drive_service.list_files(folder_id)
+                for f in files:
+                    name = f.get('name', '')
+                    if name.lower().startswith(MATRIX_FILE_PREFIX.lower()):
+                        return (f['id'], name)
             return None
         except Exception as e:
             print(f"Error buscando matriz: {e}")
@@ -1325,7 +1409,7 @@ CONTENIDO DEL DOCUMENTO:
 {doc_chunk}
 
 Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
-{{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones"}}"""
+{{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones", "confidence": 0.0-1.0}}"""
 
         target_model = model_name or GEMINI_MODEL
 
@@ -1333,9 +1417,15 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
             try:
                 raw = self._call_gemini_raw(key, target_model, prompt)
                 parsed = json.loads(raw)
+                raw_conf = parsed.get('confidence', None)
+                try:
+                    conf = round(float(raw_conf), 3) if raw_conf is not None else None
+                except (TypeError, ValueError):
+                    conf = None
                 return {
                     'presente':    str(parsed.get('presente', 'No')),
-                    'observacion': str(parsed.get('observacion', ''))
+                    'observacion': str(parsed.get('observacion', '')),
+                    'confidence':  conf,
                 }
             except json.JSONDecodeError:
                 print(f"  ⚠️  JSON inválido de Gemini")
@@ -1373,7 +1463,8 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         if not keywords:
             return {
                 'presente': 'No',
-                'observacion': f'Sin IA (quota agotada): el requisito "{requirement_text}" no tiene términos evaluables'
+                'observacion': f'Sin IA (quota agotada): el requisito "{requirement_text}" no tiene términos evaluables',
+                'confidence': 0.0,
             }
 
         # Match parcial: cada keyword se busca como substring Y por sus primeros 5 chars (stem)
@@ -1396,7 +1487,8 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
             + (f' | faltante [{missing_str}]' if missing else '')
             + f' ({len(found)}/{len(keywords)} términos)'
         )
-        return {'presente': presente, 'observacion': obs}
+        # Confianza baja — es solo keyword matching, no IA semántica
+        return {'presente': presente, 'observacion': obs, 'confidence': round(ratio * 0.6, 3)}
 
     def _evaluate_requirement(
         self,
@@ -1480,12 +1572,12 @@ CONTENIDO DEL DOCUMENTO:
 
 Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), con exactamente {len(params)} objetos en el mismo orden que los requisitos:
 [
-  {{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones"}},
+  {{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones", "confidence": 0.0-1.0}},
   ...
 ]"""
 
         # ── Prioridad 1: DeepSeek ─────────────────────────────────────────────
-        if self._deepseek_key:
+        if self._deepseek_key and getattr(self, '_req_use_deepseek', True):
             print("  🤖 Usando DeepSeek como proveedor principal...")
             ds_results = self._call_deepseek_batch(
                 params, doc_snippet, section_name, group_name
@@ -1493,6 +1585,8 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
             if ds_results is not None:
                 return ds_results
             print("  ⚠️  DeepSeek falló, intentando con Gemini...")
+        elif self._deepseek_key and not getattr(self, '_req_use_deepseek', True):
+            print("  ⏭️  DeepSeek desactivado por configuración")
 
         # ── Prioridad 2: Gemini con rotación de claves ────────────────────────
         available_keys = self._get_available_keys()
@@ -1519,9 +1613,15 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                     for i, p in enumerate(params):
                         if i < len(parsed):
                             item = parsed[i]
+                            raw_conf = item.get('confidence', None)
+                            try:
+                                conf = round(float(raw_conf), 3) if raw_conf is not None else None
+                            except (TypeError, ValueError):
+                                conf = None
                             results.append({
                                 'presente':    str(item.get('presente', 'No')),
                                 'observacion': str(item.get('observacion', '')),
+                                'confidence':  conf,
                             })
                         else:
                             results.append(self._fallback_keyword_check(p['sub_seccion'], doc_text))
@@ -1569,22 +1669,26 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                         backoff *= 2   # doblar: 5 → 10 → 20 → 40s
 
         # ── Respaldo 3: Groq ──────────────────────────────────────────────────
-        if self._groq_key:
+        if self._groq_key and getattr(self, '_req_use_groq', True):
             print("  🔄 Intentando con Groq (respaldo)...")
             groq_results = self._call_groq_batch(
                 params, doc_snippet, section_name, group_name
             )
             if groq_results is not None:
                 return groq_results
+        elif self._groq_key and not getattr(self, '_req_use_groq', True):
+            print("  ⏭️  Groq desactivado por configuración")
 
         # ── Respaldo 4: OpenRouter ────────────────────────────────────────────
-        if self._openrouter_key:
+        if self._openrouter_key and getattr(self, '_req_use_openrouter', True):
             print("  🔄 Intentando con OpenRouter (respaldo)...")
             or_results = self._call_openrouter_batch(
                 params, doc_snippet, section_name, group_name
             )
             if or_results is not None:
                 return or_results
+        elif self._openrouter_key and not getattr(self, '_req_use_openrouter', True):
+            print("  ⏭️  OpenRouter desactivado por configuración")
 
         # ── Último recurso: keyword matching ─────────────────────────────────
         return [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
@@ -1894,7 +1998,7 @@ CONTENIDO DEL DOCUMENTO:
 Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta estructura exacta:
 {{
   "requirements": [
-    {{"presente": "Si" o "No", "observacion": "Observación específica de 1-2 oraciones"}},
+    {{"presente": "Si" o "No", "observacion": "Observación específica de 1-2 oraciones", "confidence": 0.0-1.0}},
     ...  ({len(params)} elementos en el mismo orden)
   ],
   "document_analysis": {{
@@ -1920,10 +2024,19 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
             return None, None
 
         def _pack(reqs: List, analysis: Optional[Dict]) -> Tuple[List[Dict], Dict]:
-            return (
-                [{'presente': str(r.get('presente', 'No')), 'observacion': str(r.get('observacion', ''))} for r in reqs],
-                analysis or empty_analysis,
-            )
+            packed = []
+            for r in reqs:
+                raw_conf = r.get('confidence', None)
+                try:
+                    conf = round(float(raw_conf), 3) if raw_conf is not None else None
+                except (TypeError, ValueError):
+                    conf = None
+                packed.append({
+                    'presente':    str(r.get('presente', 'No')),
+                    'observacion': str(r.get('observacion', '')),
+                    'confidence':  conf,
+                })
+            return packed, analysis or empty_analysis
 
         import urllib.request, urllib.error
 
@@ -2023,7 +2136,8 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
         semana_folder_id: str,
         semana_folder_name: str,
         candidate_folder_ids: List[str],
-        db=None
+        db=None,
+        user_id=None,
     ) -> Dict[str, Any]:
         """
         Pipeline completo de validación de contenido para una carpeta Semana_X.
@@ -2044,22 +2158,45 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
             print(f"  🗂️  Tipo de carpeta: {folder_type}")
 
             # 0b. Leer settings dinámicos desde BD (si db disponible)
-            use_gemini = self.enabled
+            use_gemini      = self.enabled
             active_model_name = GEMINI_MODEL
+            # Defaults por si no hay BD
+            self._req_use_deepseek    = True
+            self._req_use_groq        = True
+            self._req_use_openrouter  = True
+            self._req_temperature     = 0.05
+            self._req_max_tokens      = 2000
             if db is not None:
                 try:
                     from app.services.settings_service import settings_service
-                    use_gemini = self.enabled and settings_service.get_bool("gemini_enabled", db)
+                    use_gemini        = self.enabled and settings_service.get_bool("gemini_enabled", db)
                     active_model_name = settings_service.get("gemini_model", db) or GEMINI_MODEL
-                    print(f"  ⚙️  Gemini: {'habilitado' if use_gemini else 'deshabilitado'} | modelo: {active_model_name}")
+                    self._req_use_deepseek   = settings_service.get_bool("deepseek_enabled", db)
+                    self._req_use_groq       = settings_service.get_bool("groq_enabled", db)
+                    self._req_use_openrouter = settings_service.get_bool("openrouter_enabled", db)
+                    try:
+                        self._req_temperature = float(settings_service.get("ai_temperature", db) or 0.05)
+                    except (ValueError, TypeError):
+                        pass
+                    self._req_max_tokens = settings_service.get_int("ai_max_tokens", db, default=2000)
+                    print(
+                        f"  ⚙️  Proveedores: DeepSeek={'✓' if self._req_use_deepseek else '✗'} "
+                        f"Gemini={'✓' if use_gemini else '✗'} (modelo: {active_model_name}) "
+                        f"Groq={'✓' if self._req_use_groq else '✗'} "
+                        f"OpenRouter={'✓' if self._req_use_openrouter else '✗'} "
+                        f"| temp={self._req_temperature} max_tokens={self._req_max_tokens}"
+                    )
                 except Exception:
                     pass
+
+            # 0c. Recargar API keys desde BD (prioriza keys personales del usuario)
+            self._reload_keys_from_db(db, user_id=user_id)
 
             # 1. Derivar sección
             section_name = self._derive_section_from_folder(semana_folder_name)
             print(f"  📌 Sección: '{section_name}'")
 
-            # 2. Buscar el Excel en cada carpeta candidata
+            # 2. Buscar el Excel en cada carpeta candidata (busca en '0. Revision de Material' primero)
             matrix_info = None
             matrix_folder_id = None
             for fid in candidate_folder_ids:

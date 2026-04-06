@@ -5,6 +5,8 @@
   --color-primary:       #ff8c42;
   --color-primary-dark:  #e57a32;
   --color-primary-light: #ffaa6f;
+  /* alias para compatibilidad con código existente */
+  --color-accent: #ff8c42;
   /* aliases usados en componentes admin */
   --cococys-orange:        #ff8c42;
   --cococys-orange-dark:   #e57a32;

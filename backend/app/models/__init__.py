@@ -6,6 +6,8 @@ from app.models.document import Document, DocumentType, DocumentStatus
 from app.models.validation import ValidationCriteria, DriveFolder
 from app.models.system_setting import SystemSetting
 from app.models.validation_record import ValidationRecord
+from app.models.validation_job import ValidationJob
+from app.models.audit_log import AuditLog
 
 __all__ = [
     "User",
@@ -17,5 +19,7 @@ __all__ = [
     "DriveFolder",
     "SystemSetting",
     "ValidationRecord",
+    "ValidationJob",
+    "AuditLog",
 ]
 

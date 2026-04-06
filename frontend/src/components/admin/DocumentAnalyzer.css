@@ -1085,6 +1085,18 @@ button:focus-visible,
   margin: 0 0 12px 0;
 }
 
+.ai-loading-progress {
+  font-size: 0.82rem;
+  color: var(--cococys-orange, #ff8c42);
+  background: rgba(255,140,66,0.08);
+  border: 1px solid rgba(255,140,66,0.2);
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin: 0 0 8px;
+  font-style: italic;
+  min-height: 28px;
+}
+
 .ai-loading-desc {
   font-size: 0.875rem;
   color: var(--text-secondary);

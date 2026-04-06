@@ -5,15 +5,16 @@ Incluye: validate-folder, validate-content, validate-course (lote), history, sta
 import re
 import unicodedata
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sqlfunc, desc
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
-from app.database import get_db
+from app.database import get_db, SessionLocal
 from app.models.user import User, UserRole
 from app.models.validation_record import ValidationRecord
+from app.models.validation_job import ValidationJob
 from app.services.structure_validation_service import structure_validation_service
 from app.services.drive_service import drive_service
 from app.utils.auth import get_current_user
@@ -114,7 +115,7 @@ async def validate_folder_structure(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="No tienes permiso para validar estructura")
     try:
-        result = structure_validation_service.validate_folder_structure(request.folder_id)
+        result = structure_validation_service.validate_folder_structure(request.folder_id, db=db)
 
         # Guardar en historial
         if result.get('success') or result.get('has_matrix') is not None:
@@ -142,41 +143,122 @@ async def validate_folder_structure(
                             detail=f"Error al validar estructura: {str(e)}")
 
 
-# ─── Validate Content ─────────────────────────────────────────────────────────
+# ─── Job helpers ──────────────────────────────────────────────────────────────
 
-@router.post("/validate-content")
-async def validate_document_content(
-    request: ValidateContentRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Validar el CONTENIDO de los documentos en una carpeta Semana_X con Gemini AI."""
-    is_admin = current_user.role == UserRole.ADMIN
-    perms = getattr(current_user, "permissions", None) or {}
-    if not is_admin and not perms.get("can_validate_content", False):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="No tienes permiso para validar contenido")
+def _create_job(db: Session, user_id, job_type: str) -> ValidationJob:
+    job = ValidationJob(user_id=user_id, job_type=job_type, status="pending",
+                        progress="En cola...")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def _update_job(job_id, **kwargs):
+    """Actualiza el job en una sesión propia (uso desde background tasks)."""
+    db = SessionLocal()
     try:
-        from app.services.document_content_validation_service import document_content_validation_service
-        candidates = [request.matrix_folder_id]
-        for fid in (request.candidate_folder_ids or []):
+        job = db.query(ValidationJob).filter(ValidationJob.id == job_id).first()
+        if job:
+            for k, v in kwargs.items():
+                setattr(job, k, v)
+            if kwargs.get("status") in ("completed", "failed"):
+                job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+    except Exception as e:
+        print(f"⚠️  Error actualizando job {job_id}: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+@router.get("/jobs/{job_id}")
+async def get_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Consulta el estado de un job de validación en background."""
+    import uuid as _uuid
+    try:
+        jid = _uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="job_id inválido")
+
+    job = db.query(ValidationJob).filter(ValidationJob.id == jid).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job no encontrado")
+    if str(job.user_id) != str(current_user.id) and current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Sin acceso a este job")
+
+    return {
+        "job_id":      str(job.id),
+        "status":      job.status,
+        "progress":    job.progress,
+        "result":      job.result_json,
+        "error":       job.error,
+        "created_at":  job.created_at.isoformat() if job.created_at else None,
+        "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+    }
+
+
+# ─── Validate Content (background) ────────────────────────────────────────────
+
+def _run_content_validation(job_id, semana_folder_id, semana_folder_name,
+                             matrix_folder_id, candidate_folder_ids,
+                             course_name, user_id):
+    """Tarea en background: ejecuta la validación de contenido y guarda resultado."""
+    from app.services.document_content_validation_service import document_content_validation_service
+    from app.services.settings_service import settings_service
+    db = SessionLocal()
+    try:
+        _update_job(job_id, status="running",
+                    progress=f"Verificando caché para '{semana_folder_name}'...")
+
+        # ── Cache check ──────────────────────────────────────────────────────
+        cache_minutes = settings_service.get_int("validation_cache_minutes", db, default=60)
+        if cache_minutes > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=cache_minutes)
+            cached = (
+                db.query(ValidationRecord)
+                .filter(
+                    ValidationRecord.folder_id == semana_folder_id,
+                    ValidationRecord.validation_type == "content",
+                    ValidationRecord.created_at >= cutoff,
+                )
+                .order_by(desc(ValidationRecord.created_at))
+                .first()
+            )
+            if cached and cached.results_json:
+                cached_result = dict(cached.results_json)
+                cached_result["cached"] = True
+                cached_result["cached_at"] = cached.created_at.isoformat()
+                _update_job(job_id, status="completed", result_json=cached_result,
+                            progress=f"⚡ Resultado del caché ({cache_minutes} min)")
+                return
+
+        _update_job(job_id, progress=f"Analizando '{semana_folder_name}' con IA...")
+
+        candidates = [matrix_folder_id]
+        for fid in (candidate_folder_ids or []):
             if fid not in candidates:
                 candidates.append(fid)
+
         result = document_content_validation_service.validate_folder_content(
-            semana_folder_id  = request.semana_folder_id,
-            semana_folder_name = request.semana_folder_name,
+            semana_folder_id     = semana_folder_id,
+            semana_folder_name   = semana_folder_name,
             candidate_folder_ids = candidates,
-            db = db
+            db                   = db,
+            user_id              = user_id,
         )
 
-        # Guardar en historial
         if result.get('success'):
             pct = result.get('compliance_percentage', 0) or 0
             _save_record(
                 db,
-                folder_id    = request.semana_folder_id,
-                folder_name  = request.semana_folder_name,
-                course_name  = request.course_name,
+                folder_id    = semana_folder_id,
+                folder_name  = semana_folder_name,
+                course_name  = course_name,
                 validation_type = "content",
                 section_name = result.get('section'),
                 compliance_percentage = pct,
@@ -187,28 +269,193 @@ async def validate_document_content(
                 results_json  = {k: v for k, v in result.items() if k != 'results'},
                 documents_analyzed = result.get('documents_analyzed', []),
                 excel_updated = result.get('excel_updated', False),
-                validated_by  = current_user.id,
+                validated_by  = user_id,
             )
 
-        return result
+        _update_job(job_id, status="completed", result_json=result,
+                    progress="Validación completada")
     except Exception as e:
-        print(f"❌ Error validando contenido: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f"Error al validar contenido: {str(e)}")
+        print(f"❌ Error en background job {job_id}: {e}")
+        _update_job(job_id, status="failed", error=str(e),
+                    progress="Error en la validación")
+    finally:
+        db.close()
+
+
+@router.post("/validate-content")
+async def validate_document_content(
+    request: ValidateContentRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Inicia la validación de contenido en background. Retorna job_id para consultar estado."""
+    is_admin = current_user.role == UserRole.ADMIN
+    perms = getattr(current_user, "permissions", None) or {}
+    if not is_admin and not perms.get("can_validate_content", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="No tienes permiso para validar contenido")
+
+    job = _create_job(db, current_user.id, "content")
+    background_tasks.add_task(
+        _run_content_validation,
+        job_id               = job.id,
+        semana_folder_id     = request.semana_folder_id,
+        semana_folder_name   = request.semana_folder_name,
+        matrix_folder_id     = request.matrix_folder_id,
+        candidate_folder_ids = request.candidate_folder_ids or [],
+        course_name          = request.course_name,
+        user_id              = current_user.id,
+    )
+    return {"job_id": str(job.id), "status": "pending",
+            "message": f"Validación de '{request.semana_folder_name}' iniciada"}
 
 
 # ─── Validate Course (lote) ───────────────────────────────────────────────────
 
+def _run_course_validation(job_id, course_folder_id, course_name,
+                            validation_type, candidate_folder_ids, user_id):
+    """Tarea en background: valida todas las semanas y labs de un curso."""
+    from app.services.document_content_validation_service import document_content_validation_service
+    db = SessionLocal()
+    try:
+        _update_job(job_id, status="running",
+                    progress=f"Iniciando validación de curso '{course_name}'...")
+
+        all_subfolders = drive_service.list_folders(course_folder_id)
+        semana_folders = [f for f in all_subfolders if _is_semana_folder(f['name'])]
+
+        def semana_num(f):
+            m = re.search(r'\d+', f['name'])
+            return int(m.group()) if m else 0
+        semana_folders.sort(key=semana_num)
+
+        lab_folders = [f for f in all_subfolders if _is_lab_folder(f['name'])]
+        lab_folders.sort(key=lambda f: f['name'])
+
+        if not semana_folders and not lab_folders:
+            _update_job(job_id, status="completed", progress="Sin carpetas encontradas",
+                        result_json={"success": False, "error": "No se encontraron carpetas",
+                                     "course_name": course_name, "total_weeks": 0})
+            return
+
+        total_folders = len(semana_folders) + len(lab_folders)
+        course_structure = None
+
+        if validation_type in ("structure", "both"):
+            _update_job(job_id, progress=f"Validando estructura del curso...")
+            struct = structure_validation_service.validate_folder_structure(course_folder_id, db=db)
+            pct_s = struct.get('compliance_percentage', 0) or 0
+            course_structure = {
+                "success": struct.get('success', False),
+                "compliance_percentage": pct_s,
+                "status": _compliance_status(pct_s),
+                "total_required": struct.get('total_required', 0),
+                "total_found": struct.get('total_found', 0),
+                "total_missing": struct.get('total_missing', 0),
+                "missing_documents": [d.get('name') for d in (struct.get('missing_documents') or [])],
+                "error": struct.get('error'),
+            }
+            _save_record(db, folder_id=course_folder_id, folder_name=course_name,
+                         course_name=course_name, validation_type="structure",
+                         compliance_percentage=pct_s, total_items=struct.get('total_required', 0) or 0,
+                         present_items=struct.get('total_found', 0) or 0,
+                         missing_items=struct.get('total_missing', 0) or 0,
+                         status=_compliance_status(pct_s), results_json=struct, validated_by=user_id)
+
+        weeks_results = []
+        lab_results = []
+        total_content_compliance = 0.0
+        content_count = 0
+        failed = 0
+        candidates = [course_folder_id] + [fid for fid in candidate_folder_ids if fid != course_folder_id]
+
+        all_content_folders = semana_folders + lab_folders
+        for idx, folder in enumerate(all_content_folders):
+            is_lab = _is_lab_folder(folder['name'])
+            _update_job(job_id, progress=f"[{idx+1}/{total_folders}] Analizando '{folder['name']}'...")
+
+            folder_result = {
+                "folder_id": folder['id'], "folder_name": folder['name'],
+                "content": None, "compliance_percentage": 0.0,
+                "status": "unknown", "error": None,
+            }
+            if is_lab:
+                folder_result["folder_type"] = "lab"
+
+            try:
+                if validation_type in ("content", "both"):
+                    content = document_content_validation_service.validate_folder_content(
+                        semana_folder_id=folder['id'], semana_folder_name=folder['name'],
+                        candidate_folder_ids=candidates, db=db, user_id=user_id,
+                    )
+                    if content.get('success'):
+                        pct_c = content.get('compliance_percentage', 0) or 0
+                        folder_result["content"] = {
+                            "compliance_percentage": pct_c, "status": _compliance_status(pct_c),
+                            "total_requirements": content.get('total_requirements', 0),
+                            "present_count": content.get('present_count', 0),
+                            "absent_count": content.get('absent_count', 0),
+                            "results": content.get('results', []),
+                            **({"groups": content.get('groups', []), "is_lab": True} if is_lab else {}),
+                        }
+                        folder_result["compliance_percentage"] = round(pct_c, 1)
+                        folder_result["status"] = _compliance_status(pct_c)
+                        total_content_compliance += pct_c
+                        content_count += 1
+                        _save_record(db, folder_id=folder['id'], folder_name=folder['name'],
+                                     course_name=course_name, validation_type="content",
+                                     section_name=content.get('section'),
+                                     compliance_percentage=pct_c,
+                                     total_items=content.get('total_requirements', 0) or 0,
+                                     present_items=content.get('present_count', 0) or 0,
+                                     missing_items=content.get('absent_count', 0) or 0,
+                                     status=_compliance_status(pct_c),
+                                     results_json={k: v for k, v in content.items() if k != 'results'},
+                                     documents_analyzed=content.get('documents_analyzed', []),
+                                     excel_updated=content.get('excel_updated', False),
+                                     validated_by=user_id)
+                    else:
+                        folder_result["content"] = {"error": content.get('error', 'Sin datos')}
+            except Exception as err:
+                print(f"  ❌ Error en {folder['name']}: {err}")
+                folder_result["error"] = str(err)
+                failed += 1
+
+            if is_lab:
+                lab_results.append(folder_result)
+            else:
+                weeks_results.append(folder_result)
+
+        avg_compliance = (round(total_content_compliance / content_count, 1)
+                          if content_count > 0 else
+                          round(course_structure['compliance_percentage'], 1) if course_structure else 0.0)
+
+        result = {
+            "success": True, "course_name": course_name,
+            "course_folder_id": course_folder_id, "validation_type": validation_type,
+            "total_weeks": len(semana_folders), "total_lab_folders": len(lab_folders),
+            "completed": total_folders - failed, "failed": failed,
+            "average_compliance": avg_compliance, "overall_status": _compliance_status(avg_compliance),
+            "course_structure": course_structure, "weeks": weeks_results, "lab_folders": lab_results,
+        }
+        _update_job(job_id, status="completed", result_json=result,
+                    progress=f"Curso completo — {avg_compliance}% de cumplimiento promedio")
+    except Exception as e:
+        print(f"❌ Error en background job curso {job_id}: {e}")
+        _update_job(job_id, status="failed", error=str(e), progress="Error en la validación")
+    finally:
+        db.close()
+
+
 @router.post("/validate-course")
 async def validate_course_batch(
     request: ValidateCourseRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Validar todas las carpetas Semana_X de un curso de una sola vez.
-    Tipo: 'structure' | 'content' | 'both'
-    """
+    """Inicia la validación de curso completo en background. Retorna job_id."""
     is_admin = current_user.role == UserRole.ADMIN
     perms = getattr(current_user, "permissions", None) or {}
     can_validate = perms.get("can_validate_structure", False) or perms.get("can_validate_content", False)
@@ -216,237 +463,18 @@ async def validate_course_batch(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="No tienes permiso para validar cursos")
 
-    try:
-        from app.services.document_content_validation_service import document_content_validation_service
-
-        # 1. Listar subcarpetas del curso
-        all_subfolders = drive_service.list_folders(request.course_folder_id)
-        semana_folders = [f for f in all_subfolders if _is_semana_folder(f['name'])]
-
-        # Ordenar por número de semana
-        def semana_num(f):
-            m = re.search(r'\d+', f['name'])
-            return int(m.group()) if m else 0
-        semana_folders.sort(key=semana_num)
-
-        # Carpetas de laboratorio
-        lab_folders = [f for f in all_subfolders if _is_lab_folder(f['name'])]
-        lab_folders.sort(key=lambda f: f['name'])
-
-        if not semana_folders and not lab_folders:
-            return {
-                "success": False,
-                "error": "No se encontraron carpetas Semana_X ni carpetas de laboratorio en el curso",
-                "course_name": request.course_name,
-                "total_weeks": 0
-            }
-
-        print(f"\n📦 Validación en lote: '{request.course_name}' — {len(semana_folders)} semanas, {len(lab_folders)} carpetas lab")
-
-        # ── Estructura: se valida UNA VEZ en la carpeta raíz del curso ────────
-        # El Excel "Matriz observaciones estructura.xlsx" vive en el root del
-        # curso, NO en cada Semana_X. Validarlo por semana siempre fallaría.
-        course_structure = None
-        if request.validation_type in ("structure", "both"):
-            print(f"  📋 Validando estructura del curso en carpeta raíz...")
-            struct = structure_validation_service.validate_folder_structure(request.course_folder_id)
-            pct_s = struct.get('compliance_percentage', 0) or 0
-            course_structure = {
-                "success":              struct.get('success', False),
-                "compliance_percentage": pct_s,
-                "status":               _compliance_status(pct_s),
-                "total_required":       struct.get('total_required', 0),
-                "total_found":          struct.get('total_found', 0),
-                "total_missing":        struct.get('total_missing', 0),
-                "missing_documents":    [d.get('name') for d in (struct.get('missing_documents') or [])],
-                "error":                struct.get('error'),
-            }
-            _save_record(
-                db,
-                folder_id    = request.course_folder_id,
-                folder_name  = request.course_name,
-                course_name  = request.course_name,
-                validation_type = "structure",
-                compliance_percentage = pct_s,
-                total_items   = struct.get('total_required', 0) or 0,
-                present_items = struct.get('total_found', 0) or 0,
-                missing_items = struct.get('total_missing', 0) or 0,
-                status        = _compliance_status(pct_s),
-                results_json  = struct,
-                validated_by  = current_user.id,
-            )
-            print(f"  ✅ Estructura del curso: {pct_s}%")
-
-        # ── Contenido: se valida por cada Semana_X ───────────────────────────
-        weeks_results = []
-        total_content_compliance = 0.0
-        content_weeks_count = 0
-        failed = 0
-
-        for folder in semana_folders:
-            week_result = {
-                "folder_id":             folder['id'],
-                "folder_name":           folder['name'],
-                "content":               None,
-                "compliance_percentage": 0.0,
-                "status":                "unknown",
-                "error":                 None,
-            }
-
-            try:
-                if request.validation_type in ("content", "both"):
-                    # Buscar la Matriz en el curso y también en los ancestros enviados por el frontend
-                    candidates = [request.course_folder_id]
-                    for fid in request.candidate_folder_ids:
-                        if fid not in candidates:
-                            candidates.append(fid)
-                    content = document_content_validation_service.validate_folder_content(
-                        semana_folder_id     = folder['id'],
-                        semana_folder_name   = folder['name'],
-                        candidate_folder_ids = candidates,
-                        db                   = db
-                    )
-                    if content.get('success'):
-                        pct_c = content.get('compliance_percentage', 0) or 0
-                        week_result["content"] = {
-                            "compliance_percentage": pct_c,
-                            "status":               _compliance_status(pct_c),
-                            "total_requirements":   content.get('total_requirements', 0),
-                            "present_count":        content.get('present_count', 0),
-                            "absent_count":         content.get('absent_count', 0),
-                            "results":              content.get('results', []),
-                        }
-                        week_result["compliance_percentage"] = round(pct_c, 1)
-                        week_result["status"] = _compliance_status(pct_c)
-                        total_content_compliance += pct_c
-                        content_weeks_count += 1
-                        _save_record(
-                            db,
-                            folder_id    = folder['id'],
-                            folder_name  = folder['name'],
-                            course_name  = request.course_name,
-                            validation_type = "content",
-                            section_name = content.get('section'),
-                            compliance_percentage = pct_c,
-                            total_items   = content.get('total_requirements', 0) or 0,
-                            present_items = content.get('present_count', 0) or 0,
-                            missing_items = content.get('absent_count', 0) or 0,
-                            status        = _compliance_status(pct_c),
-                            results_json  = {k: v for k, v in content.items() if k != 'results'},
-                            documents_analyzed = content.get('documents_analyzed', []),
-                            excel_updated = content.get('excel_updated', False),
-                            validated_by  = current_user.id,
-                        )
-                    else:
-                        week_result["content"] = {"error": content.get('error', 'Sin datos')}
-
-            except Exception as week_err:
-                print(f"  ❌ Error en {folder['name']}: {week_err}")
-                week_result["error"] = str(week_err)
-                failed += 1
-
-            weeks_results.append(week_result)
-            print(f"  {'✅' if not week_result['error'] else '⚠️ '} {folder['name']}: {week_result['compliance_percentage']}%")
-
-        completed = len(semana_folders) - failed
-
-        # ── Carpetas Lab: Proyectos, Practicas, Tareas ────────────────────────
-        lab_results = []
-        lab_failed  = 0
-
-        if request.validation_type in ("content", "both") and lab_folders:
-            print(f"\n🔬 Validando {len(lab_folders)} carpeta(s) de laboratorio...")
-            candidates = [request.course_folder_id]
-            for fid in request.candidate_folder_ids:
-                if fid not in candidates:
-                    candidates.append(fid)
-
-            for folder in lab_folders:
-                lab_result = {
-                    "folder_id":             folder['id'],
-                    "folder_name":           folder['name'],
-                    "folder_type":           "lab",
-                    "content":               None,
-                    "compliance_percentage": 0.0,
-                    "status":                "unknown",
-                    "error":                 None,
-                }
-                try:
-                    content = document_content_validation_service.validate_folder_content(
-                        semana_folder_id     = folder['id'],
-                        semana_folder_name   = folder['name'],
-                        candidate_folder_ids = candidates,
-                        db                   = db
-                    )
-                    if content.get('success'):
-                        pct_c = content.get('compliance_percentage', 0) or 0
-                        lab_result["content"] = {
-                            "compliance_percentage": pct_c,
-                            "status":               _compliance_status(pct_c),
-                            "total_requirements":   content.get('total_requirements', 0),
-                            "present_count":        content.get('present_count', 0),
-                            "absent_count":         content.get('absent_count', 0),
-                            "groups":               content.get('groups', []),
-                            "is_lab":               True,
-                        }
-                        lab_result["compliance_percentage"] = round(pct_c, 1)
-                        lab_result["status"] = _compliance_status(pct_c)
-                        total_content_compliance += pct_c
-                        content_weeks_count += 1
-                        _save_record(
-                            db,
-                            folder_id    = folder['id'],
-                            folder_name  = folder['name'],
-                            course_name  = request.course_name,
-                            validation_type = "content",
-                            section_name = content.get('section'),
-                            compliance_percentage = pct_c,
-                            total_items   = content.get('total_requirements', 0) or 0,
-                            present_items = content.get('present_count', 0) or 0,
-                            missing_items = content.get('absent_count', 0) or 0,
-                            status        = _compliance_status(pct_c),
-                            results_json  = {k: v for k, v in content.items() if k != 'results'},
-                            documents_analyzed = content.get('documents_analyzed', []),
-                            validated_by  = current_user.id,
-                        )
-                    else:
-                        lab_result["content"] = {"error": content.get('error', 'Sin datos')}
-                except Exception as lab_err:
-                    print(f"  ❌ Error en {folder['name']}: {lab_err}")
-                    lab_result["error"] = str(lab_err)
-                    lab_failed += 1
-
-                lab_results.append(lab_result)
-                print(f"  {'✅' if not lab_result['error'] else '⚠️ '} {folder['name']}: {lab_result['compliance_percentage']}%")
-
-        # Promedio global: si hay contenido, usar ese; si solo estructura, usar esa
-        if content_weeks_count > 0:
-            avg_compliance = round(total_content_compliance / content_weeks_count, 1)
-        elif course_structure:
-            avg_compliance = round(course_structure['compliance_percentage'], 1)
-        else:
-            avg_compliance = 0.0
-
-        return {
-            "success":            True,
-            "course_name":        request.course_name,
-            "course_folder_id":   request.course_folder_id,
-            "validation_type":    request.validation_type,
-            "total_weeks":        len(semana_folders),
-            "total_lab_folders":  len(lab_folders),
-            "completed":          completed,
-            "failed":             failed + lab_failed,
-            "average_compliance": avg_compliance,
-            "overall_status":     _compliance_status(avg_compliance),
-            "course_structure":   course_structure,
-            "weeks":              weeks_results,
-            "lab_folders":        lab_results,
-        }
-
-    except Exception as e:
-        print(f"❌ Error en validación en lote: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f"Error en validación de curso: {str(e)}")
+    job = _create_job(db, current_user.id, "course")
+    background_tasks.add_task(
+        _run_course_validation,
+        job_id               = job.id,
+        course_folder_id     = request.course_folder_id,
+        course_name          = request.course_name,
+        validation_type      = request.validation_type,
+        candidate_folder_ids = request.candidate_folder_ids or [],
+        user_id              = current_user.id,
+    )
+    return {"job_id": str(job.id), "status": "pending",
+            "message": f"Validación de curso '{request.course_name}' iniciada"}
 
 
 # ─── History ─────────────────────────────────────────────────────────────────
@@ -483,6 +511,13 @@ async def get_validation_history(
     total = q.count()
     records = q.order_by(desc(ValidationRecord.created_at)).offset(offset).limit(limit).all()
 
+    # Cargar nombres de validadores en un solo query
+    validator_ids = list({r.validated_by for r in records if r.validated_by})
+    validators: Dict[Any, str] = {}
+    if validator_ids:
+        users = db.query(User.id, User.nombre, User.apellidos).filter(User.id.in_(validator_ids)).all()
+        validators = {str(u.id): f"{u.nombre} {u.apellidos}".strip() for u in users}
+
     return {
         "total": total,
         "offset": offset,
@@ -503,6 +538,7 @@ async def get_validation_history(
                 "documents_analyzed":     r.documents_analyzed,
                 "excel_updated":          r.excel_updated,
                 "created_at":             r.created_at.isoformat() if r.created_at else None,
+                "validated_by_name":      validators.get(str(r.validated_by), "—"),
             }
             for r in records
         ]
