@@ -13,7 +13,7 @@ from sqlalchemy import func
 from app.database import get_db
 from app.models.user import User
 from app.models.validation_record import ValidationRecord
-from app.schemas.user import UserCreate, UserResponse, UserLogin, Token
+from app.schemas.user import UserCreate, UserResponse, UserLogin, Token, PasswordReset
 from app.utils.auth import (
     get_password_hash,
     verify_password,
@@ -520,3 +520,67 @@ async def remove_my_api_key(
                target_type="api_key", target_id=provider,
                details={"provider": provider, "key_count": len(keys)})
     return {"message": f"Key de {provider} eliminada", "key_count": len(keys)}
+
+
+# ─── Password Reset (Admin Only) ──────────────────────────────────────────────
+
+@router.post("/users/{user_id}/reset-password")
+async def reset_user_password(
+    user_id: uuid.UUID,
+    request: PasswordReset,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Resetear la contraseña de un usuario (solo admin).
+    Solo los administradores pueden cambiar la contraseña de otros usuarios.
+    """
+    # Verificar que el usuario actual es admin
+    if current_user.role.value != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo administradores pueden resetear contraseñas"
+        )
+
+    # Buscar el usuario cuya contraseña será reseteada
+    target_user = db.query(User).filter(User.id == user_id).first()
+    
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+
+    # No permitir que un admin reseteé su propia contraseña por este endpoint
+    # (se debe usar un endpoint diferente para cambio de contraseña propio)
+    if target_user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes resetear tu propia contraseña usando este endpoint. Usa tu perfil para cambiarla."
+        )
+
+    # Actualizar contraseña
+    target_user.password_hash = get_password_hash(request.new_password)
+    db.commit()
+    db.refresh(target_user)
+
+    # Registrar acción en audit log
+    log_action(
+        db, 
+        "user.password_reset", 
+        user_id=current_user.id, 
+        user_email=current_user.correo,
+        target_type="user", 
+        target_id=str(target_user.id),
+        details={
+            "target_email": target_user.correo, 
+            "target_name": f"{target_user.nombre} {target_user.apellidos}"
+        }
+    )
+
+    return {
+        "success": True,
+        "message": f"Contraseña reseteada para {target_user.nombre} {target_user.apellidos}",
+        "user_id": str(target_user.id),
+        "user_email": target_user.correo
+    }

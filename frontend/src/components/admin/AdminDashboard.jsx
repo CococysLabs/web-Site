@@ -276,6 +276,15 @@ const AdminDashboard = () => {
     permissions: { can_view_drive: false, can_analyze: false, can_validate_structure: false, can_validate_content: false }
   });
 
+  // Reset password modal state
+  const [resetPasswordModal, setResetPasswordModal] = useState(null); // user object
+  const [resetPasswordForm, setResetPasswordForm] = useState({
+    new_password: '',
+    confirm_password: ''
+  });
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const openUserConfigModal = (u) => {
     setUserConfigModal(u);
     setUserConfigForm({
@@ -299,6 +308,48 @@ const AdminDashboard = () => {
       loadAllUsers();
     } catch (err) {
       showToast('error', err.response?.data?.detail || 'Error al guardar');
+    }
+  };
+
+  const openResetPasswordModal = (u) => {
+    setResetPasswordModal(u);
+    setResetPasswordForm({ new_password: '', confirm_password: '' });
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  const handleResetPassword = async () => {
+    try {
+      if (resetPasswordForm.new_password !== resetPasswordForm.confirm_password) {
+        showToast('error', 'Las contraseñas no coinciden');
+        return;
+      }
+      if (resetPasswordForm.new_password.length < 8) {
+        showToast('error', 'La contraseña debe tener al menos 8 caracteres');
+        return;
+      }
+      if (!/[A-Z]/.test(resetPasswordForm.new_password)) {
+        showToast('error', 'La contraseña debe contener al menos una mayúscula');
+        return;
+      }
+      if (!/[a-z]/.test(resetPasswordForm.new_password)) {
+        showToast('error', 'La contraseña debe contener al menos una minúscula');
+        return;
+      }
+      if (!/[0-9]/.test(resetPasswordForm.new_password)) {
+        showToast('error', 'La contraseña debe contener al menos un número');
+        return;
+      }
+
+      await api.post(`/api/auth/users/${resetPasswordModal.id}/reset-password`, {
+        new_password: resetPasswordForm.new_password,
+        confirm_password: resetPasswordForm.confirm_password
+      });
+      showToast('success', `Contraseña reseteada para ${resetPasswordModal.nombre} ${resetPasswordModal.apellidos}`);
+      setResetPasswordModal(null);
+      loadAllUsers();
+    } catch (err) {
+      showToast('error', err.response?.data?.detail || 'Error al resetear contraseña');
     }
   };
 
@@ -444,6 +495,98 @@ const AdminDashboard = () => {
             <div className="confirm-actions">
               <button className="confirm-cancel" onClick={() => setConfirmModal(null)}>Cancelar</button>
               <button className="confirm-ok" onClick={confirmModal.onConfirm}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset password modal */}
+      {resetPasswordModal && (
+        <div className="admin-modal-overlay" onClick={() => setResetPasswordModal(null)}>
+          <div className="admin-confirm-modal user-config-modal" onClick={e => e.stopPropagation()}>
+            <div className="user-config-header">
+              <div className="user-table-avatar">
+                {resetPasswordModal.nombre?.[0]}{resetPasswordModal.apellidos?.[0]}
+              </div>
+              <div>
+                <p className="user-config-name">{resetPasswordModal.nombre} {resetPasswordModal.apellidos}</p>
+                <p className="user-config-email">{resetPasswordModal.correo}</p>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Nueva Contraseña
+              </label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={resetPasswordForm.new_password}
+                  onChange={e => setResetPasswordForm({ ...resetPasswordForm, new_password: e.target.value })}
+                  className="settings-input"
+                  placeholder="Mínimo 8 caracteres con mayúscula, minúscula y número"
+                  style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0',
+                    color: 'var(--text-secondary)'
+                  }}
+                  title={showNewPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showNewPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Confirmar Contraseña
+              </label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={resetPasswordForm.confirm_password}
+                  onChange={e => setResetPasswordForm({ ...resetPasswordForm, confirm_password: e.target.value })}
+                  className="settings-input"
+                  placeholder="Confirma la contraseña"
+                  style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '1.2rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0',
+                    color: 'var(--text-secondary)'
+                  }}
+                  title={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
+            </div>
+
+            <div className="confirm-actions">
+              <button className="confirm-cancel" onClick={() => setResetPasswordModal(null)}>Cancelar</button>
+              <button className="confirm-ok" onClick={handleResetPassword} style={{ background: '#3b82f6', borderColor: '#3b82f6' }}>Resetear Contraseña</button>
             </div>
           </div>
         </div>
@@ -1589,6 +1732,13 @@ const AdminDashboard = () => {
                                 title="Configurar usuario (Drive + permisos)"
                               >
                                 🏫
+                              </button>
+                              <button
+                                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, background: 'rgba(59,130,246,0.15)', color: '#3b82f6' }}
+                                onClick={() => openResetPasswordModal(u)}
+                                title="Resetear contraseña"
+                              >
+                                🔑
                               </button>
                               <button
                                 style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, background: u.is_active ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)', color: u.is_active ? '#ef4444' : '#10b981' }}

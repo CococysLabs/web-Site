@@ -78,6 +78,32 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class PasswordReset(BaseModel):
+    """Schema para resetear contraseña de usuario (solo admin)"""
+    new_password: str = Field(..., min_length=8, max_length=100)
+    confirm_password: str = Field(..., min_length=8, max_length=100)
+
+    @field_validator('confirm_password')
+    @classmethod
+    def passwords_match(cls, v, info):
+        if 'new_password' in info.data and v != info.data['new_password']:
+            raise ValueError('Las contraseñas no coinciden')
+        return v
+
+    @field_validator('new_password')
+    @classmethod
+    def password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError('La contraseña debe tener al menos 8 caracteres')
+        if not any(c.isupper() for c in v):
+            raise ValueError('La contraseña debe contener al menos una mayúscula')
+        if not any(c.islower() for c in v):
+            raise ValueError('La contraseña debe contener al menos una minúscula')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('La contraseña debe contener al menos un número')
+        return v
+
+
 class TokenData(BaseModel):
     """Schema para datos del token"""
     user_id: Optional[str] = None
