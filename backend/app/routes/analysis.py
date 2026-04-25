@@ -122,7 +122,10 @@ async def analyze_drive_file(
 
         # Analizar el documento completo
         print(f"🔍 Analizando: {file_name} (effective mime: {effective_mime})")
-        analysis_result = analysis_service.analyze_complete(file_content, effective_mime)
+        analysis_result = analysis_service.analyze_complete(
+            file_content, effective_mime,
+            db=db, user_id=current_user.id
+        )
         
         # Guardar o actualizar en la base de datos
         existing_doc = db.query(Document).filter(

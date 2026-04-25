@@ -200,7 +200,9 @@ async def analyze_document(
         # Analizar documento
         analysis_result = analysis_service.analyze_document_structure(
             file_content,
-            required_sections
+            required_sections,
+            db=db,
+            user_id=current_user.id,
         )
         
         # Actualizar documento con resultados
