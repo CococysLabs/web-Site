@@ -238,12 +238,16 @@ class DocumentContentValidationService:
         """
         if db is None:
             return
+        # Limpiar exhausted_keys al inicio de cada validación para que las keys
+        # cargadas desde BD siempre se intenten — el estado de 429 de una sesión
+        # anterior no debe bloquear la siguiente validación.
+        self._exhausted_keys.clear()
         try:
             from app.services.settings_service import settings_service
             from app.models.user import User
 
             # Leer keys personales del usuario
-            user_personal: dict = {}
+            user_personal = {}
             if user_id is not None:
                 try:
                     u = db.query(User).filter(User.id == user_id).first()
@@ -251,25 +255,26 @@ class DocumentContentValidationService:
                 except Exception:
                     pass
 
-            def _prefer_personal(provider: str, system_keys: list, env_key: str | None) -> list:
-                """
-                Si el usuario tiene keys personales para este proveedor → usarlas en exclusiva.
-                Si no → mezclar env + sistema (comportamiento anterior).
-                """
+            def _prefer_personal(provider, system_keys, env_key):
                 personal = [k.strip() for k in user_personal.get(provider, []) if k.strip()]
                 if personal:
                     print(f"    🔑 Usando {len(personal)} key(s) personal(es) de usuario para {provider}")
                     return personal
-                merged = list(env_key and [env_key] or [])
+                merged = [env_key] if env_key else []
                 for k in system_keys:
                     k = k.strip()
                     if k and k not in merged:
                         merged.append(k)
                 return merged
 
+            # ── Guardar env keys originales para merge (no usar self.* que ya fue mutado)
+            env_gemini    = self._default_api_keys[0] if self._default_api_keys else None
+            env_deepseek  = getattr(settings, 'DEEPSEEK_API_KEY', '') or ''
+            env_groq      = getattr(settings, 'GROQ_API_KEY', '') or ''
+            env_openrouter = getattr(settings, 'OPENROUTER_API_KEY', '') or ''
+
             # ── Gemini ──────────────────────────────────────────────────────────
             db_gemini = settings_service.get_json("gemini_api_keys", db, default=[]) or []
-            env_gemini = self._default_api_keys[0] if self._default_api_keys else None
             merged_gemini = _prefer_personal("gemini", db_gemini, env_gemini)
             self._api_keys = merged_gemini
             self.enabled = len(merged_gemini) > 0
@@ -279,21 +284,30 @@ class DocumentContentValidationService:
 
             # ── DeepSeek ────────────────────────────────────────────────────────
             db_deepseek = settings_service.get_json("deepseek_api_keys", db, default=[]) or []
-            merged_deepseek = _prefer_personal("deepseek", db_deepseek, self._deepseek_key)
+            merged_deepseek = _prefer_personal("deepseek", db_deepseek, env_deepseek or None)
             self._deepseek_key = merged_deepseek[0] if merged_deepseek else None
 
             # ── Groq ────────────────────────────────────────────────────────────
             db_groq = settings_service.get_json("groq_api_keys", db, default=[]) or []
-            merged_groq = _prefer_personal("groq", db_groq, self._groq_key)
+            merged_groq = _prefer_personal("groq", db_groq, env_groq or None)
             self._groq_key = merged_groq[0] if merged_groq else None
 
             # ── OpenRouter ──────────────────────────────────────────────────────
             db_openrouter = settings_service.get_json("openrouter_api_keys", db, default=[]) or []
-            merged_openrouter = _prefer_personal("openrouter", db_openrouter, self._openrouter_key)
+            merged_openrouter = _prefer_personal("openrouter", db_openrouter, env_openrouter or None)
             self._openrouter_key = merged_openrouter[0] if merged_openrouter else None
 
+            print(
+                f"  🔑 Keys cargadas — Gemini:{len(merged_gemini)} "
+                f"DeepSeek:{'✓' if self._deepseek_key else '✗'} "
+                f"Groq:{'✓' if self._groq_key else '✗'} "
+                f"OpenRouter:{'✓' if self._openrouter_key else '✗'}"
+            )
+
         except Exception as e:
+            import traceback
             print(f"  ⚠️  Error recargando keys desde BD: {e}")
+            print(traceback.format_exc())
 
     def _get_available_keys(self) -> List[str]:
         """Retorna las claves Gemini que aún no han sido marcadas como agotadas."""
@@ -1455,7 +1469,8 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         Fallback cuando Gemini no está disponible o falla.
         Búsqueda inteligente de palabras clave con matching parcial (stem-like).
         """
-        norm_req = self._normalize(requirement_text)
+        clean_requirement = str(requirement_text).strip().strip('[]')
+        norm_req = self._normalize(clean_requirement)
         norm_doc = self._normalize(doc_text)
 
         # Palabras significativas (≥4 chars), sin stopwords básicas
@@ -1465,7 +1480,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         if not keywords:
             return {
                 'presente': 'No',
-                'observacion': f'Sin IA (quota agotada): el requisito "{requirement_text}" no tiene términos evaluables',
+                'observacion': f'Sin IA: no se pudieron evaluar términos en "{clean_requirement}"',
                 'confidence': 0.0,
             }
 
@@ -1482,12 +1497,12 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         ratio = len(found) / len(keywords)
         presente = 'Si' if ratio >= 0.35 else 'No'
 
-        found_str   = ', '.join(found[:4])   or '—'
-        missing_str = ', '.join(missing[:4]) or '—'
+        found_str   = ', '.join(found[:4])   or 'ninguno'
+        missing_str = ', '.join(missing[:4]) or 'ninguno'
         obs = (
-            f'Sin IA (quota agotada): encontrado [{found_str}]'
-            + (f' | faltante [{missing_str}]' if missing else '')
-            + f' ({len(found)}/{len(keywords)} términos)'
+            f'Sin IA: coincidencias detectadas: {found_str}'
+            + (f'; faltantes: {missing_str}' if missing else '')
+            + f'. Cobertura {len(found)}/{len(keywords)} términos'
         )
         # Confianza baja — es solo keyword matching, no IA semántica
         return {'presente': presente, 'observacion': obs, 'confidence': round(ratio * 0.6, 3)}
@@ -1540,7 +1555,10 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         Retorna lista ordenada de {'presente', 'observacion'} por parámetro.
         Si Gemini falla, aplica fallback keyword por cada param.
         """
-        if not use_gemini and not self._deepseek_key:
+        has_any_provider = (use_gemini or self._deepseek_key or
+                            self._groq_key or self._openrouter_key)
+        if not has_any_provider:
+            print("  ⚠️  Sin proveedores de IA disponibles → keyword fallback")
             return [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
 
         # Truncar texto al máximo razonable para un solo prompt
