@@ -354,6 +354,8 @@ async def get_all_users(
                 "is_approved": u.is_approved,
                 "is_teacher": getattr(u, "is_teacher", False) or False,
                 "drive_folder_id": getattr(u, "drive_folder_id", None),
+                "drive_folder_name": getattr(u, "drive_folder_name", None),
+                "permissions": getattr(u, "permissions", None) or {},
                 "created_at": u.created_at.isoformat() if u.created_at else None,
                 "activity": {
                     "validation_count": activity_map[str(u.id)].count if str(u.id) in activity_map else 0,

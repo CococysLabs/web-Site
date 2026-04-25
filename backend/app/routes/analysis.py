@@ -17,6 +17,40 @@ from app.utils.auth import get_current_user
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
 
+def _ensure_analysis_permission(current_user: User):
+    is_admin = current_user.role == UserRole.ADMIN
+    perms = getattr(current_user, "permissions", None) or {}
+    if not is_admin and not perms.get("can_analyze", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para analizar documentos"
+        )
+
+
+def _ensure_folder_scope_for_user(current_user: User, folder_id: Optional[str]):
+    if current_user.role == UserRole.ADMIN:
+        return
+
+    if not folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="folder_id es requerido para usuarios no administradores"
+        )
+
+    user_root_folder_id = getattr(current_user, "drive_folder_id", None)
+    if not user_root_folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes una carpeta de Drive asignada"
+        )
+
+    if not drive_service.is_descendant_or_same(folder_id, user_root_folder_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para analizar archivos fuera de tu carpeta asignada"
+        )
+
+
 # Schemas
 class AnalyzeFileRequest(BaseModel):
     file_id: str
@@ -44,11 +78,13 @@ async def analyze_drive_file(
     2. Estructura (secciones, tabla de contenidos, etc.)
     3. Contexto (resumen, temas, idioma, etc.)
     """
-    # Verificar permisos (solo admin)
-    if current_user.role != UserRole.ADMIN:
+    _ensure_analysis_permission(current_user)
+    _ensure_folder_scope_for_user(current_user, request.folder_id)
+
+    if current_user.role != UserRole.ADMIN and not drive_service.file_belongs_to_folder(request.file_id, request.folder_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo administradores pueden analizar documentos"
+            detail="El archivo no pertenece a la carpeta indicada"
         )
     
     try:

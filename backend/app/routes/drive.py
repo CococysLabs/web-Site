@@ -15,6 +15,25 @@ from app.utils.auth import get_current_user
 router = APIRouter(prefix="/api/drive", tags=["drive"])
 
 
+def _ensure_user_folder_scope(current_user: User, folder_id: str):
+    """Restringe a estudiantes a su carpeta asignada y subcarpetas."""
+    if current_user.role == UserRole.ADMIN:
+        return
+
+    user_root_folder_id = getattr(current_user, "drive_folder_id", None)
+    if not user_root_folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes una carpeta de Drive asignada"
+        )
+
+    if not drive_service.is_descendant_or_same(folder_id, user_root_folder_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para acceder a esta carpeta"
+        )
+
+
 # Schemas
 class FolderResponse(BaseModel):
     id: str
@@ -138,6 +157,8 @@ async def list_contents(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes permiso para explorar carpetas de Drive"
         )
+
+    _ensure_user_folder_scope(current_user, folder_id)
 
     # Obtener carpetas y archivos
     folders = drive_service.list_folders(folder_id)

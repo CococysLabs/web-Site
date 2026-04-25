@@ -33,6 +33,18 @@ const Dashboard = () => {
   const isTeacher = user?.is_teacher;
   const canViewDrive = user?.permissions?.can_view_drive && user?.drive_folder_id;
 
+  const withRetry = async (requestFn, retries = 1) => {
+    try {
+      return await requestFn();
+    } catch (err) {
+      const isTransientNetworkError = err?.code === 'ERR_NETWORK' || err?.message === 'Network Error';
+      if (retries > 0 && isTransientNetworkError) {
+        return await requestFn();
+      }
+      throw err;
+    }
+  };
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     if (user?.is_approved) {
@@ -45,10 +57,13 @@ const Dashboard = () => {
   const loadTeacherSummary = async () => {
     try {
       setTeacherLoading(true);
-      const res = await api.get('/api/validation/teacher-summary');
+      const res = await withRetry(() => api.get('/api/validation/teacher-summary'));
       setTeacherSummary(res.data);
     } catch (err) {
-      console.error('Error loading teacher summary:', err);
+      // Evita ruido en consola por cortes de red breves durante despliegues/restarts.
+      if (err?.response?.status !== 401) {
+        setTeacherSummary({ has_folder: false, records: [], total: 0, avg_compliance: 0.0, by_week: [] });
+      }
     } finally {
       setTeacherLoading(false);
     }
@@ -84,9 +99,11 @@ const Dashboard = () => {
 
   const loadPersonalKeys = async () => {
     try {
-      const res = await api.get('/api/auth/me/api-keys');
+      const res = await withRetry(() => api.get('/api/auth/me/api-keys'));
       setPersonalKeys(res.data);
-    } catch { /* ignore */ }
+    } catch {
+      setPersonalKeys({ gemini: { key_count: 0, keys: [] }, deepseek: { key_count: 0, keys: [] }, groq: { key_count: 0, keys: [] }, openrouter: { key_count: 0, keys: [] } });
+    }
   };
 
   const addPersonalKey = async (provider) => {
@@ -330,7 +347,8 @@ const Dashboard = () => {
                   <DocumentAnalyzer
                     folderId={user.drive_folder_id}
                     folderName={user.drive_folder_name || 'Mi Carpeta'}
-                    userPermissions={user.permissions}
+                    userPermissions={user?.permissions || {}}
+                    isAdmin={false}
                   />
                 </div>
               )}

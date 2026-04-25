@@ -112,6 +112,7 @@ class DocumentContentValidationService:
         self.model = None
         self.enabled = False
         # Multi-key rotation: lista de todas las claves Gemini disponibles
+        self._default_api_keys: List[str] = []
         self._api_keys: List[str] = []
         # Claves que ya recibieron 429 en esta sesión (se resetean al reiniciar)
         self._exhausted_keys: set = set()
@@ -141,7 +142,8 @@ class DocumentContentValidationService:
             if k and k not in keys:
                 keys.append(k)
 
-        self._api_keys = keys
+        self._default_api_keys = list(keys)
+        self._api_keys = list(keys)
         self.enabled = len(keys) > 0
 
         if self.enabled:
@@ -267,7 +269,7 @@ class DocumentContentValidationService:
 
             # ── Gemini ──────────────────────────────────────────────────────────
             db_gemini = settings_service.get_json("gemini_api_keys", db, default=[]) or []
-            env_gemini = self._api_keys[0] if self._api_keys else None
+            env_gemini = self._default_api_keys[0] if self._default_api_keys else None
             merged_gemini = _prefer_personal("gemini", db_gemini, env_gemini)
             self._api_keys = merged_gemini
             self.enabled = len(merged_gemini) > 0
@@ -2169,7 +2171,6 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
             if db is not None:
                 try:
                     from app.services.settings_service import settings_service
-                    use_gemini        = self.enabled and settings_service.get_bool("gemini_enabled", db)
                     active_model_name = settings_service.get("gemini_model", db) or GEMINI_MODEL
                     self._req_use_deepseek   = settings_service.get_bool("deepseek_enabled", db)
                     self._req_use_groq       = settings_service.get_bool("groq_enabled", db)
@@ -2191,6 +2192,13 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
 
             # 0c. Recargar API keys desde BD (prioriza keys personales del usuario)
             self._reload_keys_from_db(db, user_id=user_id)
+
+                # Gemini queda habilitado si existe al menos una key disponible y
+                # la configuración del sistema no lo ha desactivado.
+            if db is not None:
+                use_gemini = bool(self._api_keys) and settings_service.get_bool("gemini_enabled", db)
+            else:
+                use_gemini = bool(self._api_keys)
 
             # 1. Derivar sección
             section_name = self._derive_section_from_folder(semana_folder_name)

@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import './DocumentAnalyzer.css';
 
-// userPermissions: null = admin (todo habilitado), objeto = permisos del estudiante
-const DocumentAnalyzer = ({ folderId, folderName, userPermissions = null }) => {
-  // Si userPermissions es null → admin (todo visible)
-  const canAnalyze          = userPermissions === null || userPermissions?.can_analyze !== false;
-  const canValidateStructure = userPermissions === null || userPermissions?.can_validate_structure !== false;
-  const canValidateContent   = userPermissions === null || userPermissions?.can_validate_content !== false;
+// isAdmin=true habilita todas las acciones; para usuarios normales, los permisos son estrictos.
+const DocumentAnalyzer = ({ folderId, folderName, userPermissions = {}, isAdmin = false }) => {
+  const isAdminView = Boolean(isAdmin);
+  const canAnalyze = isAdminView || userPermissions?.can_analyze === true;
+  const canValidateStructure = isAdminView || userPermissions?.can_validate_structure === true;
+  const canValidateContent = isAdminView || userPermissions?.can_validate_content === true;
   // Curso completo requiere ambas validaciones
   const canValidateCourse    = canValidateStructure && canValidateContent;
   const [folders, setFolders] = useState([]);

@@ -300,7 +300,9 @@ const AdminDashboard = () => {
     });
   };
 
-  const saveUserConfig = async () => {
+  const saveUserConfig = async (event) => {
+    if (event?.preventDefault) event.preventDefault();
+    if (event?.stopPropagation) event.stopPropagation();
     try {
       await api.patch(`/api/auth/users/${userConfigModal.id}/update-config`, userConfigForm);
       showToast('success', 'Configuración del usuario guardada');
@@ -475,8 +477,8 @@ const AdminDashboard = () => {
             </div>
 
             <div className="confirm-actions">
-              <button className="confirm-cancel" onClick={() => setUserConfigModal(null)}>Cancelar</button>
-              <button className="confirm-ok-orange" onClick={saveUserConfig}>Guardar</button>
+              <button type="button" className="confirm-cancel" onClick={() => setUserConfigModal(null)}>Cancelar</button>
+              <button type="button" className="confirm-ok-orange" onClick={saveUserConfig}>Guardar</button>
             </div>
           </div>
         </div>
@@ -872,6 +874,7 @@ const AdminDashboard = () => {
                 <DocumentAnalyzer 
                   folderId={selectedFolder.id}
                   folderName={selectedFolder.name}
+                  isAdmin={true}
                 />
               </>
             )}

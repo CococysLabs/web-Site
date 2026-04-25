@@ -107,12 +107,50 @@ class GoogleDriveService:
         try:
             file = self.service.files().get(
                 fileId=file_id,
-                fields="id, name, mimeType, size, webViewLink, createdTime, modifiedTime, owners"
+                fields="id, name, mimeType, size, webViewLink, createdTime, modifiedTime, owners, parents"
             ).execute()
             return file
         except Exception as e:
             print(f"Error getting file metadata: {e}")
             return None
+
+    def file_belongs_to_folder(self, file_id: str, folder_id: str) -> bool:
+        """Valida si un archivo pertenece directamente a una carpeta dada."""
+        meta = self.get_file_metadata(file_id)
+        if not meta:
+            return False
+        parents = meta.get('parents', []) or []
+        return folder_id in parents
+
+    def is_descendant_or_same(self, folder_id: str, root_folder_id: str, max_depth: int = 30) -> bool:
+        """Valida si una carpeta está dentro del árbol de otra (incluyendo igualdad)."""
+        if not self.service:
+            return False
+        if not folder_id or not root_folder_id:
+            return False
+        if folder_id == root_folder_id:
+            return True
+
+        current_id = folder_id
+        depth = 0
+        visited = set()
+
+        while depth < max_depth and current_id and current_id not in visited:
+            visited.add(current_id)
+            meta = self.get_file_metadata(current_id)
+            if not meta:
+                return False
+
+            parents = meta.get('parents', []) or []
+            if root_folder_id in parents:
+                return True
+            if not parents:
+                return False
+
+            current_id = parents[0]
+            depth += 1
+
+        return False
     
     # MIME types de Google Workspace → formato de exportación
     GOOGLE_EXPORT_MAP = {

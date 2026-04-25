@@ -22,6 +22,33 @@ from app.utils.auth import get_current_user
 router = APIRouter(prefix="/api/validation", tags=["validation"])
 
 
+def _has_permission(current_user: User, permission_key: str) -> bool:
+    if current_user.role == UserRole.ADMIN:
+        return True
+    perms = getattr(current_user, "permissions", None) or {}
+    return bool(perms.get(permission_key, False))
+
+
+def _ensure_user_folder_scope(current_user: User, folder_ids: List[str]):
+    """Restringe a estudiantes a su carpeta asignada y subcarpetas."""
+    if current_user.role == UserRole.ADMIN:
+        return
+
+    user_root_folder_id = getattr(current_user, "drive_folder_id", None)
+    if not user_root_folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes una carpeta de Drive asignada"
+        )
+
+    for folder_id in {fid for fid in folder_ids if fid}:
+        if not drive_service.is_descendant_or_same(folder_id, user_root_folder_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permiso para validar carpetas fuera de tu carpeta asignada"
+            )
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _normalize(name: str) -> str:
@@ -109,11 +136,10 @@ async def validate_folder_structure(
     db: Session = Depends(get_db)
 ):
     """Validar estructura de una carpeta de curso."""
-    is_admin = current_user.role == UserRole.ADMIN
-    perms = getattr(current_user, "permissions", None) or {}
-    if not is_admin and not perms.get("can_validate_structure", False):
+    if not _has_permission(current_user, "can_validate_structure"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="No tienes permiso para validar estructura")
+    _ensure_user_folder_scope(current_user, [request.folder_id])
     try:
         result = structure_validation_service.validate_folder_structure(request.folder_id, db=db)
 
@@ -290,11 +316,13 @@ async def validate_document_content(
     db: Session = Depends(get_db)
 ):
     """Inicia la validación de contenido en background. Retorna job_id para consultar estado."""
-    is_admin = current_user.role == UserRole.ADMIN
-    perms = getattr(current_user, "permissions", None) or {}
-    if not is_admin and not perms.get("can_validate_content", False):
+    if not _has_permission(current_user, "can_validate_content"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail="No tienes permiso para validar contenido")
+    _ensure_user_folder_scope(
+        current_user,
+        [request.semana_folder_id, request.matrix_folder_id] + (request.candidate_folder_ids or [])
+    )
 
     job = _create_job(db, current_user.id, "content")
     background_tasks.add_task(
@@ -456,12 +484,19 @@ async def validate_course_batch(
     db: Session = Depends(get_db)
 ):
     """Inicia la validación de curso completo en background. Retorna job_id."""
-    is_admin = current_user.role == UserRole.ADMIN
-    perms = getattr(current_user, "permissions", None) or {}
-    can_validate = perms.get("can_validate_structure", False) or perms.get("can_validate_content", False)
-    if not is_admin and not can_validate:
+    validation_type = (request.validation_type or "both").lower()
+    if validation_type not in {"structure", "content", "both"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="validation_type inválido. Use: structure, content o both")
+
+    if validation_type in ("structure", "both") and not _has_permission(current_user, "can_validate_structure"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="No tienes permiso para validar cursos")
+                            detail="No tienes permiso para validar estructura")
+    if validation_type in ("content", "both") and not _has_permission(current_user, "can_validate_content"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="No tienes permiso para validar contenido")
+
+    _ensure_user_folder_scope(current_user, [request.course_folder_id] + (request.candidate_folder_ids or []))
 
     job = _create_job(db, current_user.id, "course")
     background_tasks.add_task(
@@ -469,7 +504,7 @@ async def validate_course_batch(
         job_id               = job.id,
         course_folder_id     = request.course_folder_id,
         course_name          = request.course_name,
-        validation_type      = request.validation_type,
+        validation_type      = validation_type,
         candidate_folder_ids = request.candidate_folder_ids or [],
         user_id              = current_user.id,
     )
