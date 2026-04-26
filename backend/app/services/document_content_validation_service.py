@@ -120,6 +120,7 @@ class DocumentContentValidationService:
         self._deepseek_key: Optional[str] = None
         self._groq_key: Optional[str] = None
         self._openrouter_key: Optional[str] = None
+        self._key_source: str = "none"
         self._init_gemini()
 
     def _init_gemini(self):
@@ -145,6 +146,7 @@ class DocumentContentValidationService:
         self._default_api_keys = list(keys)
         self._api_keys = list(keys)
         self.enabled = len(keys) > 0
+        self._key_source = "env" if keys else "none"
 
         if self.enabled:
             # Configurar con la primera clave por defecto
@@ -259,23 +261,32 @@ class DocumentContentValidationService:
                 personal = [k.strip() for k in user_personal.get(provider, []) if k.strip()]
                 if personal:
                     print(f"    🔑 Usando {len(personal)} key(s) personal(es) de usuario para {provider}")
-                    return personal
-                merged = [env_key] if env_key else []
+                    return personal, "personal"
+                # Admin (BD) primero, .env como último recurso
+                merged = []
                 for k in system_keys:
                     k = k.strip()
                     if k and k not in merged:
                         merged.append(k)
-                return merged
+                # env_key puede ser str o list
+                env_list = env_key if isinstance(env_key, list) else ([env_key] if env_key else [])
+                for k in env_list:
+                    if k and k not in merged:
+                        merged.append(k)
+                admin_keys = [k.strip() for k in system_keys if k.strip()]
+                if not merged:
+                    return [], "none"
+                return merged, "admin" if admin_keys else "env"
 
             # ── Guardar env keys originales para merge (no usar self.* que ya fue mutado)
-            env_gemini    = self._default_api_keys[0] if self._default_api_keys else None
+            env_gemini    = list(self._default_api_keys)   # todas las keys .env de Gemini
             env_deepseek  = getattr(settings, 'DEEPSEEK_API_KEY', '') or ''
             env_groq      = getattr(settings, 'GROQ_API_KEY', '') or ''
             env_openrouter = getattr(settings, 'OPENROUTER_API_KEY', '') or ''
 
             # ── Gemini ──────────────────────────────────────────────────────────
             db_gemini = settings_service.get_json("gemini_api_keys", db, default=[]) or []
-            merged_gemini = _prefer_personal("gemini", db_gemini, env_gemini)
+            merged_gemini, gemini_src = _prefer_personal("gemini", db_gemini, env_gemini)
             self._api_keys = merged_gemini
             self.enabled = len(merged_gemini) > 0
             if merged_gemini:
@@ -284,18 +295,30 @@ class DocumentContentValidationService:
 
             # ── DeepSeek ────────────────────────────────────────────────────────
             db_deepseek = settings_service.get_json("deepseek_api_keys", db, default=[]) or []
-            merged_deepseek = _prefer_personal("deepseek", db_deepseek, env_deepseek or None)
+            merged_deepseek, deepseek_src = _prefer_personal("deepseek", db_deepseek, env_deepseek or None)
             self._deepseek_key = merged_deepseek[0] if merged_deepseek else None
 
             # ── Groq ────────────────────────────────────────────────────────────
             db_groq = settings_service.get_json("groq_api_keys", db, default=[]) or []
-            merged_groq = _prefer_personal("groq", db_groq, env_groq or None)
+            merged_groq, groq_src = _prefer_personal("groq", db_groq, env_groq or None)
             self._groq_key = merged_groq[0] if merged_groq else None
 
             # ── OpenRouter ──────────────────────────────────────────────────────
             db_openrouter = settings_service.get_json("openrouter_api_keys", db, default=[]) or []
-            merged_openrouter = _prefer_personal("openrouter", db_openrouter, env_openrouter or None)
+            merged_openrouter, openrouter_src = _prefer_personal("openrouter", db_openrouter, env_openrouter or None)
             self._openrouter_key = merged_openrouter[0] if merged_openrouter else None
+
+            # ── Fuente del proveedor primario (para AnalysisLog) ─────────────────
+            if merged_gemini:
+                self._key_source = gemini_src
+            elif self._deepseek_key:
+                self._key_source = deepseek_src
+            elif self._groq_key:
+                self._key_source = groq_src
+            elif self._openrouter_key:
+                self._key_source = openrouter_src
+            else:
+                self._key_source = "none"
 
             print(
                 f"  🔑 Keys cargadas — Gemini:{len(merged_gemini)} "
@@ -308,6 +331,22 @@ class DocumentContentValidationService:
             import traceback
             print(f"  ⚠️  Error recargando keys desde BD: {e}")
             print(traceback.format_exc())
+
+    @property
+    def primary_provider(self) -> str:
+        if self.enabled:
+            return "gemini"
+        if self._deepseek_key:
+            return "deepseek"
+        if self._groq_key:
+            return "groq"
+        if self._openrouter_key:
+            return "openrouter"
+        return "basic"
+
+    @property
+    def key_source(self) -> str:
+        return self._key_source
 
     def _get_available_keys(self) -> List[str]:
         """Retorna las claves Gemini que aún no han sido marcadas como agotadas."""

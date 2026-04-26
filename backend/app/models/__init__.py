@@ -8,6 +8,7 @@ from app.models.system_setting import SystemSetting
 from app.models.validation_record import ValidationRecord
 from app.models.validation_job import ValidationJob
 from app.models.audit_log import AuditLog
+from app.models.analysis_log import AnalysisLog
 
 __all__ = [
     "User",
@@ -21,5 +22,6 @@ __all__ = [
     "ValidationRecord",
     "ValidationJob",
     "AuditLog",
+    "AnalysisLog",
 ]
 

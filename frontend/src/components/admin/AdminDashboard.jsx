@@ -57,6 +57,13 @@ const AdminDashboard = () => {
   const [auditPage, setAuditPage]       = useState(0);
   const AUDIT_PAGE_SIZE = 50;
 
+  // Analysis history state (admin: all users)
+  const [analysisHistory, setAnalysisHistory] = useState({ records: [], total: 0 });
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisPage, setAnalysisPage]       = useState(0);
+  const [analysisFilter, setAnalysisFilter]   = useState({ type: '', user_id: '' });
+  const ANALYSIS_PAGE_SIZE = 25;
+
   const showToast = (type, message) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 3500);
@@ -72,6 +79,9 @@ const AdminDashboard = () => {
     }
     if (activeTab === 'users') {
       loadAllUsers(userFilter, 0);
+    }
+    if (activeTab === 'analysis') {
+      loadAnalysisHistory(analysisFilter, 0);
     }
   }, [activeTab]);
 
@@ -369,6 +379,26 @@ const AdminDashboard = () => {
     }
   };
 
+  const loadAnalysisHistory = async (filter, page) => {
+    const f = filter !== undefined ? filter : analysisFilter;
+    const p = page !== undefined ? page : analysisPage;
+    setAnalysisLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', ANALYSIS_PAGE_SIZE);
+      params.set('offset', p * ANALYSIS_PAGE_SIZE);
+      params.set('analysis_type', 'document');
+      if (f.user_id) params.set('user_id', f.user_id);
+      const res = await api.get(`/api/analysis/history?${params.toString()}`);
+      setAnalysisHistory(res.data);
+      setAnalysisPage(p);
+    } catch (_err) {
+      showToast('error', 'Error al cargar historial de análisis');
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
   const handleExportCSV = () => {
     const params = new URLSearchParams();
     params.set('days', reportFilter.days);
@@ -642,6 +672,16 @@ const AdminDashboard = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             Reportes
+          </button>
+
+          <button
+            className={activeTab === 'analysis' ? 'active' : ''}
+            onClick={() => { setActiveTab('analysis'); setSidebarOpen(false); }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+            </svg>
+            Análisis IA
           </button>
 
           <button
@@ -1494,13 +1534,17 @@ const AdminDashboard = () => {
                       <table className="report-table">
                         <thead>
                           <tr>
-                            {['Fecha', 'Carpeta', 'Curso', 'Tipo', 'Cumplimiento', 'Estado', 'Validado por'].map(h => (
+                            {['Fecha', 'Carpeta', 'Curso', 'Tipo', 'Cumplimiento', 'Estado', 'Proveedor IA', 'Origen key', 'Validado por'].map(h => (
                               <th key={h}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {reportHistory.records.map((r, idx) => (
+                          {reportHistory.records.map((r, idx) => {
+                            const provColors = { gemini:'#4285f4', deepseek:'#7c3aed', groq:'#059669', openrouter:'#d97706', basic:'#6b7280', none:'#9ca3af' };
+                            const srcCls = { personal:'success', admin:'warning', env:'info', none:'' };
+                            const pColor = provColors[r.provider] || provColors.none;
+                            return (
                             <tr key={idx}>
                               <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                                 {r.created_at
@@ -1536,11 +1580,24 @@ const AdminDashboard = () => {
                                   {r.status === 'compliant' ? '✓ Cumple' : r.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
                                 </span>
                               </td>
+                              <td>
+                                {r.provider && r.provider !== 'none'
+                                  ? <span style={{ fontWeight: 700, color: pColor, fontSize: '0.8rem', textTransform: 'capitalize' }}>{r.provider}</span>
+                                  : <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>—</span>}
+                              </td>
+                              <td>
+                                {r.key_source && r.key_source !== 'none'
+                                  ? <span className={`status-badge ${srcCls[r.key_source] || ''}`} style={{ fontSize: '0.72rem' }}>
+                                      {{ personal: 'Personal', admin: 'Admin', env: 'Sistema' }[r.key_source] || r.key_source}
+                                    </span>
+                                  : <span style={{ color: '#9ca3af' }}>—</span>}
+                              </td>
                               <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                                 {r.validated_by_name || '—'}
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1554,6 +1611,131 @@ const AdminDashboard = () => {
                   Cargar Reportes
                 </button>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Analysis History Tab */}
+        {activeTab === 'analysis' && (
+          <div className="reports-tab">
+            <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Análisis de Documentos</h2>
+                <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                  Análisis individuales de archivos con IA — score de calidad, proveedor y origen de key
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <button className="btn-primary" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}
+                  onClick={() => loadAnalysisHistory(analysisFilter, analysisPage)}>
+                  Actualizar
+                </button>
+              </div>
+            </div>
+
+            {analysisLoading && analysisHistory.records.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                <div className="spinner" style={{ margin: '0 auto 1rem' }}></div>
+                <p>Cargando historial...</p>
+              </div>
+            ) : analysisHistory.records.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                <p style={{ fontSize: '2rem', margin: '0 0 0.5rem' }}>🔍</p>
+                <p>No hay registros de análisis aún.</p>
+              </div>
+            ) : (
+              <>
+                <div className="history-table-wrap">
+                  <table className="history-table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Usuario</th>
+                        <th>Analizado</th>
+                        <th>Proveedor</th>
+                        <th>Origen key</th>
+                        <th>Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysisHistory.records.map(r => {
+                        const providerColors = {
+                          gemini: '#4285f4', deepseek: '#7c3aed',
+                          groq: '#059669', openrouter: '#d97706',
+                          basic: '#6b7280', none: '#9ca3af',
+                        };
+                        const sourceLabels = {
+                          personal: { label: 'Personal', cls: 'success' },
+                          admin:    { label: 'Admin',    cls: 'warning' },
+                          env:      { label: 'Sistema',  cls: 'info'    },
+                          none:     { label: '—',        cls: ''        },
+                        };
+                        const pColor = providerColors[r.provider] || '#6b7280';
+                        const src = sourceLabels[r.key_source] || sourceLabels.none;
+                        return (
+                          <tr key={r.id}>
+                            <td className="history-date" style={{ whiteSpace: 'nowrap' }}>
+                              {new Date(r.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              <br />
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                                {new Date(r.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '0.83rem' }}>
+                              <span style={{ fontWeight: 600 }}>{r.user_name || '—'}</span>
+                            </td>
+                            <td className="history-folder">
+                              <span className="history-folder-name">{r.analyzed_what}</span>
+                              {r.course_name && (
+                                <span className="history-section">{r.course_name}</span>
+                              )}
+                            </td>
+                            <td>
+                              <span style={{ fontWeight: 700, color: pColor, fontSize: '0.82rem', textTransform: 'capitalize' }}>
+                                {r.provider === 'none' ? '—' : r.provider}
+                              </span>
+                            </td>
+                            <td>
+                              {src.label !== '—' ? (
+                                <span className={`status-badge ${src.cls}`} style={{ fontSize: '0.72rem' }}>
+                                  {src.label}
+                                </span>
+                              ) : <span style={{ color: '#9ca3af' }}>—</span>}
+                            </td>
+                            <td>
+                              {r.score != null ? (
+                                <span className={`history-pct history-pct--${r.score >= 70 ? 'success' : r.score >= 40 ? 'warning' : 'danger'}`}>
+                                  {r.score.toFixed(0)}/100
+                                </span>
+                              ) : (
+                                <span style={{ color: '#9ca3af' }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Paginación */}
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '1.25rem' }}>
+                  <button className="history-page-btn"
+                    disabled={analysisPage === 0 || analysisLoading}
+                    onClick={() => loadAnalysisHistory(analysisFilter, analysisPage - 1)}>
+                    ← Anterior
+                  </button>
+                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                    {analysisPage + 1} / {Math.max(1, Math.ceil(analysisHistory.total / ANALYSIS_PAGE_SIZE))}
+                    &nbsp;·&nbsp; {analysisHistory.total} registros
+                  </span>
+                  <button className="history-page-btn"
+                    disabled={(analysisPage + 1) * ANALYSIS_PAGE_SIZE >= analysisHistory.total || analysisLoading}
+                    onClick={() => loadAnalysisHistory(analysisFilter, analysisPage + 1)}>
+                    Siguiente →
+                  </button>
+                </div>
+              </>
             )}
           </div>
         )}

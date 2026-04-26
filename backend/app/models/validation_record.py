@@ -27,5 +27,7 @@ class ValidationRecord(Base):
     results_json          = Column(JSON, nullable=True)          # resultado completo
     documents_analyzed    = Column(JSON, nullable=True)          # lista de archivos
     excel_updated         = Column(Boolean, nullable=False, default=False)
+    provider              = Column(String(30), nullable=True, default="none")   # gemini | deepseek | groq | basic | none
+    key_source            = Column(String(20), nullable=True, default="none")   # personal | admin | env | none
     validated_by          = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at            = Column(DateTime(timezone=True), server_default=func.now(), index=True)

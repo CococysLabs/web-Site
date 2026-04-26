@@ -49,6 +49,7 @@ class DocumentAnalysisService:
         self.model = None
         self.enabled = False
         self._active_api_key: Optional[str] = None
+        self._key_source: str = "none"
         if GENAI_AVAILABLE:
             api_key = getattr(settings, 'GEMINI_API_KEY', None)
             if api_key and api_key not in ('', 'kjkj'):
@@ -56,11 +57,20 @@ class DocumentAnalysisService:
                 self.model = genai.GenerativeModel(GEMINI_MODEL)
                 self.enabled = True
                 self._active_api_key = api_key
+                self._key_source = "env"
                 print(f"✅ Gemini ({GEMINI_MODEL}) listo para análisis de documentos")
             else:
                 print("⚠️  GEMINI_API_KEY no configurada — se usarán keys de BD si están disponibles")
         else:
             print("⚠️  google-generativeai no disponible — modo básico")
+
+    @property
+    def provider_name(self) -> str:
+        return "gemini" if self.enabled else "basic"
+
+    @property
+    def key_source(self) -> str:
+        return self._key_source
 
     def _reload_keys_from_db(self, db, user_id=None) -> None:
         """
@@ -91,6 +101,7 @@ class DocumentAnalysisService:
                         self.model = genai.GenerativeModel(GEMINI_MODEL)
                         self.enabled = True
                         self._active_api_key = api_key
+                        self._key_source = "personal"
                         print(f"  🔑 Análisis usando key personal de usuario (gemini)")
                         return
                 except Exception:
@@ -105,6 +116,7 @@ class DocumentAnalysisService:
                 self.model = genai.GenerativeModel(GEMINI_MODEL)
                 self.enabled = True
                 self._active_api_key = api_key
+                self._key_source = "admin"
                 print(f"  🔑 Análisis usando key del sistema (gemini)")
                 return
 
@@ -114,12 +126,14 @@ class DocumentAnalysisService:
                 self.model = genai.GenerativeModel(GEMINI_MODEL)
                 self.enabled = True
                 self._active_api_key = env_key
+                self._key_source = "env"
                 return
 
             # Sin ninguna key disponible
             self.enabled = False
             self.model = None
             self._active_api_key = None
+            self._key_source = "none"
             print("  ⚠️  Sin API key de Gemini disponible — análisis en modo básico")
 
         except Exception as e:

@@ -15,9 +15,31 @@ from app.database import get_db, SessionLocal
 from app.models.user import User, UserRole
 from app.models.validation_record import ValidationRecord
 from app.models.validation_job import ValidationJob
+from app.models.analysis_log import AnalysisLog
 from app.services.structure_validation_service import structure_validation_service
 from app.services.drive_service import drive_service
 from app.utils.auth import get_current_user
+
+
+def _save_analysis_log(db, user_id, user_name: str, analyzed_what: str,
+                       analysis_type: str, provider: str, key_source: str,
+                       status: str = "completed", course_name: str = None):
+    try:
+        log = AnalysisLog(
+            user_id=user_id,
+            user_name=user_name,
+            analyzed_what=analyzed_what,
+            analysis_type=analysis_type,
+            provider=provider,
+            key_source=key_source,
+            status=status,
+            course_name=course_name,
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️  No se pudo guardar analysis_log: {e}")
 
 router = APIRouter(prefix="/api/validation", tags=["validation"])
 
@@ -158,7 +180,19 @@ async def validate_folder_structure(
                 missing_items = result.get('total_missing', 0) or 0,
                 status        = _compliance_status(pct),
                 results_json  = result,
+                provider      = "none",
+                key_source    = "none",
                 validated_by  = current_user.id,
+            )
+            _save_analysis_log(
+                db=db,
+                user_id=current_user.id,
+                user_name=f"{current_user.nombre} {current_user.apellidos}",
+                analyzed_what=request.folder_name or request.folder_id,
+                analysis_type="structure",
+                provider="none",
+                key_source="none",
+                course_name=request.course_name,
             )
 
         return result
@@ -295,7 +329,23 @@ def _run_content_validation(job_id, semana_folder_id, semana_folder_name,
                 results_json  = {k: v for k, v in result.items() if k != 'results'},
                 documents_analyzed = result.get('documents_analyzed', []),
                 excel_updated = result.get('excel_updated', False),
+                provider      = document_content_validation_service.primary_provider,
+                key_source    = document_content_validation_service.key_source,
                 validated_by  = user_id,
+            )
+            # Obtener nombre de usuario para el log
+            from app.models.user import User as _User
+            u = db.query(_User).filter(_User.id == user_id).first()
+            u_name = f"{u.nombre} {u.apellidos}" if u else "—"
+            _save_analysis_log(
+                db=db,
+                user_id=user_id,
+                user_name=u_name,
+                analyzed_what=semana_folder_name,
+                analysis_type="content",
+                provider=document_content_validation_service.primary_provider,
+                key_source=document_content_validation_service.key_source,
+                course_name=course_name,
             )
 
         _update_job(job_id, status="completed", result_json=result,
@@ -389,7 +439,8 @@ def _run_course_validation(job_id, course_folder_id, course_name,
                          compliance_percentage=pct_s, total_items=struct.get('total_required', 0) or 0,
                          present_items=struct.get('total_found', 0) or 0,
                          missing_items=struct.get('total_missing', 0) or 0,
-                         status=_compliance_status(pct_s), results_json=struct, validated_by=user_id)
+                         status=_compliance_status(pct_s), results_json=struct,
+                         provider="none", key_source="none", validated_by=user_id)
 
         weeks_results = []
         lab_results = []
@@ -442,6 +493,8 @@ def _run_course_validation(job_id, course_folder_id, course_name,
                                      results_json={k: v for k, v in content.items() if k != 'results'},
                                      documents_analyzed=content.get('documents_analyzed', []),
                                      excel_updated=content.get('excel_updated', False),
+                                     provider=document_content_validation_service.primary_provider,
+                                     key_source=document_content_validation_service.key_source,
                                      validated_by=user_id)
                     else:
                         folder_result["content"] = {"error": content.get('error', 'Sin datos')}
@@ -467,6 +520,16 @@ def _run_course_validation(job_id, course_folder_id, course_name,
             "average_compliance": avg_compliance, "overall_status": _compliance_status(avg_compliance),
             "course_structure": course_structure, "weeks": weeks_results, "lab_folders": lab_results,
         }
+        from app.models.user import User as _User
+        u = db.query(_User).filter(_User.id == user_id).first()
+        u_name = f"{u.nombre} {u.apellidos}" if u else "—"
+        _save_analysis_log(
+            db=db, user_id=user_id, user_name=u_name,
+            analyzed_what=course_name, analysis_type="course",
+            provider=document_content_validation_service.primary_provider,
+            key_source=document_content_validation_service.key_source,
+            course_name=course_name,
+        )
         _update_job(job_id, status="completed", result_json=result,
                     progress=f"Curso completo — {avg_compliance}% de cumplimiento promedio")
     except Exception as e:
@@ -572,6 +635,8 @@ async def get_validation_history(
                 "status":                 r.status,
                 "documents_analyzed":     r.documents_analyzed,
                 "excel_updated":          r.excel_updated,
+                "provider":               r.provider or "none",
+                "key_source":             r.key_source or "none",
                 "created_at":             r.created_at.isoformat() if r.created_at else None,
                 "validated_by_name":      validators.get(str(r.validated_by), "—"),
             }

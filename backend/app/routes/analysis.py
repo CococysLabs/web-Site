@@ -1,7 +1,8 @@
 """
 Endpoint para analizar documentos desde Google Drive
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
@@ -10,11 +11,36 @@ import uuid
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.document import Document, DocumentStatus, DocumentType
+from app.models.analysis_log import AnalysisLog
 from app.services.drive_service import drive_service
 from app.services.analysis_service import analysis_service
 from app.utils.auth import get_current_user
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
+
+
+def _save_analysis_log(db: Session, user_id, user_name: str, analyzed_what: str,
+                       analysis_type: str, provider: str, key_source: str,
+                       status: str = "completed", score: float = None,
+                       drive_file_id: str = None, course_name: str = None):
+    try:
+        log = AnalysisLog(
+            user_id=user_id,
+            user_name=user_name,
+            analyzed_what=analyzed_what,
+            drive_file_id=drive_file_id,
+            analysis_type=analysis_type,
+            provider=provider,
+            key_source=key_source,
+            status=status,
+            score=score,
+            course_name=course_name,
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"⚠️  No se pudo guardar analysis_log: {e}")
 
 
 def _ensure_analysis_permission(current_user: User):
@@ -143,12 +169,10 @@ async def analyze_drive_file(
             doc_type = DocumentType.PDF
 
         if existing_doc:
-            # Actualizar documento existente
             existing_doc.analysis_result = analysis_result
             existing_doc.status = DocumentStatus.COMPLETED
             db.commit()
         else:
-            # Crear nuevo documento
             new_doc = Document(
                 name=file_name,
                 type=doc_type,
@@ -163,7 +187,20 @@ async def analyze_drive_file(
             )
             db.add(new_doc)
             db.commit()
-        
+
+        # Registrar en historial de análisis
+        _save_analysis_log(
+            db=db,
+            user_id=current_user.id,
+            user_name=f"{current_user.nombre} {current_user.apellidos}",
+            analyzed_what=file_name,
+            drive_file_id=request.file_id,
+            analysis_type="document",
+            provider=analysis_service.provider_name,
+            key_source=analysis_service.key_source,
+            score=analysis_result.get("quality", {}).get("score"),
+        )
+
         return AnalysisResponse(
             success=True,
             file_name=file_name,
@@ -222,4 +259,62 @@ async def analysis_health_check():
         "gemini_enabled": analysis_service.enabled,
         "status": "ready" if analysis_service.enabled else "limited",
         "message": "Gemini AI activo" if analysis_service.enabled else "Usando análisis básico (sin Gemini API)"
+    }
+
+
+@router.get("/history")
+async def get_analysis_history(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    analysis_type: Optional[str] = Query(None, description="document|structure|content|course"),
+    user_id: Optional[str] = Query(None, description="Filtrar por usuario (solo admin)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Historial de análisis.
+    - Usuarios: ven solo sus propios registros.
+    - Admins: ven todo el sistema; pueden filtrar por user_id.
+    """
+    query = db.query(AnalysisLog)
+
+    if current_user.role != UserRole.ADMIN:
+        query = query.filter(AnalysisLog.user_id == current_user.id)
+    elif user_id:
+        try:
+            query = query.filter(AnalysisLog.user_id == uuid.UUID(user_id))
+        except ValueError:
+            pass
+
+    if analysis_type:
+        query = query.filter(AnalysisLog.analysis_type == analysis_type)
+
+    total = query.count()
+    records = (
+        query.order_by(desc(AnalysisLog.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "records": [
+            {
+                "id": str(r.id),
+                "user_id": str(r.user_id) if r.user_id else None,
+                "user_name": r.user_name or "—",
+                "analyzed_what": r.analyzed_what,
+                "analysis_type": r.analysis_type,
+                "provider": r.provider,
+                "key_source": r.key_source,
+                "status": r.status,
+                "score": r.score,
+                "course_name": r.course_name,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in records
+        ],
     }

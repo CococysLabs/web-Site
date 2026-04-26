@@ -89,7 +89,7 @@ const Dashboard = () => {
   const loadMyHistory = async (page = 0) => {
     setHistoryLoading(true);
     try {
-      const res = await api.get(`/api/validation/history?limit=${HISTORY_PAGE_SIZE}&offset=${page * HISTORY_PAGE_SIZE}`);
+      const res = await api.get(`/api/analysis/history?limit=${HISTORY_PAGE_SIZE}&offset=${page * HISTORY_PAGE_SIZE}`);
       setMyHistory(res.data);
       setHistoryPage(page);
     } catch { /* ignore */ } finally {
@@ -523,8 +523,8 @@ const Dashboard = () => {
               {activeView === 'history' && (
                 <div className="history-view">
                   <div className="view-header">
-                    <h2>Mi Historial de Validaciones</h2>
-                    <p>Todas las validaciones que has ejecutado en el sistema</p>
+                    <h2>Mi Historial de Análisis</h2>
+                    <p>Todos los análisis y validaciones que has ejecutado en el sistema</p>
                   </div>
 
                   {historyLoading && !myHistory && (
@@ -536,7 +536,7 @@ const Dashboard = () => {
                       {myHistory.records?.length === 0 ? (
                         <div className="history-empty">
                           <div className="history-empty-icon">📋</div>
-                          <p>Aún no has ejecutado ninguna validación.</p>
+                          <p>Aún no has ejecutado ningún análisis o validación.</p>
                         </div>
                       ) : (
                         <>
@@ -546,43 +546,75 @@ const Dashboard = () => {
                                 <tr>
                                   <th>Fecha</th>
                                   <th>Tipo</th>
-                                  <th>Carpeta / Sección</th>
-                                  <th>Curso</th>
-                                  <th>Cumplimiento</th>
-                                  <th>Estado</th>
+                                  <th>Analizado</th>
+                                  <th>Proveedor</th>
+                                  <th>Origen key</th>
+                                  <th>Resultado</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {myHistory.records.map(r => {
-                                  const pct = r.compliance_percentage ?? 0;
-                                  const statusCls = pct >= 70 ? 'success' : pct >= 40 ? 'warning' : 'danger';
+                                  const typeLabels = {
+                                    document: { label: 'Documento', cls: 'content', icon: '📄' },
+                                    structure: { label: 'Estructura', cls: 'structure', icon: '📋' },
+                                    content: { label: 'Contenido', cls: 'content', icon: '🧠' },
+                                    course: { label: 'Curso', cls: 'structure', icon: '🏫' },
+                                  };
+                                  const providerLabels = {
+                                    gemini: { label: 'Gemini', color: '#4285f4' },
+                                    deepseek: { label: 'DeepSeek', color: '#7c3aed' },
+                                    groq: { label: 'Groq', color: '#059669' },
+                                    openrouter: { label: 'OpenRouter', color: '#d97706' },
+                                    basic: { label: 'Básico', color: '#6b7280' },
+                                    none: { label: '—', color: '#6b7280' },
+                                  };
+                                  const sourceLabels = {
+                                    personal: { label: 'Personal', cls: 'success' },
+                                    admin: { label: 'Admin', cls: 'warning' },
+                                    env: { label: 'Sistema', cls: 'info' },
+                                    none: { label: '—', cls: '' },
+                                  };
+                                  const t = typeLabels[r.analysis_type] || { label: r.analysis_type, cls: '', icon: '🔍' };
+                                  const prov = providerLabels[r.provider] || providerLabels.basic;
+                                  const src = sourceLabels[r.key_source] || sourceLabels.none;
                                   return (
                                     <tr key={r.id}>
                                       <td className="history-date">
-                                        {new Date(r.created_at).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })}
+                                        {new Date(r.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
                                       </td>
                                       <td>
-                                        <span className={`status-badge status-badge--${r.validation_type === 'content' ? 'content' : 'structure'}`}>
-                                          {r.validation_type === 'content' ? '🧠 Contenido' : '📋 Estructura'}
+                                        <span className={`status-badge status-badge--${t.cls}`}>
+                                          {t.icon} {t.label}
                                         </span>
                                       </td>
                                       <td className="history-folder">
-                                        <span className="history-folder-name">{r.folder_name}</span>
-                                        {r.section_name && <span className="history-section">{r.section_name}</span>}
-                                      </td>
-                                      <td className="history-course">{r.course_name || '—'}</td>
-                                      <td>
-                                        <div className="history-pct-wrap">
-                                          <span className={`history-pct history-pct--${statusCls}`}>{pct.toFixed(1)}%</span>
-                                          <div className="history-bar">
-                                            <div className={`history-bar-fill history-bar-fill--${statusCls}`} style={{ width: `${pct}%` }} />
-                                          </div>
-                                        </div>
+                                        <span className="history-folder-name">{r.analyzed_what}</span>
+                                        {r.course_name && r.analysis_type !== 'course' && (
+                                          <span className="history-section">{r.course_name}</span>
+                                        )}
                                       </td>
                                       <td>
-                                        <span className={`status-badge ${statusCls}`}>
-                                          {pct >= 70 ? '✓ Cumple' : pct >= 40 ? '⚠ Parcial' : '✗ Bajo'}
+                                        <span style={{ fontWeight: 600, color: prov.color, fontSize: '0.82rem' }}>
+                                          {prov.label}
                                         </span>
+                                      </td>
+                                      <td>
+                                        {src.label !== '—' ? (
+                                          <span className={`status-badge ${src.cls}`} style={{ fontSize: '0.75rem' }}>
+                                            {src.label}
+                                          </span>
+                                        ) : <span style={{ color: '#9ca3af' }}>—</span>}
+                                      </td>
+                                      <td>
+                                        {r.analysis_type === 'document' && r.score != null ? (
+                                          <span className={`history-pct history-pct--${r.score >= 70 ? 'success' : r.score >= 40 ? 'warning' : 'danger'}`}>
+                                            {r.score.toFixed(0)}/100
+                                          </span>
+                                        ) : (
+                                          <span className={`status-badge ${r.status === 'completed' ? 'success' : 'danger'}`}>
+                                            {r.status === 'completed' ? '✓' : '✗'}
+                                          </span>
+                                        )}
                                       </td>
                                     </tr>
                                   );
