@@ -193,23 +193,33 @@ class DocumentContentValidationService:
         """
         reqs_list = "\n".join(f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params))
         system_msg = (
-            "Eres un evaluador académico experto. SOLO responde con JSON válido, "
-            "sin texto introductorio ni explicación. Tu respuesta debe ser "
-            f"un array JSON con exactamente {len(params)} elementos."
+            "Eres un evaluador académico universitario experto en revisión de material pedagógico. "
+            "Determina si cada requisito listado está cubierto en el documento proporcionado. "
+            "Evalúa con criterio: cuenta como PRESENTE si el tema aparece de forma explícita "
+            "(nombrado directamente) o implícita (ejemplos, demostraciones, desarrollo práctico "
+            "que evidencia el concepto aunque use terminología distinta). "
+            "SOLO responde con un array JSON válido de exactamente "
+            f"{len(params)} elementos, sin texto introductorio ni explicación."
         )
         user_msg = (
-            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
-            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
-            f"Contenido del documento:\n{doc_snippet[:max_chars]}\n\n"
-            "Para cada requisito responde con un objeto JSON que incluya:\n"
-            '- "presente": "Si" o "No"\n'
-            '- "observacion": cómo se evidencia (si presente) o qué falta (si ausente)\n'
-            '- "confidence": número entre 0.0 y 1.0 indicando tu certeza\n'
-            '- "sugerencia": (solo si ausente) acción concreta de 1 oración para incluirlo\n\n'
-            "Ejemplo:\n"
-            '[{"presente":"Si","observacion":"Se explica en la diapositiva 3","confidence":0.95},\n'
-            ' {"presente":"No","observacion":"No se menciona","sugerencia":"Agregar sección de objetivos","confidence":0.82}]\n\n'
-            f"Responde SOLO el array JSON ({len(params)} elementos, sin texto extra):"
+            f"CONTEXTO: Sección del curso: \"{section_name}\" | Documento: \"{group_name}\"\n\n"
+            f"REQUISITOS A EVALUAR ({len(params)}):\n{reqs_list}\n\n"
+            f"CONTENIDO DEL DOCUMENTO:\n{doc_snippet[:max_chars]}\n\n"
+            "INSTRUCCIONES PARA CADA REQUISITO:\n"
+            "- \"presente\": \"Si\" si hay evidencia clara (explícita o implícita). "
+            "  \"No\" si el tema está completamente ausente o es tan superficial que no aporta valor.\n"
+            "- \"observacion\": Si PRESENTE → cita brevemente dónde o cómo aparece "
+            "  (ej: 'Se desarrolla en la sección de introducción mediante el ejemplo de...'). "
+            "  Si AUSENTE → describe específicamente qué falta y por qué es importante.\n"
+            "- \"sugerencia\": SOLO si AUSENTE → acción concreta y específica en 1 oración "
+            "  para que el autor incluya este contenido (ej: 'Agregar una sección que explique X "
+            "  con al menos un ejemplo aplicado').\n"
+            "- \"confidence\": 0.0–1.0 (certeza de tu evaluación; usa >0.8 solo cuando la "
+            "  evidencia es clara y directa).\n\n"
+            "FORMATO EXACTO DE RESPUESTA (array JSON, sin texto extra):\n"
+            '[{"presente":"Si","observacion":"Se desarrolla en la introducción con el ejemplo de listas enlazadas","confidence":0.92},\n'
+            ' {"presente":"No","observacion":"No se aborda la complejidad temporal de los algoritmos","sugerencia":"Incluir una tabla comparativa de complejidad O(n) para cada algoritmo presentado","confidence":0.88}]\n\n'
+            f"Responde SOLO el array JSON con {len(params)} elementos:"
         )
         return system_msg, user_msg
 
@@ -1128,6 +1138,7 @@ class DocumentContentValidationService:
         # ── Paso 1: localizar columnas de escritura en toda la hoja ──────────
         write_cols: Dict[str, int] = {}
         aplica_col: Optional[int] = None
+        autor_col:  Optional[int] = None
         criteria_col: Optional[int] = None   # columna principal con texto de criterios
 
         # Escaneamos las primeras 15 filas buscando encabezados de columna
@@ -1146,10 +1157,14 @@ class DocumentContentValidationService:
                     row_matched = True
                 elif norm.startswith('aplica') and aplica_col is None:
                     aplica_col = c
+                elif norm == 'autor' and autor_col is None:
+                    autor_col = c
             if row_matched and len(write_cols) >= 2:
                 break   # ambas columnas encontradas
 
-        print(f"  📝 Columnas de escritura detectadas: {write_cols} | aplica: {aplica_col}")
+        if autor_col:
+            write_cols['autor'] = autor_col
+        print(f"  📝 Columnas detectadas: {write_cols} | aplica: {aplica_col} | autor: {autor_col}")
 
         # ── Paso 2: detectar columna de criterios ────────────────────────────
         # Es la primera columna (col. más a la izquierda) que contiene texto
@@ -1182,11 +1197,47 @@ class DocumentContentValidationService:
             'calificacion', 'puntaje', 'nota', 'descripcion',
         }
 
+        # Columnas que NO son de criterios ni de escritura (candidatas a encabezado de grupo)
+        excluded_cols = write_col_idxs | ({aplica_col} if aplica_col else set())
+        # Buscar en todas las columnas disponibles, no solo criteria_col
+        max_scan_col = min(ws.max_column + 1, 15)
+
+        def _is_group_header(text: str) -> bool:
+            """True si el texto corresponde a un encabezado de grupo lab."""
+            if not text or len(text.strip()) >= 80:
+                return False
+            norm = self._normalize(text.strip())
+            norm_clean = re.sub(r'[​‌‍﻿­]', '', norm).strip()
+            return bool(re.match(
+                r'^(proyecto|practica|tarea)\s*\d*(\s*[\-:,./].*)?$',
+                norm_clean
+            ))
+
         groups: List[Dict] = []
         current_group: Optional[Dict] = None
         seen_in_group: set = set()   # (group_name, norm_criteria) → evitar duplicados
 
         for r in range(1, ws.max_row + 1):
+            # ── Buscar encabezado de grupo en CUALQUIER columna de la fila ──
+            # Esto resuelve el caso donde los encabezados (Proyecto 1, Proyecto 2…)
+            # están en una columna distinta a la de los criterios.
+            group_header_found = False
+            for c in range(1, max_scan_col):
+                if c in excluded_cols:
+                    continue
+                raw_h = ws.cell(row=r, column=c).value
+                if raw_h and _is_group_header(str(raw_h)):
+                    header_text = str(raw_h).strip()
+                    current_group = {'group_name': header_text, 'params': [], 'header_row': r}
+                    groups.append(current_group)
+                    seen_in_group = set()
+                    print(f"     🗂️  Grupo detectado: '{header_text}' (fila {r}, col {c})")
+                    group_header_found = True
+                    break
+            if group_header_found:
+                continue
+
+            # ── Leer criterio desde criteria_col ────────────────────────────
             raw = ws.cell(row=r, column=criteria_col).value
             if not raw or not str(raw).strip():
                 continue
@@ -1196,13 +1247,6 @@ class DocumentContentValidationService:
 
             # Saltar encabezados de tabla y valores muy cortos
             if norm in SKIP_NORMS or len(text) < 3:
-                continue
-
-            # ── Encabezado de grupo ("Proyecto 1", "Practica 2", "Tarea 3") ──
-            if re.match(r'^(proyecto|practica|tarea)\s*\d*$', norm):
-                current_group = {'group_name': text, 'params': []}
-                groups.append(current_group)
-                seen_in_group = set()
                 continue
 
             # ── Verificar columna Aplica ──────────────────────────────────────
@@ -1231,13 +1275,20 @@ class DocumentContentValidationService:
                 'autor':       '',
             })
 
+        grupos_vacios = [g for g in groups if not g['params']]
+        if grupos_vacios:
+            print(f"  ⚠️  {len(grupos_vacios)} grupo(s) sin criterios detectados: "
+                  f"{[g['group_name'] for g in grupos_vacios]}")
         groups = [g for g in groups if g['params']]
         total = sum(len(g['params']) for g in groups)
-        print(f"  📋 Lab sheet full: {len(groups)} grupos, {total} criterios")
+        print(f"  📋 Lab sheet full: {len(groups)} grupos, {total} criterios "
+              f"| criteria_col={criteria_col} | write_cols={write_cols}")
         for g in groups:
-            print(f"     📑 '{g['group_name']}': {len(g['params'])} criterios")
-            for p in g['params'][:3]:   # muestra los primeros 3 para debug
-                print(f"        · [{p['row_idx']}] {p['sub_seccion']}")
+            rows = [p['row_idx'] for p in g['params']]
+            print(f"     📑 '{g['group_name']}': {len(g['params'])} criterios "
+                  f"(filas {min(rows)}-{max(rows)})")
+            for p in g['params'][:3]:
+                print(f"        · [{p['row_idx']}] {p['sub_seccion'][:60]}")
             if len(g['params']) > 3:
                 print(f"        … +{len(g['params'])-3} más")
 
@@ -1326,11 +1377,25 @@ class DocumentContentValidationService:
                         return f
                 break   # intentar solo la primera pista que aplique
 
-        # 4. Fallback posicional: cualquier archivo no asignado aún
-        #    (para lab: Proyecto 1 → 1er archivo, Proyecto 2 → 2do archivo, etc.)
-        for f in files_metadata:
-            if f['name'] not in already_matched:
-                return f
+        # 4. Fallback posicional ordenado:
+        #    Para grupos lab numerados, preferir archivos que contengan la keyword
+        #    del tipo (proyecto/practica/tarea) sobre archivos genéricos.
+        lab_keyword = None
+        for kw in ('proyecto', 'practica', 'tarea'):
+            if kw in norm_group:
+                lab_keyword = kw
+                break
+
+        unmatched = [f for f in files_metadata if f['name'] not in already_matched]
+        if lab_keyword:
+            # Primero intentar archivos que contengan la keyword del tipo
+            keyword_files = [f for f in unmatched
+                             if lab_keyword in self._normalize(f['name'])]
+            if keyword_files:
+                return keyword_files[0]
+
+        if unmatched:
+            return unmatched[0]
 
         return None
 
@@ -1377,8 +1442,16 @@ class DocumentContentValidationService:
 
             text = self.extract_text_from_bytes(file_bytes, effective_mime)
             doc_texts[name] = text
-            files_metadata.append({'name': name, 'mimeType': mime, 'id': f.get('id', '')})
-            print(f"  📄 '{name}': {len(text)} chars | {len(text.split())} palabras")
+            # Extraer el nombre del propietario del archivo (Drive owners)
+            owners = f.get('owners', [])
+            owner_name = owners[0].get('displayName', '') if owners else ''
+            files_metadata.append({
+                'name':      name,
+                'mimeType':  mime,
+                'id':        f.get('id', ''),
+                'owner':     owner_name,
+            })
+            print(f"  📄 '{name}': {len(text)} chars | propietario: {owner_name or 'N/A'}")
 
         return doc_texts, files_metadata
 
@@ -1966,6 +2039,7 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
 
         presente_col = col_map.get('presente')
         obs_col      = col_map.get('observaciones')
+        autor_col    = col_map.get('autor')
 
         if not presente_col and not obs_col:
             print("  ⚠️  No se encontraron columnas 'Presente'/'Observaciones' — no se puede escribir en la matriz")
@@ -1976,11 +2050,26 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
         left_wrap  = Alignment(horizontal="left", vertical="center", wrap_text=True)
         center     = Alignment(horizontal="center", vertical="center")
 
+        print(f"  🖊️  Escribiendo {len(group_results)} grupo(s) | "
+              f"col Presente={presente_col} | col Obs={obs_col} | col Autor={autor_col}")
         updated = 0
         for group in group_results:
+            group_rows = [r.get('row_idx') for r in group.get('results', []) if r.get('row_idx')]
+            print(f"     ✏️  '{group.get('group_name','?')}': "
+                  f"{len(group.get('results',[]))} resultado(s) | "
+                  f"filas={group_rows[:5]}{'…' if len(group_rows)>5 else ''}")
+
+            # Escribir autor en la fila del encabezado del grupo
+            if autor_col and group.get('header_row') and group.get('autor'):
+                autor_cell = ws.cell(row=group['header_row'], column=autor_col)
+                autor_cell.value = group['autor']
+                autor_cell.alignment = center
+                print(f"        👤 Autor '{group['autor']}' → fila {group['header_row']}, col {autor_col}")
+
             for r in group.get('results', []):
                 row_idx = r.get('row_idx')
                 if not row_idx:
+                    print(f"        ⚠️  row_idx ausente en resultado: {r.get('sub_seccion','?')[:40]}")
                     continue
 
                 presente = r.get('presente', 'No')
@@ -2028,25 +2117,46 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
             f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
         )
 
-        prompt = f"""Eres un evaluador académico universitario experto. Analiza el contenido del documento y realiza DOS tareas:
+        prompt = f"""Eres un evaluador académico universitario experto en revisión de trabajos estudiantiles. Analiza el documento y realiza DOS tareas:
 
-TAREA 1 — EVALUAR REQUISITOS:
-Determina si cada requisito de la lista está cubierto en el documento.
+═══════════════════════════════════════════════════
+TAREA 1 — EVALUAR REQUISITOS DE LA RÚBRICA
+═══════════════════════════════════════════════════
+Determina si cada requisito está cubierto en el documento.
 
-TAREA 2 — ANALIZAR EL DOCUMENTO:
-Proporciona un análisis del documento con:
-- descripcion: qué cubre o desarrolla el documento (2-3 oraciones)
-- enfoque: enfoque pedagógico/técnico principal del documento (1-2 oraciones)
-- complejidad: nivel de complejidad ("Básica", "Intermedia" o "Avanzada") con justificación breve
+CRITERIOS:
+• PRESENTE (Si): el documento aborda el requisito de forma explícita (nombrado directamente)
+  O implícita (demostrado mediante ejemplos, código, diagramas, resultados o desarrollo
+  práctico que evidencia el concepto aunque use terminología distinta).
+• AUSENTE (No): el requisito no aparece, o aparece de forma tan superficial que no
+  aporta valor real al trabajo.
 
-CONTEXTO:
+INSTRUCCIONES PARA CADA REQUISITO:
+- "presente": "Si" o "No" (según los criterios anteriores).
+- "observacion":
+    Si PRESENTE → cita específicamente dónde o cómo se evidencia en el documento
+    (ej: "Se presenta en la sección Metodología con el diagrama de flujo del proceso X").
+    Si AUSENTE → explica qué falta y por qué es importante para este tipo de {tipo_doc}.
+- "sugerencia": SOLO si AUSENTE → indica una acción concreta y específica para
+    incluir este elemento (ej: "Agregar una sección de Conclusiones que relacione
+    los resultados obtenidos con los objetivos planteados").
+- "confidence": 0.0–1.0 (tu certeza; >0.85 solo si la evidencia es clara y directa).
+
+═══════════════════════════════════════════════════
+TAREA 2 — ANÁLISIS DEL DOCUMENTO
+═══════════════════════════════════════════════════
+Proporciona un análisis objetivo del trabajo:
+- descripcion: qué desarrolla o presenta el documento, qué problema aborda (2-3 oraciones).
+- enfoque: enfoque técnico/metodológico principal que usa el estudiante (1-2 oraciones).
+- complejidad: nivel del trabajo ("Básica", "Intermedia" o "Avanzada") con una
+  justificación breve basada en la profundidad, originalidad y cantidad de contenido.
+
+═══════════════════════════════════════════════════
+CONTEXTO DE EVALUACIÓN
+═══════════════════════════════════════════════════
 - Tipo de actividad: {tipo_doc}
-- Sección/carpeta: {section_name}
-- Tipo de documento: {group_name}
-
-CRITERIOS DE EVALUACIÓN DE REQUISITOS:
-- PRESENTE (Si): el documento aborda el tema de forma explícita O implícita.
-- AUSENTE (No): el tema NO aparece o es meramente superficial.
+- Carpeta / sección del curso: {section_name}
+- Documento evaluado: {group_name}
 
 REQUISITOS A EVALUAR ({len(params)} en total):
 {reqs_list}
@@ -2054,16 +2164,18 @@ REQUISITOS A EVALUAR ({len(params)} en total):
 CONTENIDO DEL DOCUMENTO:
 {doc_snippet}
 
-Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta estructura exacta:
+═══════════════════════════════════════════════════
+Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
 {{
   "requirements": [
-    {{"presente": "Si" o "No", "observacion": "Observación específica de 1-2 oraciones", "confidence": 0.0-1.0}},
-    ...  ({len(params)} elementos en el mismo orden)
+    {{"presente": "Si", "observacion": "Evidencia específica de cómo aparece", "confidence": 0.90}},
+    {{"presente": "No", "observacion": "Qué falta y por qué importa", "sugerencia": "Acción concreta para incluirlo", "confidence": 0.85}},
+    ... ({len(params)} elementos en el mismo orden que la lista)
   ],
   "document_analysis": {{
-    "descripcion": "Descripción del documento (2-3 oraciones)",
-    "enfoque": "Enfoque pedagógico/técnico (1-2 oraciones)",
-    "complejidad": "Básica|Intermedia|Avanzada — justificación breve"
+    "descripcion": "Descripción objetiva del trabajo (2-3 oraciones)",
+    "enfoque": "Enfoque técnico/metodológico principal (1-2 oraciones)",
+    "complejidad": "Básica|Intermedia|Avanzada — justificación en 1 oración"
   }}
 }}"""
 
@@ -2090,9 +2202,11 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
                     conf = round(float(raw_conf), 3) if raw_conf is not None else None
                 except (TypeError, ValueError):
                     conf = None
+                presente = str(r.get('presente', 'No'))
                 packed.append({
-                    'presente':    str(r.get('presente', 'No')),
+                    'presente':    presente,
                     'observacion': str(r.get('observacion', '')),
+                    'sugerencia':  str(r.get('sugerencia', '')) if presente != 'Si' else '',
                     'confidence':  conf,
                 })
             return packed, analysis or empty_analysis
@@ -2105,7 +2219,7 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
                 "model": "deepseek-chat",
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.1,
-                "max_tokens": 3000,
+                "max_tokens": 4000,
             }).encode("utf-8")
             try:
                 req = urllib.request.Request(
@@ -2426,6 +2540,10 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
                 g_total = len(group['params'])
                 g_pct   = round(present_in_group / g_total * 100, 2) if g_total else 0
 
+                owner_name = ''
+                if self._normalize(group['group_name']) != 'general' and matched_file:
+                    owner_name = matched_file.get('owner', '')
+
                 group_entry = {
                     'group_name':            group['group_name'],
                     'matched_file':          matched_name,
@@ -2435,6 +2553,8 @@ Responde ÚNICAMENTE con un JSON válido (sin markdown ni texto extra) con esta 
                     'absent_count':          absent_in_group,
                     'compliance_percentage': g_pct,
                     'results':               params_results,
+                    'autor':                 owner_name,
+                    'header_row':            group.get('header_row'),
                 }
                 # Campos extra para carpetas lab
                 if is_lab and doc_analysis:

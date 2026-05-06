@@ -1371,7 +1371,7 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = {}, isAdmin 
       {/* Toolbar de validaciones — solo se muestra cuando hay acciones disponibles */}
       {(() => {
         const currentName = breadcrumbs[breadcrumbs.length - 1]?.name;
-        const showStructure = canValidateStructure && !isSemanaFolder(currentName) && !isCourseRoot;
+        const showStructure = canValidateStructure && isCourseRoot;
         const showContent   = canValidateContent && isContentFolder(currentName);
         const showCourse    = canValidateCourse && isCourseRoot;
         const isLab         = isLabFolder(currentName);
