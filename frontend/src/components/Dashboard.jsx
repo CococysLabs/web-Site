@@ -52,6 +52,7 @@ const Dashboard = () => {
       if (isTeacher) loadTeacherSummary();
     }
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTeacher, user?.is_approved]);
 
   const loadTeacherSummary = async () => {

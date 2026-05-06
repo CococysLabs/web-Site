@@ -32,7 +32,6 @@ const AdminDashboard = () => {
   const [savingSettings, setSavingSettings] = useState(null); // categoría que se está guardando
   const [settingsSection, setSettingsSection] = useState('drive'); // sección activa del settings tab
   // API Keys state: { gemini_api_keys: ['AIza...', ...], ... }
-  const [apiKeysList, setApiKeysList]       = useState({});
   const [newApiKey, setNewApiKey]           = useState({ gemini: '', deepseek: '', groq: '', openrouter: '' });
   const [apiKeyLoading, setApiKeyLoading]   = useState({});
 
@@ -61,7 +60,7 @@ const AdminDashboard = () => {
   const [analysisHistory, setAnalysisHistory] = useState({ records: [], total: 0 });
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisPage, setAnalysisPage]       = useState(0);
-  const [analysisFilter, setAnalysisFilter]   = useState({ type: '', user_id: '' });
+  const [analysisFilter] = useState({ type: '', user_id: '' });
   const ANALYSIS_PAGE_SIZE = 25;
 
   const showToast = (type, message) => {
@@ -83,6 +82,7 @@ const AdminDashboard = () => {
     if (activeTab === 'analysis') {
       loadAnalysisHistory(analysisFilter, 0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const loadDashboardData = async () => {

@@ -51,6 +51,7 @@ const DocumentAnalyzer = ({ folderId, folderName, userPermissions = {}, isAdmin 
       setError(null);
       loadContents();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFolderId]);
 
   const loadContents = async () => {
