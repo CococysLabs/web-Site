@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import DocumentAnalyzer from './admin/DocumentAnalyzer';
+import CreateFoldersFromCsv from './CreateFoldersFromCsv';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -32,6 +33,8 @@ const Dashboard = () => {
 
   const isTeacher = user?.is_teacher;
   const canViewDrive = user?.permissions?.can_view_drive && user?.drive_folder_id;
+  const canCreateFolders = user?.role === 'admin' || isTeacher;
+  const structureFolderId = '1kKtxjCV9cXxkS_BeQv95Ud5M_Q0S77aA';
 
   const withRetry = async (requestFn, retries = 1) => {
     try {
@@ -177,6 +180,18 @@ const Dashboard = () => {
             </button>
           )}
 
+          {canCreateFolders && (
+            <button
+              className={`nav-item ${activeView === 'crear-carpetas' ? 'active' : ''}`}
+              onClick={() => navTo('crear-carpetas')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Crear carpetas</span>
+            </button>
+          )}
+
           <button className={`nav-item ${activeView === 'validations' ? 'active' : ''}`} onClick={() => navTo('validations')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -292,6 +307,21 @@ const Dashboard = () => {
                         onClick={() => navTo('mi-carpeta')}
                       />
                     )}
+                    {canCreateFolders && (
+                      <FeatureCard
+                        icon={
+                          <svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                        }
+                        iconBg="linear-gradient(135deg,#10b981,#059669)"
+                        title="Crear carpetas"
+                        desc={`Mi Carpeta (${structureFolderId})`}
+                        accent="rgba(16,185,129,0.18)"
+                        border="rgba(16,185,129,0.35)"
+                        onClick={() => navTo('crear-carpetas')}
+                      />
+                    )}
                     <FeatureCard
                       icon={<svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                       colorVariant="indigo"
@@ -352,6 +382,11 @@ const Dashboard = () => {
                     isAdmin={false}
                   />
                 </div>
+              )}
+
+              {/* ── Crear carpetas desde CSV ── */}
+              {activeView === 'crear-carpetas' && canCreateFolders && (
+                <CreateFoldersFromCsv />
               )}
 
               {/* ── Validaciones ── */}
