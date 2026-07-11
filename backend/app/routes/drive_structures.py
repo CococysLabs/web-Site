@@ -312,21 +312,27 @@ def _record_folder_result(
 
 import os
 
-@router.get("/debug-config")
-async def debug_drive_structure_config(
-    current_user: User = Depends(get_current_active_user),
-):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Solo admin"
-        )
-
+@router.get("/debug-config-public")
+async def debug_drive_structure_config_public():
+    """
+    Endpoint temporal de debug.
+    Quitar después de revisar producción.
+    No requiere login.
+    """
     root_folder_id = _get_structure_root_folder_id()
     credentials_file = getattr(settings, "GOOGLE_CREDENTIALS_FILE", None)
 
     metadata = None
     metadata_error = None
+    client_email = None
+
+    try:
+        if credentials_file and os.path.exists(credentials_file):
+            with open(credentials_file, "r", encoding="utf-8") as f:
+                credentials_data = json.load(f)
+                client_email = credentials_data.get("client_email")
+    except Exception as exc:
+        client_email = f"No se pudo leer client_email: {str(exc)}"
 
     try:
         metadata = drive_service.get_file_metadata(root_folder_id)
@@ -338,7 +344,9 @@ async def debug_drive_structure_config(
         "GOOGLE_DRIVE_FOLDER_ID": getattr(settings, "GOOGLE_DRIVE_FOLDER_ID", None),
         "GOOGLE_CREDENTIALS_FILE": credentials_file,
         "credentials_file_exists": bool(credentials_file and os.path.exists(credentials_file)),
+        "GOOGLE_CREDENTIALS_JSON_B64_exists": bool(getattr(settings, "GOOGLE_CREDENTIALS_JSON_B64", None)),
         "drive_service_initialized": bool(drive_service.service),
+        "credentials_client_email": client_email,
         "structure_folder_accessible": bool(metadata),
         "structure_folder_metadata": metadata,
         "metadata_error": metadata_error,
