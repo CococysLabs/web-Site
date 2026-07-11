@@ -344,7 +344,7 @@ async def debug_drive_structure_config_public():
         "GOOGLE_DRIVE_FOLDER_ID": getattr(settings, "GOOGLE_DRIVE_FOLDER_ID", None),
         "GOOGLE_CREDENTIALS_FILE": credentials_file,
         "credentials_file_exists": bool(credentials_file and os.path.exists(credentials_file)),
-        "GOOGLE_CREDENTIALS_JSON_B64_exists": bool(getattr(settings, "GOOGLE_CREDENTIALS_JSON_B64", None)),
+        "GOOGLE_CREDENTIALS_JSON_B64_exists": bool(os.getenv("GOOGLE_CREDENTIALS_JSON_B64")),
         "drive_service_initialized": bool(drive_service.service),
         "credentials_client_email": client_email,
         "structure_folder_accessible": bool(metadata),

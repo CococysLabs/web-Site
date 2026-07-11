@@ -56,6 +56,15 @@ async def startup_event():
             f.write(base64.b64decode(creds_b64))
         print(f"✅ Google credentials escritas en {creds_path}")
 
+        # Re-inicializar Google Drive porque drive_service pudo cargarse
+        # antes de que existiera el archivo de credenciales en /tmp.
+        try:
+            from app.services.drive_service import drive_service
+            drive_service._initialize_service()
+            print("✅ Google Drive service reinicializado después de escribir credenciales")
+        except Exception as e:
+            print(f"⚠️ No se pudo reinicializar Google Drive service: {e}")
+            
     init_db()
 
     # Migraciones incrementales (columnas nuevas en tablas existentes)
