@@ -43,6 +43,8 @@ services:
         value: /tmp/google-credentials.json
       - key: GOOGLE_DRIVE_FOLDER_ID
         sync: false
+      - key: GOOGLE_DRIVE_STRUCTURE_FOLDER_ID
+        sync: false
       - key: FRONTEND_URL
         sync: false           # URL del frontend en Render (ej: https://cococys.onrender.com)
       - key: HOST

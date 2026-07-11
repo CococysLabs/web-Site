@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import DocumentAnalyzer from './admin/DocumentAnalyzer';
+import CourseFolderCreator from './CourseFolderCreator';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -19,8 +20,10 @@ const Dashboard = () => {
   const [teacherSummary, setTeacherSummary] = useState(null);
   const [teacherLoading, setTeacherLoading] = useState(false);
 
-  const isTeacher = user?.is_teacher;
-  const canViewDrive = user?.permissions?.can_view_drive && user?.drive_folder_id;
+  const isTeacher = Boolean(user?.is_teacher);
+  const isAdmin = user?.role === 'admin';
+  const canViewDrive = Boolean(user?.permissions?.can_view_drive && user?.drive_folder_id);
+  const canCreateFolders = isTeacher || isAdmin;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -93,6 +96,19 @@ const Dashboard = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
               </svg>
               <span>Mi Carpeta</span>
+            </button>
+          )}
+
+          {canCreateFolders && (
+            <button
+              className={`nav-item ${activeView === 'crear-carpetas' ? 'active' : ''}`}
+              onClick={() => navTo('crear-carpetas')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+              </svg>
+              <span>Crear carpetas</span>
             </button>
           )}
 
@@ -209,6 +225,21 @@ const Dashboard = () => {
                         onClick={() => navTo('mi-carpeta')}
                       />
                     )}
+                    {canCreateFolders && (
+                      <FeatureCard
+                        icon={
+                          <svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                        }
+                        iconBg="linear-gradient(135deg,#10b981,#059669)"
+                        title="Crear carpetas"
+                        desc="Crear estructuras de cursos desde catálogo y CSV"
+                        accent="rgba(16,185,129,0.18)"
+                        border="rgba(16,185,129,0.35)"
+                        onClick={() => navTo('crear-carpetas')}
+                      />
+                    )}
                     <FeatureCard
                       icon={<svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                       iconBg="linear-gradient(135deg,#6366f1,#4f46e5)"
@@ -270,6 +301,10 @@ const Dashboard = () => {
                     userPermissions={user.permissions}
                   />
                 </div>
+              )}
+              {/* ── Crear Carpetas ── */}
+              {activeView === 'crear-carpetas' && canCreateFolders && (
+                <CourseFolderCreator />
               )}
 
               {/* ── Validaciones ── */}

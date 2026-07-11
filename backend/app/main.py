@@ -5,7 +5,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
-from app.routes import auth, drive, documents, analysis, validation, admin_settings
+from app.routes import (
+    auth,
+    drive,
+    documents,
+    analysis,
+    validation,
+    admin_settings,
+    course_catalog,
+    drive_structures,
+)
 
 app = FastAPI(
     title="COCOCYS API",
@@ -137,7 +146,8 @@ app.include_router(documents.router, tags=["Documentos"])
 app.include_router(analysis.router, tags=["Análisis"])
 app.include_router(validation.router, tags=["Validación"])
 app.include_router(admin_settings.router, tags=["Configuración"])
-
+app.include_router(course_catalog.router, tags=["Catálogo de Cursos"])
+app.include_router(drive_structures.router, tags=["Estructuras de Google Drive"])
 
 if __name__ == "__main__":
     import uvicorn

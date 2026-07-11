@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Google Drive API
     GOOGLE_CREDENTIALS_FILE: Optional[str] = None
     GOOGLE_DRIVE_FOLDER_ID: Optional[str] = None
+    GOOGLE_DRIVE_STRUCTURE_FOLDER_ID: Optional[str] = None
     
     # Servidor
     HOST: str = "0.0.0.0"
