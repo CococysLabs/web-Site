@@ -33,7 +33,6 @@ class User(Base):
     drive_folder_id = Column(String(200), nullable=True)          # ID de carpeta Drive asignada
     drive_folder_name = Column(String(300), nullable=True)        # Nombre de la carpeta Drive asignada
     permissions = Column(JSONB, nullable=True)                    # Permisos granulares del usuario
-    personal_api_keys = Column(JSONB, nullable=True, default=dict)  # API keys personales del usuario por proveedor
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 # Relaciones

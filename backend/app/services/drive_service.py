@@ -2,9 +2,7 @@
 Servicio de integración con Google Drive
 """
 import os
-import re
-import unicodedata
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
@@ -41,84 +39,6 @@ class GoogleDriveService:
         except Exception as e:
             print(f"❌ Error initializing Drive service: {e}")
             self.service = None
-    
-    FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
-
-    def _normalize_drive_name(self, name: str) -> str:
-        """
-        Normaliza nombres para comparar carpetas sin duplicar:
-        - ignora mayúsculas/minúsculas
-        - ignora espacios dobles
-        - ignora acentos
-        """
-        value = str(name or "").strip()
-        value = re.sub(r"\s+", " ", value).casefold()
-        nfkd = unicodedata.normalize("NFKD", value)
-        return "".join(c for c in nfkd if not unicodedata.combining(c))
-
-    def get_or_create_folder(
-        self,
-        parent_folder_id: str,
-        folder_name: str,
-        aliases: Optional[List[str]] = None,
-    ) -> Optional[Dict]:
-        """
-        Busca una carpeta dentro de parent_folder_id.
-        Si existe, la retorna.
-        Si no existe, la crea.
-
-        aliases sirve para evitar duplicados.
-        Ejemplo:
-        - folder_name: 5_Contenidos
-        - aliases: ["Contenidos"]
-        """
-        if not self.service:
-            print("⚠️ Google Drive service no inicializado")
-            return None
-
-        aliases = aliases or []
-        names_to_match = [folder_name] + aliases
-        normalized_targets = {
-            self._normalize_drive_name(name)
-            for name in names_to_match
-            if name
-        }
-
-        try:
-            existing_folders = self.list_folders(parent_folder_id)
-
-            for folder in existing_folders:
-                existing_name = folder.get("name", "")
-                if self._normalize_drive_name(existing_name) in normalized_targets:
-                    return {
-                        **folder,
-                        "created": False,
-                        "existed": True,
-                    }
-
-            metadata = {
-                "name": folder_name,
-                "mimeType": self.FOLDER_MIME_TYPE,
-                "parents": [parent_folder_id],
-            }
-
-            created = self.service.files().create(
-                body=metadata,
-                fields="id, name, webViewLink, createdTime, modifiedTime",
-                supportsAllDrives=True,
-            ).execute()
-
-            print(f"✅ Carpeta creada: {folder_name}")
-
-            return {
-                **created,
-                "created": True,
-                "existed": False,
-            }
-
-        except Exception as e:
-            print(f"❌ Error creando/buscando carpeta '{folder_name}': {e}")
-            return None
     
     def list_folders(self, parent_folder_id: Optional[str] = None) -> List[Dict]:
         """Listar carpetas en Drive"""
@@ -187,50 +107,12 @@ class GoogleDriveService:
         try:
             file = self.service.files().get(
                 fileId=file_id,
-                fields="id, name, mimeType, size, webViewLink, createdTime, modifiedTime, owners, parents"
+                fields="id, name, mimeType, size, webViewLink, createdTime, modifiedTime, owners"
             ).execute()
             return file
         except Exception as e:
             print(f"Error getting file metadata: {e}")
             return None
-
-    def file_belongs_to_folder(self, file_id: str, folder_id: str) -> bool:
-        """Valida si un archivo pertenece directamente a una carpeta dada."""
-        meta = self.get_file_metadata(file_id)
-        if not meta:
-            return False
-        parents = meta.get('parents', []) or []
-        return folder_id in parents
-
-    def is_descendant_or_same(self, folder_id: str, root_folder_id: str, max_depth: int = 30) -> bool:
-        """Valida si una carpeta está dentro del árbol de otra (incluyendo igualdad)."""
-        if not self.service:
-            return False
-        if not folder_id or not root_folder_id:
-            return False
-        if folder_id == root_folder_id:
-            return True
-
-        current_id = folder_id
-        depth = 0
-        visited = set()
-
-        while depth < max_depth and current_id and current_id not in visited:
-            visited.add(current_id)
-            meta = self.get_file_metadata(current_id)
-            if not meta:
-                return False
-
-            parents = meta.get('parents', []) or []
-            if root_folder_id in parents:
-                return True
-            if not parents:
-                return False
-
-            current_id = parents[0]
-            depth += 1
-
-        return False
     
     # MIME types de Google Workspace → formato de exportación
     GOOGLE_EXPORT_MAP = {
@@ -441,6 +323,80 @@ class GoogleDriveService:
         except Exception as e:
             print(f"Error getting folder structure: {e}")
             return {}
+        
+    def _escape_query_value(self, value: str) -> str:
+        """
+        Escapa valores usados dentro de queries de Google Drive.
+        """
+        return str(value or "").replace("\\", "\\\\").replace("'", "\\'")
+
+    def find_folder(self, folder_name: str, parent_folder_id: str) -> Optional[Dict]:
+        """
+        Busca una carpeta por nombre exacto dentro de un padre específico.
+        """
+        if not self.service:
+            raise RuntimeError("El servicio de Google Drive no está inicializado")
+
+        safe_name = self._escape_query_value(folder_name)
+        safe_parent = self._escape_query_value(parent_folder_id)
+
+        query = (
+            "mimeType='application/vnd.google-apps.folder' "
+            f"and name='{safe_name}' "
+            f"and '{safe_parent}' in parents "
+            "and trashed=false"
+        )
+
+        results = self.service.files().list(
+            q=query,
+            fields="files(id, name, webViewLink, createdTime, modifiedTime)",
+            pageSize=10,
+            orderBy="createdTime",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+
+        folders = results.get("files", [])
+        return folders[0] if folders else None
+
+    def create_folder(self, folder_name: str, parent_folder_id: str) -> Dict:
+        """
+        Crea una carpeta dentro del padre indicado.
+        """
+        if not self.service:
+            raise RuntimeError("El servicio de Google Drive no está inicializado")
+
+        metadata = {
+            "name": folder_name,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [parent_folder_id],
+        }
+
+        return self.service.files().create(
+            body=metadata,
+            fields="id, name, webViewLink, createdTime, modifiedTime",
+            supportsAllDrives=True,
+        ).execute()
+
+    def get_or_create_folder(
+        self,
+        folder_name: str,
+        parent_folder_id: str,
+    ) -> Tuple[Dict, bool]:
+        """
+        Obtiene una carpeta existente o la crea.
+
+        Retorna:
+        - folder metadata
+        - True si fue creada
+        - False si ya existía
+        """
+        existing = self.find_folder(folder_name, parent_folder_id)
+        if existing:
+            return existing, False
+
+        created = self.create_folder(folder_name, parent_folder_id)
+        return created, True
 
 
 # Instancia singleton del servicio

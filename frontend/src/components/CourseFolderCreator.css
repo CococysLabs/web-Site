@@ -1,0 +1,407 @@
+.course-folder-creator {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 2rem;
+}
+
+.cfc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cfc-header h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  color: var(--color-text-primary);
+}
+
+.cfc-header p {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.92rem;
+}
+
+.cfc-header-badge {
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #34d399;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.cfc-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1rem;
+}
+
+.cfc-card,
+.cfc-result {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.cfc-card h3,
+.cfc-result h3 {
+  margin: 0 0 0.5rem;
+  color: var(--color-text-primary);
+}
+
+.cfc-muted {
+  margin: 0 0 1rem;
+  color: var(--color-text-secondary);
+  font-size: 0.88rem;
+}
+
+.cfc-file {
+  width: 100%;
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1px dashed var(--color-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text-primary);
+}
+
+.cfc-file-selected {
+  margin-top: 0.75rem;
+  font-size: 0.84rem;
+  color: var(--color-text-secondary);
+}
+
+.cfc-example {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.cfc-example pre {
+  white-space: pre-wrap;
+  margin: 0.5rem 0 0;
+  padding: 0.85rem;
+  border-radius: 12px;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.cfc-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.95rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.cfc-label select,
+.cfc-label input {
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-primary);
+  padding: 0.75rem;
+  outline: none;
+}
+
+.cfc-label select:focus,
+.cfc-label input:focus {
+  border-color: rgba(16, 185, 129, 0.6);
+}
+
+.cfc-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.cfc-actions-mini {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cfc-actions-mini button {
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-primary);
+  border-radius: 10px;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.cfc-actions-mini button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cfc-loading,
+.cfc-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.cfc-courses {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.8rem;
+}
+
+.cfc-course {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.cfc-course:hover {
+  border-color: rgba(16, 185, 129, 0.35);
+  transform: translateY(-1px);
+}
+
+.cfc-course.selected {
+  background: rgba(16, 185, 129, 0.09);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.cfc-course input {
+  margin-top: 0.2rem;
+}
+
+.cfc-course-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.cfc-course-main {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  color: var(--color-text-primary);
+}
+
+.cfc-course-main strong {
+  color: #34d399;
+}
+
+.cfc-course code,
+.cfc-course-result code {
+  display: inline-block;
+  font-size: 0.74rem;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.cfc-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1.2rem;
+}
+
+.cfc-primary {
+  border: 0;
+  border-radius: 12px;
+  padding: 0.85rem 1.2rem;
+  cursor: pointer;
+  font-weight: 800;
+  color: white;
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.cfc-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  background: linear-gradient(135deg, #9ca3af, #6b7280);
+}
+
+.cfc-alert {
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.cfc-alert.error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.cfc-alert p {
+  margin: 0.35rem 0 0;
+}
+
+.cfc-result.success {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.cfc-result.warning {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.cfc-result-header p {
+  margin: 0.25rem 0 0;
+  color: var(--color-text-secondary);
+}
+
+.cfc-result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.cfc-result-item {
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cfc-result-item span {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.cfc-result-item strong {
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.cfc-details {
+  margin-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  padding-top: 1rem;
+}
+
+.cfc-details summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.cfc-course-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.cfc-course-result {
+  padding: 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cfc-course-result.ok {
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.cfc-course-result.fail {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.cfc-course-result-stats {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.55rem;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.cfc-course-result ul,
+.cfc-details ul {
+  margin: 0.75rem 0 0;
+  color: #f87171;
+}
+
+@media (max-width: 900px) {
+  .cfc-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cfc-courses {
+    grid-template-columns: 1fr;
+  }
+
+  .cfc-footer-actions {
+    justify-content: stretch;
+  }
+
+  .cfc-primary {
+    width: 100%;
+  }
+}
+
+
+.cfc-label select {
+  color-scheme: dark;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+
+  border: 1px solid rgba(16, 185, 129, 0.6);
+  border-radius: 12px;
+  padding: 0.85rem 2.5rem 0.85rem 0.9rem;
+
+  background-image:
+    linear-gradient(45deg, transparent 50%, #f9fafb 50%),
+    linear-gradient(135deg, #f9fafb 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 12px) 50%;
+  background-size:
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+
+  cursor: pointer;
+}
+
+.cfc-label select option {
+  background-color: #1f2937 !important;
+  color: #f9fafb !important;
+}
+
+.cfc-label select option:checked {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.cfc-label select:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+
+.cfc-label select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}

@@ -5,7 +5,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import init_db
-from app.routes import auth, drive, documents, analysis, validation, admin_settings
+from app.routes import (
+    auth,
+    drive,
+    documents,
+    analysis,
+    validation,
+    admin_settings,
+    course_catalog,
+    drive_structures,
+)
 
 app = FastAPI(
     title="COCOCYS API",
@@ -16,17 +25,14 @@ app = FastAPI(
 )
 
 # Configurar CORS
-# Filtramos valores None/vacíos para evitar que FastAPI rechace la lista
-_raw_origins = [
+allow_origins = [
     settings.FRONTEND_URL,
-    "https://cococys-frontend.onrender.com",  # URL fija de Render como fallback
     "http://localhost:5173",
     "http://localhost:5174",
     "http://localhost:5175",
     "http://localhost",
     "http://localhost:80",
 ]
-allow_origins = [o for o in _raw_origins if o and o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,39 +47,14 @@ app.add_middleware(
 async def startup_event():
     """Inicializar base de datos al iniciar"""
 
-    # Credenciales de Google Drive desde variable de entorno (Render/Cloud)
-    import os, base64, json as _json
-    creds_path = os.getenv("GOOGLE_CREDENTIALS_FILE", "/tmp/google-credentials.json")
-    written = False
-
-    # Opción 1: JSON plano (más simple, recomendado)
-    creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
-    if creds_json:
-        try:
-            _json.loads(creds_json)  # validar que sea JSON válido
-            with open(creds_path, "w", encoding="utf-8") as f:
-                f.write(creds_json)
-            written = True
-            print(f"✅ Google credentials (JSON) escritas en {creds_path}")
-        except Exception as e:
-            print(f"⚠️  GOOGLE_CREDENTIALS_JSON inválido: {e}")
-
-    # Opción 2: Base64 (fallback)
-    if not written:
-        creds_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON_B64", "")
-        if creds_b64:
-            try:
-                with open(creds_path, "wb") as f:
-                    f.write(base64.b64decode(creds_b64))
-                written = True
-                print(f"✅ Google credentials (base64) escritas en {creds_path}")
-            except Exception as e:
-                print(f"⚠️  GOOGLE_CREDENTIALS_JSON_B64 inválido: {e}")
-
-    if written:
-        from app.services.drive_service import drive_service
-        drive_service._initialize_service()
-        print("✅ Google Drive service reinicializado")
+    # Credenciales de Google Drive desde variable base64 (Render/Cloud)
+    import os, base64
+    creds_b64 = os.getenv("GOOGLE_CREDENTIALS_JSON_B64", "")
+    if creds_b64:
+        creds_path = os.getenv("GOOGLE_CREDENTIALS_FILE", "/tmp/google-credentials.json")
+        with open(creds_path, "wb") as f:
+            f.write(base64.b64decode(creds_b64))
+        print(f"✅ Google credentials escritas en {creds_path}")
 
     init_db()
 
@@ -165,7 +146,8 @@ app.include_router(documents.router, tags=["Documentos"])
 app.include_router(analysis.router, tags=["Análisis"])
 app.include_router(validation.router, tags=["Validación"])
 app.include_router(admin_settings.router, tags=["Configuración"])
-
+app.include_router(course_catalog.router, tags=["Catálogo de Cursos"])
+app.include_router(drive_structures.router, tags=["Estructuras de Google Drive"])
 
 if __name__ == "__main__":
     import uvicorn

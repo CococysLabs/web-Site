@@ -86,36 +86,13 @@ class StructureValidationService:
     # Lectura del Excel de la matriz
     # ──────────────────────────────────────────────
 
-    REVISION_FOLDER = "revision de material"
-
-    def _find_revision_subfolder(self, folder_id: str) -> Optional[str]:
-        """Busca la carpeta '0. Revision de Material' (o similar) dentro de folder_id."""
-        try:
-            subfolders = drive_service.list_folders(folder_id)
-            for sf in subfolders:
-                if self.REVISION_FOLDER in self._normalize(sf.get('name', '')):
-                    return sf['id']
-        except Exception:
-            pass
-        return None
-
     def find_matrix_file(self, folder_id: str) -> Optional[str]:
-        """
-        Busca el archivo de matriz en la carpeta de Drive.
-        Primero busca dentro de '0. Revision de Material'; si no existe, busca en folder_id.
-        """
+        """Busca el archivo de matriz en la carpeta de Drive."""
         try:
-            search_id = self._find_revision_subfolder(folder_id) or folder_id
-            files = drive_service.list_files(search_id)
+            files = drive_service.list_files(folder_id)
             for f in files:
                 if f.get('name', '').startswith(self.MATRIX_PREFIX):
                     return f.get('id')
-            # Fallback: si buscamos en subfolder y no encontramos, intentar en raíz
-            if search_id != folder_id:
-                files = drive_service.list_files(folder_id)
-                for f in files:
-                    if f.get('name', '').startswith(self.MATRIX_PREFIX):
-                        return f.get('id')
             return None
         except Exception as e:
             print(f"Error buscando matriz: {e}")
@@ -353,14 +330,14 @@ class StructureValidationService:
     # Punto de entrada principal
     # ──────────────────────────────────────────────
 
-    def validate_folder_structure(self, folder_id: str, db=None) -> Dict[str, Any]:
+    def validate_folder_structure(self, folder_id: str) -> Dict[str, Any]:
         """
         Valida la estructura completa de una carpeta de curso.
         """
         try:
             print(f"\n🔍 Iniciando validación de carpeta: {folder_id}")
 
-            # 1. Localizar la matriz (busca en '0. Revision de Material' primero)
+            # 1. Localizar la matriz
             matrix_id = self.find_matrix_file(folder_id)
             if not matrix_id:
                 return {

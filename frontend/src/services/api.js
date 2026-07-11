@@ -1,8 +1,6 @@
 import axios from 'axios';
 
-// En producción (Docker/Render) las llamadas van por /api a través del proxy nginx.
-// En dev local con `vite dev`, VITE_API_URL apunta al backend directamente.
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // Instancia de axios con configuración base
 const api = axios.create({
