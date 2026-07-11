@@ -310,50 +310,8 @@ def _record_folder_result(
     else:
         existing_items.append(item)
 
-import os
-
-@router.get("/debug-config-public")
-async def debug_drive_structure_config_public():
-    """
-    Endpoint temporal de debug.
-    Quitar después de revisar producción.
-    No requiere login.
-    """
-    root_folder_id = _get_structure_root_folder_id()
-    credentials_file = getattr(settings, "GOOGLE_CREDENTIALS_FILE", None)
-
-    metadata = None
-    metadata_error = None
-    client_email = None
-
-    try:
-        if credentials_file and os.path.exists(credentials_file):
-            with open(credentials_file, "r", encoding="utf-8") as f:
-                credentials_data = json.load(f)
-                client_email = credentials_data.get("client_email")
-    except Exception as exc:
-        client_email = f"No se pudo leer client_email: {str(exc)}"
-
-    try:
-        metadata = drive_service.get_file_metadata(root_folder_id)
-    except Exception as exc:
-        metadata_error = str(exc)
-
-    return {
-        "GOOGLE_DRIVE_STRUCTURE_FOLDER_ID": root_folder_id,
-        "GOOGLE_DRIVE_FOLDER_ID": getattr(settings, "GOOGLE_DRIVE_FOLDER_ID", None),
-        "GOOGLE_CREDENTIALS_FILE": credentials_file,
-        "credentials_file_exists": bool(credentials_file and os.path.exists(credentials_file)),
-        "GOOGLE_CREDENTIALS_JSON_B64_exists": bool(os.getenv("GOOGLE_CREDENTIALS_JSON_B64")),
-        "drive_service_initialized": bool(drive_service.service),
-        "credentials_client_email": client_email,
-        "structure_folder_accessible": bool(metadata),
-        "structure_folder_metadata": metadata,
-        "metadata_error": metadata_error,
-    }
-
 @router.post("/create-courses")
-async def create_course_folders_from_template(
+def create_course_folders_from_template(
     file: UploadFile = File(...),
     area: str = Form(...),
     course_codes: str = Form("[]"),
@@ -402,7 +360,7 @@ async def create_course_folders_from_template(
         )
 
     try:
-        content = await file.read()
+        content = file.file.read()
         template = _parse_structure_template(content)
         selected_codes = _parse_course_codes(course_codes)
     except ValueError as exc:
@@ -415,7 +373,7 @@ async def create_course_folders_from_template(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"No se pudo leer la plantilla CSV: {str(exc)}"
         )
-
+        
     root_folder_id = _get_structure_root_folder_id()
     root_metadata = drive_service.get_file_metadata(root_folder_id)
 
