@@ -2,7 +2,7 @@
 Servicio de integración con Google Drive
 """
 import os
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
@@ -323,6 +323,80 @@ class GoogleDriveService:
         except Exception as e:
             print(f"Error getting folder structure: {e}")
             return {}
+        
+    def _escape_query_value(self, value: str) -> str:
+        """
+        Escapa valores usados dentro de queries de Google Drive.
+        """
+        return str(value or "").replace("\\", "\\\\").replace("'", "\\'")
+
+    def find_folder(self, folder_name: str, parent_folder_id: str) -> Optional[Dict]:
+        """
+        Busca una carpeta por nombre exacto dentro de un padre específico.
+        """
+        if not self.service:
+            raise RuntimeError("El servicio de Google Drive no está inicializado")
+
+        safe_name = self._escape_query_value(folder_name)
+        safe_parent = self._escape_query_value(parent_folder_id)
+
+        query = (
+            "mimeType='application/vnd.google-apps.folder' "
+            f"and name='{safe_name}' "
+            f"and '{safe_parent}' in parents "
+            "and trashed=false"
+        )
+
+        results = self.service.files().list(
+            q=query,
+            fields="files(id, name, webViewLink, createdTime, modifiedTime)",
+            pageSize=10,
+            orderBy="createdTime",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+        ).execute()
+
+        folders = results.get("files", [])
+        return folders[0] if folders else None
+
+    def create_folder(self, folder_name: str, parent_folder_id: str) -> Dict:
+        """
+        Crea una carpeta dentro del padre indicado.
+        """
+        if not self.service:
+            raise RuntimeError("El servicio de Google Drive no está inicializado")
+
+        metadata = {
+            "name": folder_name,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [parent_folder_id],
+        }
+
+        return self.service.files().create(
+            body=metadata,
+            fields="id, name, webViewLink, createdTime, modifiedTime",
+            supportsAllDrives=True,
+        ).execute()
+
+    def get_or_create_folder(
+        self,
+        folder_name: str,
+        parent_folder_id: str,
+    ) -> Tuple[Dict, bool]:
+        """
+        Obtiene una carpeta existente o la crea.
+
+        Retorna:
+        - folder metadata
+        - True si fue creada
+        - False si ya existía
+        """
+        existing = self.find_folder(folder_name, parent_folder_id)
+        if existing:
+            return existing, False
+
+        created = self.create_folder(folder_name, parent_folder_id)
+        return created, True
 
 
 # Instancia singleton del servicio
