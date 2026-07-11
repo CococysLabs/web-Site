@@ -62,7 +62,7 @@ services:
       dockerfile: Dockerfile
       args:
         - BUILDKIT_INLINE_CACHE=1
-        - VITE_API_URL=${VITE_API_URL:-}
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
     image: cococys/frontend:latest
     container_name: cococys-frontend
     hostname: frontend

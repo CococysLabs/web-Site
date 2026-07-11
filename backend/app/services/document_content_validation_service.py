@@ -72,35 +72,6 @@ DOCUMENT_TYPE_HEADERS: set = {
     'reporte',
 }
 
-# Carpetas de laboratorio → nombre canónico de hoja en el Excel
-LAB_FOLDER_TYPES: Dict[str, str] = {
-    'proyectos': 'Proyectos',
-    'practicas': 'Practicas',
-    'tareas':    'Tareas',
-}
-
-# Descripción de cada tipo de carpeta lab para el prompt de IA
-LAB_FOLDER_DESCRIPTIONS: Dict[str, Dict[str, str]] = {
-    'proyectos': {
-        'tipo':        'Proyecto Académico',
-        'descripcion': 'Trabajo integrador donde el estudiante desarrolla e implementa una solución completa a un problema real.',
-        'enfoque':     'Integración de conocimientos, diseño de soluciones, implementación práctica y documentación técnica.',
-        'complejidad': 'Alta — requiere planificación, implementación y entrega de un producto funcional.',
-    },
-    'practicas': {
-        'tipo':        'Práctica de Laboratorio',
-        'descripcion': 'Ejercicio guiado de aplicación de técnicas o herramientas en un entorno controlado.',
-        'enfoque':     'Aplicación directa de conceptos teóricos, experimentación y verificación de resultados.',
-        'complejidad': 'Media — sigue pasos definidos con espacio para experimentación.',
-    },
-    'tareas': {
-        'tipo':        'Tarea / Asignación',
-        'descripcion': 'Actividad de refuerzo y evaluación de comprensión de los conceptos vistos en clase.',
-        'enfoque':     'Consolidación de conocimiento, resolución de problemas y ejercicios de aplicación.',
-        'complejidad': 'Básica a media — centrada en comprensión y aplicación puntual de conceptos.',
-    },
-}
-
 
 class DocumentContentValidationService:
     """
@@ -112,7 +83,6 @@ class DocumentContentValidationService:
         self.model = None
         self.enabled = False
         # Multi-key rotation: lista de todas las claves Gemini disponibles
-        self._default_api_keys: List[str] = []
         self._api_keys: List[str] = []
         # Claves que ya recibieron 429 en esta sesión (se resetean al reiniciar)
         self._exhausted_keys: set = set()
@@ -120,7 +90,6 @@ class DocumentContentValidationService:
         self._deepseek_key: Optional[str] = None
         self._groq_key: Optional[str] = None
         self._openrouter_key: Optional[str] = None
-        self._key_source: str = "none"
         self._init_gemini()
 
     def _init_gemini(self):
@@ -143,10 +112,8 @@ class DocumentContentValidationService:
             if k and k not in keys:
                 keys.append(k)
 
-        self._default_api_keys = list(keys)
-        self._api_keys = list(keys)
+        self._api_keys = keys
         self.enabled = len(keys) > 0
-        self._key_source = "env" if keys else "none"
 
         if self.enabled:
             # Configurar con la primera clave por defecto
@@ -178,185 +145,6 @@ class DocumentContentValidationService:
     # ──────────────────────────────────────────────────────────────────────────
     # Multi-key rotation & proveedores alternativos
     # ──────────────────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _batch_prompt(params: list, section_name: str, group_name: str, doc_snippet: str,
-                      max_chars: int = 12_000) -> tuple:
-        """
-        Genera (system_msg, user_msg) para evaluación batch de requisitos.
-        Formato JSON de respuesta:
-        [
-          {"presente":"Si","observacion":"cómo se evidencia","confidence":0.95},
-          {"presente":"No","observacion":"qué falta","sugerencia":"acción concreta","confidence":0.80}
-        ]
-        confidence: 0.0–1.0 — certeza del modelo sobre su evaluación.
-        """
-        reqs_list = "\n".join(f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params))
-        system_msg = (
-            "Eres un evaluador académico universitario experto en revisión de material pedagógico. "
-            "Determina si cada requisito listado está cubierto en el documento proporcionado. "
-            "Evalúa con criterio: cuenta como PRESENTE si el tema aparece de forma explícita "
-            "(nombrado directamente) o implícita (ejemplos, demostraciones, desarrollo práctico "
-            "que evidencia el concepto aunque use terminología distinta). "
-            "SOLO responde con un array JSON válido de exactamente "
-            f"{len(params)} elementos, sin texto introductorio ni explicación."
-        )
-        user_msg = (
-            f"CONTEXTO: Sección del curso: \"{section_name}\" | Documento: \"{group_name}\"\n\n"
-            f"REQUISITOS A EVALUAR ({len(params)}):\n{reqs_list}\n\n"
-            f"CONTENIDO DEL DOCUMENTO:\n{doc_snippet[:max_chars]}\n\n"
-            "INSTRUCCIONES PARA CADA REQUISITO:\n"
-            "- \"presente\": \"Si\" si hay evidencia clara (explícita o implícita). "
-            "  \"No\" si el tema está completamente ausente o es tan superficial que no aporta valor.\n"
-            "- \"observacion\": Si PRESENTE → cita brevemente dónde o cómo aparece "
-            "  (ej: 'Se desarrolla en la sección de introducción mediante el ejemplo de...'). "
-            "  Si AUSENTE → describe específicamente qué falta y por qué es importante.\n"
-            "- \"sugerencia\": SOLO si AUSENTE → acción concreta y específica en 1 oración "
-            "  para que el autor incluya este contenido (ej: 'Agregar una sección que explique X "
-            "  con al menos un ejemplo aplicado').\n"
-            "- \"confidence\": 0.0–1.0 (certeza de tu evaluación; usa >0.8 solo cuando la "
-            "  evidencia es clara y directa).\n\n"
-            "FORMATO EXACTO DE RESPUESTA (array JSON, sin texto extra):\n"
-            '[{"presente":"Si","observacion":"Se desarrolla en la introducción con el ejemplo de listas enlazadas","confidence":0.92},\n'
-            ' {"presente":"No","observacion":"No se aborda la complejidad temporal de los algoritmos","sugerencia":"Incluir una tabla comparativa de complejidad O(n) para cada algoritmo presentado","confidence":0.88}]\n\n'
-            f"Responde SOLO el array JSON con {len(params)} elementos:"
-        )
-        return system_msg, user_msg
-
-    @staticmethod
-    def _parse_batch_item(item: dict, fallback_observacion: str = '') -> dict:
-        """Normaliza un elemento de respuesta batch al formato interno."""
-        presente = str(item.get('presente', 'No'))
-        raw_conf = item.get('confidence', None)
-        try:
-            confidence = round(float(raw_conf), 3) if raw_conf is not None else None
-        except (TypeError, ValueError):
-            confidence = None
-        return {
-            'presente':    presente,
-            'observacion': str(item.get('observacion', fallback_observacion)),
-            'sugerencia':  str(item.get('sugerencia', '')) if presente != 'Si' else '',
-            'confidence':  confidence,
-        }
-
-    def _reload_keys_from_db(self, db, user_id=None) -> None:
-        """
-        Carga las API keys para esta validación con la siguiente prioridad:
-          1. Keys personales del usuario (si user_id dado y tiene keys)
-          2. Keys del sistema en BD  (settings admin)
-          3. Keys del entorno (.env)
-        Las keys personales SUSTITUYEN completamente a las del sistema/entorno
-        para ese proveedor — garantizando que cada usuario usa solo sus propias keys.
-        """
-        if db is None:
-            return
-        # Limpiar exhausted_keys al inicio de cada validación para que las keys
-        # cargadas desde BD siempre se intenten — el estado de 429 de una sesión
-        # anterior no debe bloquear la siguiente validación.
-        self._exhausted_keys.clear()
-        try:
-            from app.services.settings_service import settings_service
-            from app.models.user import User
-
-            # Leer keys personales del usuario
-            user_personal = {}
-            if user_id is not None:
-                try:
-                    u = db.query(User).filter(User.id == user_id).first()
-                    user_personal = (getattr(u, "personal_api_keys", None) or {}) if u else {}
-                except Exception:
-                    pass
-
-            def _prefer_personal(provider, system_keys, env_key):
-                personal = [k.strip() for k in user_personal.get(provider, []) if k.strip()]
-                if personal:
-                    print(f"    🔑 Usando {len(personal)} key(s) personal(es) de usuario para {provider}")
-                    return personal, "personal"
-                # Admin (BD) primero, .env como último recurso
-                merged = []
-                for k in system_keys:
-                    k = k.strip()
-                    if k and k not in merged:
-                        merged.append(k)
-                # env_key puede ser str o list
-                env_list = env_key if isinstance(env_key, list) else ([env_key] if env_key else [])
-                for k in env_list:
-                    if k and k not in merged:
-                        merged.append(k)
-                admin_keys = [k.strip() for k in system_keys if k.strip()]
-                if not merged:
-                    return [], "none"
-                return merged, "admin" if admin_keys else "env"
-
-            # ── Guardar env keys originales para merge (no usar self.* que ya fue mutado)
-            env_gemini    = list(self._default_api_keys)   # todas las keys .env de Gemini
-            env_deepseek  = getattr(settings, 'DEEPSEEK_API_KEY', '') or ''
-            env_groq      = getattr(settings, 'GROQ_API_KEY', '') or ''
-            env_openrouter = getattr(settings, 'OPENROUTER_API_KEY', '') or ''
-
-            # ── Gemini ──────────────────────────────────────────────────────────
-            db_gemini = settings_service.get_json("gemini_api_keys", db, default=[]) or []
-            merged_gemini, gemini_src = _prefer_personal("gemini", db_gemini, env_gemini)
-            self._api_keys = merged_gemini
-            self.enabled = len(merged_gemini) > 0
-            if merged_gemini:
-                import google.generativeai as genai
-                genai.configure(api_key=merged_gemini[0])
-
-            # ── DeepSeek ────────────────────────────────────────────────────────
-            db_deepseek = settings_service.get_json("deepseek_api_keys", db, default=[]) or []
-            merged_deepseek, deepseek_src = _prefer_personal("deepseek", db_deepseek, env_deepseek or None)
-            self._deepseek_key = merged_deepseek[0] if merged_deepseek else None
-
-            # ── Groq ────────────────────────────────────────────────────────────
-            db_groq = settings_service.get_json("groq_api_keys", db, default=[]) or []
-            merged_groq, groq_src = _prefer_personal("groq", db_groq, env_groq or None)
-            self._groq_key = merged_groq[0] if merged_groq else None
-
-            # ── OpenRouter ──────────────────────────────────────────────────────
-            db_openrouter = settings_service.get_json("openrouter_api_keys", db, default=[]) or []
-            merged_openrouter, openrouter_src = _prefer_personal("openrouter", db_openrouter, env_openrouter or None)
-            self._openrouter_key = merged_openrouter[0] if merged_openrouter else None
-
-            # ── Fuente del proveedor primario (para AnalysisLog) ─────────────────
-            if merged_gemini:
-                self._key_source = gemini_src
-            elif self._deepseek_key:
-                self._key_source = deepseek_src
-            elif self._groq_key:
-                self._key_source = groq_src
-            elif self._openrouter_key:
-                self._key_source = openrouter_src
-            else:
-                self._key_source = "none"
-
-            print(
-                f"  🔑 Keys cargadas — Gemini:{len(merged_gemini)} "
-                f"DeepSeek:{'✓' if self._deepseek_key else '✗'} "
-                f"Groq:{'✓' if self._groq_key else '✗'} "
-                f"OpenRouter:{'✓' if self._openrouter_key else '✗'}"
-            )
-
-        except Exception as e:
-            import traceback
-            print(f"  ⚠️  Error recargando keys desde BD: {e}")
-            print(traceback.format_exc())
-
-    @property
-    def primary_provider(self) -> str:
-        if self.enabled:
-            return "gemini"
-        if self._deepseek_key:
-            return "deepseek"
-        if self._groq_key:
-            return "groq"
-        if self._openrouter_key:
-            return "openrouter"
-        return "basic"
-
-    @property
-    def key_source(self) -> str:
-        return self._key_source
 
     def _get_available_keys(self) -> List[str]:
         """Retorna las claves Gemini que aún no han sido marcadas como agotadas."""
@@ -396,7 +184,23 @@ class DocumentContentValidationService:
         import urllib.request
         import urllib.error
 
-        system_msg, user_msg = self._batch_prompt(params, section_name, group_name, doc_snippet, 12_000)
+        reqs_list = "\n".join(
+            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
+        )
+
+        system_msg = (
+            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
+            "sin texto introductorio ni explicación. Tu respuesta debe ser "
+            f"un array JSON con exactamente {len(params)} elementos."
+        )
+
+        user_msg = (
+            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
+            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
+            f"Contenido del documento:\n{doc_snippet[:12_000]}\n\n"
+            f"Responde SOLO el array JSON (sin texto adicional):\n"
+            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
+        )
 
         # Intentar con modelos Groq en orden de preferencia
         groq_models = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
@@ -408,8 +212,8 @@ class DocumentContentValidationService:
                     {"role": "system", "content": system_msg},
                     {"role": "user",   "content": user_msg},
                 ],
-                "temperature": getattr(self, '_req_temperature', 0.05),
-                "max_tokens":  getattr(self, '_req_max_tokens', 2000),
+                "temperature": 0.05,
+                "max_tokens": 2000,
             }).encode("utf-8")
 
             try:
@@ -443,9 +247,11 @@ class DocumentContentValidationService:
                     results = []
                     for i, p in enumerate(params):
                         if i < len(parsed):
-                            parsed_item = self._parse_batch_item(parsed[i], '')
-                            parsed_item['observacion'] = f"[Groq] {parsed_item['observacion']}"
-                            results.append(parsed_item)
+                            item = parsed[i]
+                            results.append({
+                                "presente":    str(item.get("presente", "No")),
+                                "observacion": f"[Groq] {item.get('observacion', '')}",
+                            })
                         else:
                             results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
 
@@ -488,7 +294,23 @@ class DocumentContentValidationService:
         import urllib.request
         import urllib.error
 
-        system_msg, user_msg = self._batch_prompt(params, section_name, group_name, doc_snippet, 15_000)
+        reqs_list = "\n".join(
+            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
+        )
+
+        system_msg = (
+            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
+            "sin texto introductorio ni explicación. Tu respuesta debe ser "
+            f"un array JSON con exactamente {len(params)} elementos."
+        )
+
+        user_msg = (
+            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
+            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
+            f"Contenido del documento:\n{doc_snippet[:15_000]}\n\n"
+            f"Responde SOLO el array JSON (sin texto adicional):\n"
+            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
+        )
 
         payload = json.dumps({
             "model": "deepseek-chat",
@@ -496,8 +318,8 @@ class DocumentContentValidationService:
                 {"role": "system", "content": system_msg},
                 {"role": "user",   "content": user_msg},
             ],
-            "temperature": getattr(self, '_req_temperature', 0.05),
-            "max_tokens":  getattr(self, '_req_max_tokens', 2000),
+            "temperature": 0.05,
+            "max_tokens": 2000,
         }).encode("utf-8")
 
         try:
@@ -525,7 +347,11 @@ class DocumentContentValidationService:
             results = []
             for i, p in enumerate(params):
                 if i < len(parsed):
-                    results.append(self._parse_batch_item(parsed[i]))
+                    item = parsed[i]
+                    results.append({
+                        'presente':    str(item.get('presente', 'No')),
+                        'observacion': str(item.get('observacion', '')),
+                    })
                 else:
                     results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
             print(f"  🤖 [MODELO: DeepSeek-V3] respondió — {len(results)} resultados")
@@ -557,7 +383,23 @@ class DocumentContentValidationService:
         import urllib.request
         import urllib.error
 
-        system_msg, user_msg = self._batch_prompt(params, section_name, group_name, doc_snippet, 12_000)
+        reqs_list = "\n".join(
+            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
+        )
+
+        system_msg = (
+            "Eres un evaluador académico. SOLO debes responder con JSON válido, "
+            "sin texto introductorio ni explicación. Tu respuesta debe ser "
+            f"un array JSON con exactamente {len(params)} elementos."
+        )
+
+        user_msg = (
+            f"Sección: {section_name} | Tipo de documento: {group_name}\n\n"
+            f"Requisitos a evaluar ({len(params)}):\n{reqs_list}\n\n"
+            f"Contenido del documento:\n{doc_snippet[:12_000]}\n\n"
+            f"Responde SOLO el array JSON (sin texto adicional):\n"
+            f'[{{"presente":"Si","observacion":"motivo"}},...]  <- {len(params)} elementos'
+        )
 
         openrouter_models = [
             "meta-llama/llama-3.1-8b-instruct:free",
@@ -571,8 +413,8 @@ class DocumentContentValidationService:
                     {"role": "system", "content": system_msg},
                     {"role": "user",   "content": user_msg},
                 ],
-                "temperature": getattr(self, '_req_temperature', 0.05),
-                "max_tokens":  getattr(self, '_req_max_tokens', 2000),
+                "temperature": 0.05,
+                "max_tokens": 2000,
             }).encode("utf-8")
 
             try:
@@ -607,9 +449,11 @@ class DocumentContentValidationService:
                     results = []
                     for i, p in enumerate(params):
                         if i < len(parsed):
-                            parsed_item = self._parse_batch_item(parsed[i])
-                            parsed_item['observacion'] = f"[OpenRouter] {parsed_item['observacion']}"
-                            results.append(parsed_item)
+                            item = parsed[i]
+                            results.append({
+                                "presente":    str(item.get("presente", "No")),
+                                "observacion": f"[OpenRouter] {item.get('observacion', '')}",
+                            })
                         else:
                             results.append(self._fallback_keyword_check(p["sub_seccion"], doc_snippet))
 
@@ -656,83 +500,29 @@ class DocumentContentValidationService:
         Para otros tipos devuelve el nombre limpio (underscores → espacios).
         """
         normalized = self._normalize(folder_name)
+        # Sin $ final: acepta "Semana_6 - Algoritmos" → "semana 6 algoritmos" → "Semana 6"
         m = re.match(r'^semana\s*(\d+)', normalized)
         if m:
             return f"Semana {m.group(1)}"
         return folder_name.replace('_', ' ').replace('-', ' ').strip()
 
-    def _get_folder_type(self, folder_name: str) -> str:
-        """
-        Detecta el tipo de carpeta.
-        Retorna: 'semana' | 'proyectos' | 'practicas' | 'tareas' | 'unknown'
-        """
-        norm = self._normalize(folder_name)
-        if re.match(r'^semana\s*\d+', norm):
-            return 'semana'
-        for key in LAB_FOLDER_TYPES:
-            if key in norm:
-                return key
-        return 'unknown'
-
-    def get_lab_sheet(self, wb: openpyxl.Workbook, folder_type: str):
-        """
-        Obtiene la hoja del Excel correspondiente a una carpeta de laboratorio.
-        folder_type: 'proyectos' | 'practicas' | 'tareas'
-        Busca por nombre exacto, luego por coincidencia parcial.
-        """
-        sheet_name = LAB_FOLDER_TYPES.get(folder_type, '')
-        # Búsqueda exacta (case-insensitive)
-        for name in wb.sheetnames:
-            if self._normalize(name) == self._normalize(sheet_name):
-                print(f"  📋 Hoja lab '{name}' encontrada")
-                return wb[name]
-        # Búsqueda parcial
-        for name in wb.sheetnames:
-            if sheet_name.lower() in name.lower():
-                print(f"  📋 Hoja lab '{name}' encontrada (parcial)")
-                return wb[name]
-        print(f"  ⚠️  No se encontró hoja '{sheet_name}'. Hojas disponibles: {wb.sheetnames}")
-        return None
-
     # ──────────────────────────────────────────────────────────────────────────
     # Excel: localizar, leer y parsear
     # ──────────────────────────────────────────────────────────────────────────
 
-    REVISION_FOLDER = "revision de material"
-
-    def _find_revision_subfolder(self, folder_id: str) -> Optional[str]:
-        """Busca la carpeta '0. Revision de Material' (o similar) dentro de folder_id."""
-        try:
-            subfolders = drive_service.list_folders(folder_id)
-            for sf in subfolders:
-                if self.REVISION_FOLDER in self._normalize(sf.get('name', '')):
-                    return sf['id']
-        except Exception:
-            pass
-        return None
-
     def find_matrix_file(self, folder_id: str) -> Optional[Tuple[str, str]]:
         """
         Busca el Excel 'Matriz observaciones*.xlsx' en la carpeta indicada.
-        Primero busca dentro de '0. Revision de Material'; si no, busca en folder_id.
         Retorna (file_id, file_name) o None.
         """
         try:
-            search_id = self._find_revision_subfolder(folder_id) or folder_id
-            files = drive_service.list_files(search_id)
+            files = drive_service.list_files(folder_id)
             names = [f.get('name', '') for f in files]
-            print(f"  📂 Archivos en {search_id}: {names}")
+            print(f"  📂 Archivos en {folder_id}: {names}")
             for f in files:
                 name = f.get('name', '')
                 if name.lower().startswith(MATRIX_FILE_PREFIX.lower()):
                     return (f['id'], name)
-            # Fallback: si buscamos en subfolder y no encontramos, intentar en raíz
-            if search_id != folder_id:
-                files = drive_service.list_files(folder_id)
-                for f in files:
-                    name = f.get('name', '')
-                    if name.lower().startswith(MATRIX_FILE_PREFIX.lower()):
-                        return (f['id'], name)
             return None
         except Exception as e:
             print(f"Error buscando matriz: {e}")
@@ -763,19 +553,15 @@ class DocumentContentValidationService:
         print(f"⚠️  No se encontró la hoja 'Matriz observaciones'. Hojas disponibles: {wb.sheetnames}")
         return None
 
-    def _find_header_row(self, ws, min_matches: int = 3) -> Tuple[int, Dict[str, int]]:
+    def _find_header_row(self, ws) -> Tuple[int, Dict[str, int]]:
         """
         Escanea las primeras 5 filas para encontrar la fila de encabezados.
         Retorna (header_row_idx, col_map) con índices 1-based.
         col_map keys: 'seccion', 'sub_seccion', 'aplica', 'autor', 'presente', 'observaciones'
-
-        min_matches=2 permite detectar hojas lab con menos columnas estándar.
         """
         target_keywords = {
             'seccion', 'sub seccion', 'aplica', 'autor', 'presente', 'observaciones'
         }
-
-        best_row: Optional[Tuple[int, Dict, int]] = None  # (row_idx, col_map, match_count)
 
         for row_idx in range(1, 6):
             row_vals = []
@@ -784,7 +570,7 @@ class DocumentContentValidationService:
                 row_vals.append(self._normalize(str(val or '')))
 
             matches = sum(1 for v in row_vals if any(kw in v for kw in target_keywords))
-            if matches >= min_matches:
+            if matches >= 3:
                 col_map: Dict[str, int] = {}
                 for col_idx, norm_val in enumerate(row_vals, 1):
                     if not norm_val:
@@ -803,25 +589,6 @@ class DocumentContentValidationService:
                         col_map['observaciones'] = col_idx
                 print(f"📋 Encabezados encontrados en fila {row_idx}: {col_map}")
                 return (row_idx, col_map)
-            # Guardar la mejor fila aunque no alcance el mínimo
-            if best_row is None or matches > best_row[2]:
-                col_map_partial: Dict[str, int] = {}
-                for col_idx, norm_val in enumerate(row_vals, 1):
-                    if not norm_val:
-                        continue
-                    if 'sub' in norm_val and 'seccion' in norm_val:
-                        col_map_partial['sub_seccion'] = col_idx
-                    elif 'seccion' in norm_val:
-                        col_map_partial['seccion'] = col_idx
-                    elif norm_val.startswith('aplica'):
-                        col_map_partial['aplica'] = col_idx
-                    elif norm_val == 'autor':
-                        col_map_partial['autor'] = col_idx
-                    elif 'presente' in norm_val:
-                        col_map_partial['presente'] = col_idx
-                    elif 'observaci' in norm_val:
-                        col_map_partial['observaciones'] = col_idx
-                best_row = (row_idx, col_map_partial, matches)
 
         raise ValueError("No se encontró fila de encabezados en las primeras 5 filas del Excel")
 
@@ -954,55 +721,61 @@ class DocumentContentValidationService:
     def parse_requirements_by_group(
         self,
         ws,
-        target_section: Optional[str],
+        target_section: str,
         col_map: Dict[str, int],
         header_row_idx: int
     ) -> List[Dict]:
         """
         Lee la hoja y agrupa los requisitos por tipo de documento (Presentación, Lectura, Video…).
 
-        target_section=None → lee TODOS los requisitos sin filtrar por sección.
-        Útil para hojas de Proyectos/Practicas/Tareas donde toda la hoja pertenece
-        al mismo tipo de carpeta.
-
         Estructura del Excel:
           Sección  | Sub-sección          | Aplica
           Semana 2 | Presentación         |        ← encabezado de grupo (sin Aplica)
           Semana 2 | Bienvenida           | Si     ← parámetro
+          Semana 2 | Agenda               | Si     ← parámetro
+          ...
           Semana 2 | Lectura              |        ← encabezado de grupo
           Semana 2 | Titulo               | Si     ← parámetro
+
+        Retorna lista de grupos:
+          [
+            {
+              'group_name': 'Presentación',
+              'params': [
+                {'row_idx': int, 'sub_seccion': str, 'autor': str},
+                ...
+              ]
+            },
+            ...
+          ]
         """
-        norm_target = self._normalize(target_section) if target_section else None
-        sec_col    = col_map.get('seccion')
-        sub_col    = col_map.get('sub_seccion')
+        norm_target = self._normalize(target_section)
+        sec_col   = col_map.get('seccion')
+        sub_col   = col_map.get('sub_seccion')
         aplica_col = col_map.get('aplica')
         autor_col  = col_map.get('autor')
 
-        # Para hojas lab de una sola columna (Proyectos/Practicas/Tareas), la columna
-        # "Sección" contiene tanto los encabezados de grupo ("Proyecto 1") como los
-        # criterios ("Titulo Proyecto"). Si no hay sub_seccion, usar seccion como fallback.
-        effective_sub_col = sub_col or sec_col
-        if not effective_sub_col:
+        if not sec_col or not sub_col:
             return []
 
         groups: List[Dict] = []
         current_group: Optional[Dict] = None
-        last_sec_val = None
+        last_sec_val = None   # soporte para celdas combinadas (merged cells)
 
         for row_idx in range(header_row_idx + 1, ws.max_row + 1):
-            # Filtro por sección (si aplica)
-            if norm_target is not None and sec_col:
-                sec_val = ws.cell(row=row_idx, column=sec_col).value
-                if sec_val:
-                    last_sec_val = sec_val
-                elif last_sec_val:
-                    sec_val = last_sec_val
-                if not sec_val:
-                    continue
-                if self._normalize(str(sec_val)) != norm_target:
-                    continue
+            sec_val = ws.cell(row=row_idx, column=sec_col).value
+            # Celdas combinadas: la primera celda del rango tiene valor;
+            # las siguientes son None → usar el último valor conocido.
+            if sec_val:
+                last_sec_val = sec_val
+            elif last_sec_val:
+                sec_val = last_sec_val
+            if not sec_val:
+                continue
+            if self._normalize(str(sec_val)) != norm_target:
+                continue
 
-            sub_val = ws.cell(row=row_idx, column=effective_sub_col).value
+            sub_val = ws.cell(row=row_idx, column=sub_col).value
             if not sub_val or str(sub_val).strip() == '':
                 continue
             sub_str = str(sub_val).strip()
@@ -1017,14 +790,19 @@ class DocumentContentValidationService:
             sub_norm = self._normalize(sub_str)
 
             # ── Detección de encabezado de grupo ────────────────────────────
-            # Criterio 1: vocabulario de tipos de documento (Semana sheets)
-            # Criterio 2: patrón lab "Proyecto N", "Practica N", "Tarea N"
-            _is_lab_header = bool(
-                re.match(r'^(proyecto|practica|tarea)\s*\d*$', sub_norm)
-            )
-
-            if sub_norm in DOCUMENT_TYPE_HEADERS or _is_lab_header:
-                # Tipo de documento o encabezado de lab → nuevo grupo
+            # El vocabulario es el criterio PRIMARIO (robusto ante cualquier
+            # variante de Aplica: 'Si', None, vacío, etc.).
+            #
+            # Dos patrones de Excel observados:
+            #   A) aplica='Si' en todas las filas (incluidos tipos de doc)
+            #   B) aplica=None en todas las filas
+            # En ambos casos el nombre de sub-sección identifica el tipo.
+            #
+            # Fallback: si el sub_seccion NO está en el vocabulario y aplica
+            # tampoco es 'si' (ej. aplica=None), lo tratamos como parámetro
+            # asumiendo que el Excel omite la columna Aplica.
+            if sub_norm in DOCUMENT_TYPE_HEADERS:
+                # Tipo de documento conocido → nuevo grupo
                 current_group = {'group_name': sub_str, 'params': []}
                 groups.append(current_group)
             else:
@@ -1053,246 +831,6 @@ class DocumentContentValidationService:
                 print(f"      · {p['sub_seccion']}")
 
         return groups
-
-    def _parse_lab_sheet_raw(self, ws) -> List[Dict]:
-        """
-        Fallback robusto para hojas lab con estructura no estándar.
-        Lee la primera columna significativa de cada fila.
-        Detecta encabezados de grupo ("Proyecto 1", "Practica 2"…) y crea
-        grupos separados — igual que parse_requirements_by_group pero sin
-        depender del mapeo de columnas.
-        """
-        SKIP_NORMS = {
-            'si', 'no', 'aplica', 'sub seccion', 'seccion', 'autor',
-            'presente', 'observaciones', 'observacion', 'criterio',
-            'criterios', 'requisito', 'requisitos', 'nombre', 'fecha',
-            'calificacion', 'puntaje', 'nota', 'semana', 'sub-seccion',
-            'descripcion', 'descripcion',
-        }
-
-        groups: List[Dict] = []
-        current_group: Optional[Dict] = None
-        seen_params: set = set()
-
-        for row_idx in range(1, min(ws.max_row + 1, 500)):
-            # Leer la primera celda no vacía de la fila (columna más a la izquierda)
-            row_text = None
-            row_col  = None
-            for col_idx in range(1, min(ws.max_column + 1, 5)):
-                val = ws.cell(row=row_idx, column=col_idx).value
-                if val and str(val).strip():
-                    row_text = str(val).strip()
-                    row_col  = col_idx
-                    break
-            if not row_text:
-                continue
-
-            norm = self._normalize(row_text)
-
-            # Saltar palabras clave de encabezado de tabla
-            if norm in SKIP_NORMS or len(row_text) < 4:
-                continue
-
-            # ── Encabezado de grupo lab ("Proyecto 1", "Practica 2"…) ──
-            if re.match(r'^(proyecto|practica|tarea)\s*\d*$', norm):
-                current_group = {'group_name': row_text, 'params': []}
-                groups.append(current_group)
-                continue
-
-            # ── Criterio de evaluación ──────────────────────────────────
-            if len(row_text) < 8 or norm in seen_params:
-                continue
-            seen_params.add(norm)
-
-            if current_group is None:
-                current_group = {'group_name': 'General', 'params': []}
-                groups.append(current_group)
-
-            current_group['params'].append({
-                'row_idx':    row_idx,
-                'sub_seccion': row_text,
-                'autor':      '',
-            })
-
-        groups = [g for g in groups if g['params']]
-        if groups:
-            total = sum(len(g['params']) for g in groups)
-            print(f"  📋 Parsing raw: {len(groups)} grupos, {total} requisitos")
-        return groups
-
-    def _parse_lab_sheet_full(self, ws) -> Tuple[List[Dict], Dict[str, int]]:
-        """
-        Parser dedicado y completo para hojas Proyectos/Practicas/Tareas.
-
-        Hace en un solo paso:
-          1. Escanea toda la hoja para localizar las columnas de escritura
-             (Presente, Observaciones) — sin depender de _find_header_row.
-          2. Detecta la columna de criterios (primera columna con contenido).
-          3. Detecta la columna Aplica (si existe).
-          4. Agrupa criterios bajo encabezados "Proyecto N / Practica N / Tarea N".
-          5. Retorna (groups, write_cols) donde write_cols tiene las claves
-             'presente' y/o 'observaciones' con sus índices de columna 1-based.
-
-        Esto desacopla completamente el parsing lab del flujo de hojas Semana.
-        """
-        # ── Paso 1: localizar columnas de escritura en toda la hoja ──────────
-        write_cols: Dict[str, int] = {}
-        aplica_col: Optional[int] = None
-        autor_col:  Optional[int] = None
-        criteria_col: Optional[int] = None   # columna principal con texto de criterios
-
-        # Escaneamos las primeras 15 filas buscando encabezados de columna
-        for r in range(1, min(ws.max_row + 1, 15)):
-            row_matched = False
-            for c in range(1, min(ws.max_column + 1, 30)):
-                raw = ws.cell(row=r, column=c).value
-                norm = self._normalize(str(raw or ''))
-                if not norm:
-                    continue
-                if 'presente' in norm and 'presente' not in write_cols:
-                    write_cols['presente'] = c
-                    row_matched = True
-                elif 'observaci' in norm and 'observaciones' not in write_cols:
-                    write_cols['observaciones'] = c
-                    row_matched = True
-                elif norm.startswith('aplica') and aplica_col is None:
-                    aplica_col = c
-                elif norm == 'autor' and autor_col is None:
-                    autor_col = c
-            if row_matched and len(write_cols) >= 2:
-                break   # ambas columnas encontradas
-
-        if autor_col:
-            write_cols['autor'] = autor_col
-        print(f"  📝 Columnas detectadas: {write_cols} | aplica: {aplica_col} | autor: {autor_col}")
-
-        # ── Paso 2: detectar columna de criterios ────────────────────────────
-        # Es la primera columna (col. más a la izquierda) que contiene texto
-        # significativo en las primeras 30 filas (excluyendo columnas de escritura).
-        write_col_idxs = set(write_cols.values())
-        for r in range(1, min(ws.max_row + 1, 30)):
-            for c in range(1, min(ws.max_column + 1, 10)):
-                if c in write_col_idxs or c == aplica_col:
-                    continue
-                raw = ws.cell(row=r, column=c).value
-                if raw and str(raw).strip() and len(str(raw).strip()) >= 3:
-                    norm = self._normalize(str(raw))
-                    # Descartar filas de encabezado de tabla
-                    if any(kw in norm for kw in ('presente', 'observaci', 'aplica', 'autor')):
-                        continue
-                    criteria_col = c
-                    break
-            if criteria_col:
-                break
-
-        if criteria_col is None:
-            criteria_col = 1   # fallback: columna A
-        print(f"  📌 Columna de criterios: {criteria_col}")
-
-        # ── Paso 3: recorrer toda la hoja y agrupar ───────────────────────────
-        SKIP_NORMS = {
-            'si', 'no', 'aplica', 'sub seccion', 'seccion', 'sub-seccion',
-            'presente', 'observaciones', 'observacion', 'autor', 'criterio',
-            'criterios', 'requisito', 'requisitos', 'nombre', 'fecha',
-            'calificacion', 'puntaje', 'nota', 'descripcion',
-        }
-
-        # Columnas que NO son de criterios ni de escritura (candidatas a encabezado de grupo)
-        excluded_cols = write_col_idxs | ({aplica_col} if aplica_col else set())
-        # Buscar en todas las columnas disponibles, no solo criteria_col
-        max_scan_col = min(ws.max_column + 1, 15)
-
-        def _is_group_header(text: str) -> bool:
-            """True si el texto corresponde a un encabezado de grupo lab."""
-            if not text or len(text.strip()) >= 80:
-                return False
-            norm = self._normalize(text.strip())
-            norm_clean = re.sub(r'[​‌‍﻿­]', '', norm).strip()
-            return bool(re.match(
-                r'^(proyecto|practica|tarea)\s*\d*(\s*[\-:,./].*)?$',
-                norm_clean
-            ))
-
-        groups: List[Dict] = []
-        current_group: Optional[Dict] = None
-        seen_in_group: set = set()   # (group_name, norm_criteria) → evitar duplicados
-
-        for r in range(1, ws.max_row + 1):
-            # ── Buscar encabezado de grupo en CUALQUIER columna de la fila ──
-            # Esto resuelve el caso donde los encabezados (Proyecto 1, Proyecto 2…)
-            # están en una columna distinta a la de los criterios.
-            group_header_found = False
-            for c in range(1, max_scan_col):
-                if c in excluded_cols:
-                    continue
-                raw_h = ws.cell(row=r, column=c).value
-                if raw_h and _is_group_header(str(raw_h)):
-                    header_text = str(raw_h).strip()
-                    current_group = {'group_name': header_text, 'params': [], 'header_row': r}
-                    groups.append(current_group)
-                    seen_in_group = set()
-                    print(f"     🗂️  Grupo detectado: '{header_text}' (fila {r}, col {c})")
-                    group_header_found = True
-                    break
-            if group_header_found:
-                continue
-
-            # ── Leer criterio desde criteria_col ────────────────────────────
-            raw = ws.cell(row=r, column=criteria_col).value
-            if not raw or not str(raw).strip():
-                continue
-
-            text = str(raw).strip()
-            norm = self._normalize(text)
-
-            # Saltar encabezados de tabla y valores muy cortos
-            if norm in SKIP_NORMS or len(text) < 3:
-                continue
-
-            # ── Verificar columna Aplica ──────────────────────────────────────
-            if aplica_col:
-                aplica_val = ws.cell(row=r, column=aplica_col).value
-                if self._normalize(str(aplica_val or '')) == 'no':
-                    continue   # explícitamente excluido
-
-            # ── Criterio de evaluación ────────────────────────────────────────
-            if len(text) < 5:
-                continue
-
-            group_key = current_group['group_name'] if current_group else 'General'
-            dedup_key = (group_key, norm)
-            if dedup_key in seen_in_group:
-                continue
-            seen_in_group.add(dedup_key)
-
-            if current_group is None:
-                current_group = {'group_name': 'General', 'params': []}
-                groups.append(current_group)
-
-            current_group['params'].append({
-                'row_idx':     r,
-                'sub_seccion': text,
-                'autor':       '',
-            })
-
-        grupos_vacios = [g for g in groups if not g['params']]
-        if grupos_vacios:
-            print(f"  ⚠️  {len(grupos_vacios)} grupo(s) sin criterios detectados: "
-                  f"{[g['group_name'] for g in grupos_vacios]}")
-        groups = [g for g in groups if g['params']]
-        total = sum(len(g['params']) for g in groups)
-        print(f"  📋 Lab sheet full: {len(groups)} grupos, {total} criterios "
-              f"| criteria_col={criteria_col} | write_cols={write_cols}")
-        for g in groups:
-            rows = [p['row_idx'] for p in g['params']]
-            print(f"     📑 '{g['group_name']}': {len(g['params'])} criterios "
-                  f"(filas {min(rows)}-{max(rows)})")
-            for p in g['params'][:3]:
-                print(f"        · [{p['row_idx']}] {p['sub_seccion'][:60]}")
-            if len(g['params']) > 3:
-                print(f"        … +{len(g['params'])-3} más")
-
-        return groups, write_cols
 
     # Pistas de tipo: qué MIME buscar para cada nombre de grupo
     _GROUP_TYPE_HINTS: Dict[str, List[str]] = {
@@ -1339,9 +877,8 @@ class DocumentContentValidationService:
 
         Prioridad:
           1. Coincidencia de nombre normalizado (p.ej. "Presentación" ↔ "Presentacion_S2.pptx")
-          2. Para grupos lab numerados ("Proyecto 1"): coincidencia por número en nombre de archivo
-          3. Pista por MIME type según el nombre del grupo
-          4. Cualquier archivo soportado no asignado aún (orden Drive → posición)
+          2. Pista por MIME type según el nombre del grupo
+          3. Cualquier archivo soportado no asignado aún
         """
         norm_group = self._normalize(group_name)
 
@@ -1352,21 +889,7 @@ class DocumentContentValidationService:
             if self._names_match(group_name, f['name']):
                 return f
 
-        # 2. Para grupos lab numerados ("Proyecto 1", "Practica 2", etc.)
-        #    Intentar match por número en el nombre del archivo
-        m_num = re.search(r'\d+', group_name)
-        is_lab_group = bool(re.match(r'^(proyecto|practica|tarea)\s*\d', norm_group))
-        if is_lab_group and m_num:
-            num = m_num.group()
-            for f in files_metadata:
-                if f['name'] in already_matched:
-                    continue
-                norm_fname = self._normalize(f['name'])
-                # Buscar el número como palabra/token en el nombre del archivo
-                if re.search(r'(?<![0-9])' + re.escape(num) + r'(?![0-9])', norm_fname):
-                    return f
-
-        # 3. Pista por MIME
+        # 2. Pista por MIME
         for hint_key, mime_frags in self._GROUP_TYPE_HINTS.items():
             if hint_key in norm_group:
                 for f in files_metadata:
@@ -1377,26 +900,15 @@ class DocumentContentValidationService:
                         return f
                 break   # intentar solo la primera pista que aplique
 
-        # 4. Fallback posicional ordenado:
-        #    Para grupos lab numerados, preferir archivos que contengan la keyword
-        #    del tipo (proyecto/practica/tarea) sobre archivos genéricos.
-        lab_keyword = None
-        for kw in ('proyecto', 'practica', 'tarea'):
-            if kw in norm_group:
-                lab_keyword = kw
-                break
+        # 3. Cualquier archivo soportado disponible (no asignado aún)
+        #    Solo si no hay un match más específico.
+        for f in files_metadata:
+            if f['name'] not in already_matched:
+                return f
 
-        unmatched = [f for f in files_metadata if f['name'] not in already_matched]
-        if lab_keyword:
-            # Primero intentar archivos que contengan la keyword del tipo
-            keyword_files = [f for f in unmatched
-                             if lab_keyword in self._normalize(f['name'])]
-            if keyword_files:
-                return keyword_files[0]
-
-        if unmatched:
-            return unmatched[0]
-
+        # Sin archivo exclusivo → el grupo reportará "no encontrado".
+        # Si la carpeta no tiene un archivo de Lectura, Video, etc.,
+        # es correcto decir que ese tipo de documento no existe.
         return None
 
     def download_and_extract_all_docs(
@@ -1442,16 +954,8 @@ class DocumentContentValidationService:
 
             text = self.extract_text_from_bytes(file_bytes, effective_mime)
             doc_texts[name] = text
-            # Extraer el nombre del propietario del archivo (Drive owners)
-            owners = f.get('owners', [])
-            owner_name = owners[0].get('displayName', '') if owners else ''
-            files_metadata.append({
-                'name':      name,
-                'mimeType':  mime,
-                'id':        f.get('id', ''),
-                'owner':     owner_name,
-            })
-            print(f"  📄 '{name}': {len(text)} chars | propietario: {owner_name or 'N/A'}")
+            files_metadata.append({'name': name, 'mimeType': mime, 'id': f.get('id', '')})
+            print(f"  📄 '{name}': {len(text)} chars | {len(text.split())} palabras")
 
         return doc_texts, files_metadata
 
@@ -1537,7 +1041,7 @@ CONTENIDO DEL DOCUMENTO:
 {doc_chunk}
 
 Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
-{{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones", "confidence": 0.0-1.0}}"""
+{{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones"}}"""
 
         target_model = model_name or GEMINI_MODEL
 
@@ -1545,15 +1049,9 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
             try:
                 raw = self._call_gemini_raw(key, target_model, prompt)
                 parsed = json.loads(raw)
-                raw_conf = parsed.get('confidence', None)
-                try:
-                    conf = round(float(raw_conf), 3) if raw_conf is not None else None
-                except (TypeError, ValueError):
-                    conf = None
                 return {
                     'presente':    str(parsed.get('presente', 'No')),
-                    'observacion': str(parsed.get('observacion', '')),
-                    'confidence':  conf,
+                    'observacion': str(parsed.get('observacion', ''))
                 }
             except json.JSONDecodeError:
                 print(f"  ⚠️  JSON inválido de Gemini")
@@ -1581,8 +1079,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         Fallback cuando Gemini no está disponible o falla.
         Búsqueda inteligente de palabras clave con matching parcial (stem-like).
         """
-        clean_requirement = str(requirement_text).strip().strip('[]')
-        norm_req = self._normalize(clean_requirement)
+        norm_req = self._normalize(requirement_text)
         norm_doc = self._normalize(doc_text)
 
         # Palabras significativas (≥4 chars), sin stopwords básicas
@@ -1592,8 +1089,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         if not keywords:
             return {
                 'presente': 'No',
-                'observacion': f'Sin IA: no se pudieron evaluar términos en "{clean_requirement}"',
-                'confidence': 0.0,
+                'observacion': f'Sin IA (quota agotada): el requisito "{requirement_text}" no tiene términos evaluables'
             }
 
         # Match parcial: cada keyword se busca como substring Y por sus primeros 5 chars (stem)
@@ -1609,15 +1105,14 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         ratio = len(found) / len(keywords)
         presente = 'Si' if ratio >= 0.35 else 'No'
 
-        found_str   = ', '.join(found[:4])   or 'ninguno'
-        missing_str = ', '.join(missing[:4]) or 'ninguno'
+        found_str   = ', '.join(found[:4])   or '—'
+        missing_str = ', '.join(missing[:4]) or '—'
         obs = (
-            f'Sin IA: coincidencias detectadas: {found_str}'
-            + (f'; faltantes: {missing_str}' if missing else '')
-            + f'. Cobertura {len(found)}/{len(keywords)} términos'
+            f'Sin IA (quota agotada): encontrado [{found_str}]'
+            + (f' | faltante [{missing_str}]' if missing else '')
+            + f' ({len(found)}/{len(keywords)} términos)'
         )
-        # Confianza baja — es solo keyword matching, no IA semántica
-        return {'presente': presente, 'observacion': obs, 'confidence': round(ratio * 0.6, 3)}
+        return {'presente': presente, 'observacion': obs}
 
     def _evaluate_requirement(
         self,
@@ -1667,10 +1162,7 @@ Responde ÚNICAMENTE con JSON válido, sin markdown ni texto adicional:
         Retorna lista ordenada de {'presente', 'observacion'} por parámetro.
         Si Gemini falla, aplica fallback keyword por cada param.
         """
-        has_any_provider = (use_gemini or self._deepseek_key or
-                            self._groq_key or self._openrouter_key)
-        if not has_any_provider:
-            print("  ⚠️  Sin proveedores de IA disponibles → keyword fallback")
+        if not use_gemini and not self._deepseek_key:
             return [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
 
         # Truncar texto al máximo razonable para un solo prompt
@@ -1704,12 +1196,12 @@ CONTENIDO DEL DOCUMENTO:
 
 Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), con exactamente {len(params)} objetos en el mismo orden que los requisitos:
 [
-  {{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones", "confidence": 0.0-1.0}},
+  {{"presente": "Si" o "No", "observacion": "Observación específica y accionable de 1-2 oraciones"}},
   ...
 ]"""
 
         # ── Prioridad 1: DeepSeek ─────────────────────────────────────────────
-        if self._deepseek_key and getattr(self, '_req_use_deepseek', True):
+        if self._deepseek_key:
             print("  🤖 Usando DeepSeek como proveedor principal...")
             ds_results = self._call_deepseek_batch(
                 params, doc_snippet, section_name, group_name
@@ -1717,8 +1209,6 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
             if ds_results is not None:
                 return ds_results
             print("  ⚠️  DeepSeek falló, intentando con Gemini...")
-        elif self._deepseek_key and not getattr(self, '_req_use_deepseek', True):
-            print("  ⏭️  DeepSeek desactivado por configuración")
 
         # ── Prioridad 2: Gemini con rotación de claves ────────────────────────
         available_keys = self._get_available_keys()
@@ -1745,15 +1235,9 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                     for i, p in enumerate(params):
                         if i < len(parsed):
                             item = parsed[i]
-                            raw_conf = item.get('confidence', None)
-                            try:
-                                conf = round(float(raw_conf), 3) if raw_conf is not None else None
-                            except (TypeError, ValueError):
-                                conf = None
                             results.append({
                                 'presente':    str(item.get('presente', 'No')),
                                 'observacion': str(item.get('observacion', '')),
-                                'confidence':  conf,
                             })
                         else:
                             results.append(self._fallback_keyword_check(p['sub_seccion'], doc_text))
@@ -1801,26 +1285,22 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
                         backoff *= 2   # doblar: 5 → 10 → 20 → 40s
 
         # ── Respaldo 3: Groq ──────────────────────────────────────────────────
-        if self._groq_key and getattr(self, '_req_use_groq', True):
+        if self._groq_key:
             print("  🔄 Intentando con Groq (respaldo)...")
             groq_results = self._call_groq_batch(
                 params, doc_snippet, section_name, group_name
             )
             if groq_results is not None:
                 return groq_results
-        elif self._groq_key and not getattr(self, '_req_use_groq', True):
-            print("  ⏭️  Groq desactivado por configuración")
 
         # ── Respaldo 4: OpenRouter ────────────────────────────────────────────
-        if self._openrouter_key and getattr(self, '_req_use_openrouter', True):
+        if self._openrouter_key:
             print("  🔄 Intentando con OpenRouter (respaldo)...")
             or_results = self._call_openrouter_batch(
                 params, doc_snippet, section_name, group_name
             )
             if or_results is not None:
                 return or_results
-        elif self._openrouter_key and not getattr(self, '_req_use_openrouter', True):
-            print("  ⏭️  OpenRouter desactivado por configuración")
 
         # ── Último recurso: keyword matching ─────────────────────────────────
         return [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
@@ -2039,7 +1519,6 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
 
         presente_col = col_map.get('presente')
         obs_col      = col_map.get('observaciones')
-        autor_col    = col_map.get('autor')
 
         if not presente_col and not obs_col:
             print("  ⚠️  No se encontraron columnas 'Presente'/'Observaciones' — no se puede escribir en la matriz")
@@ -2050,26 +1529,11 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
         left_wrap  = Alignment(horizontal="left", vertical="center", wrap_text=True)
         center     = Alignment(horizontal="center", vertical="center")
 
-        print(f"  🖊️  Escribiendo {len(group_results)} grupo(s) | "
-              f"col Presente={presente_col} | col Obs={obs_col} | col Autor={autor_col}")
         updated = 0
         for group in group_results:
-            group_rows = [r.get('row_idx') for r in group.get('results', []) if r.get('row_idx')]
-            print(f"     ✏️  '{group.get('group_name','?')}': "
-                  f"{len(group.get('results',[]))} resultado(s) | "
-                  f"filas={group_rows[:5]}{'…' if len(group_rows)>5 else ''}")
-
-            # Escribir autor en la fila del encabezado del grupo
-            if autor_col and group.get('header_row') and group.get('autor'):
-                autor_cell = ws.cell(row=group['header_row'], column=autor_col)
-                autor_cell.value = group['autor']
-                autor_cell.alignment = center
-                print(f"        👤 Autor '{group['autor']}' → fila {group['header_row']}, col {autor_col}")
-
             for r in group.get('results', []):
                 row_idx = r.get('row_idx')
                 if not row_idx:
-                    print(f"        ⚠️  row_idx ausente en resultado: {r.get('sub_seccion','?')[:40]}")
                     continue
 
                 presente = r.get('presente', 'No')
@@ -2091,215 +1555,6 @@ Responde ÚNICAMENTE con un array JSON válido (sin markdown ni texto extra), co
 
         return updated
 
-    def _evaluate_lab_group_batch(
-        self,
-        params: List[Dict],
-        doc_text: str,
-        section_name: str,
-        group_name: str,
-        folder_type: str,
-        use_gemini: bool = True,
-        model_name: Optional[str] = None,
-    ) -> Tuple[List[Dict[str, str]], Dict[str, str]]:
-        """
-        Evaluación enriquecida para carpetas Proyectos/Practicas/Tareas.
-        Retorna (requirements_results, document_analysis).
-
-        requirements_results: [{presente, observacion}, ...]
-        document_analysis: {descripcion, enfoque, complejidad}
-        """
-        lab_info = LAB_FOLDER_DESCRIPTIONS.get(folder_type, {})
-        tipo_doc  = lab_info.get('tipo', group_name)
-        max_chars = 15_000
-        doc_snippet = doc_text[:max_chars]
-
-        reqs_list = "\n".join(
-            f"{i+1}. {p['sub_seccion']}" for i, p in enumerate(params)
-        )
-
-        prompt = f"""Eres un evaluador académico universitario experto en revisión de trabajos estudiantiles. Analiza el documento y realiza DOS tareas:
-
-═══════════════════════════════════════════════════
-TAREA 1 — EVALUAR REQUISITOS DE LA RÚBRICA
-═══════════════════════════════════════════════════
-Determina si cada requisito está cubierto en el documento.
-
-CRITERIOS:
-• PRESENTE (Si): el documento aborda el requisito de forma explícita (nombrado directamente)
-  O implícita (demostrado mediante ejemplos, código, diagramas, resultados o desarrollo
-  práctico que evidencia el concepto aunque use terminología distinta).
-• AUSENTE (No): el requisito no aparece, o aparece de forma tan superficial que no
-  aporta valor real al trabajo.
-
-INSTRUCCIONES PARA CADA REQUISITO:
-- "presente": "Si" o "No" (según los criterios anteriores).
-- "observacion":
-    Si PRESENTE → cita específicamente dónde o cómo se evidencia en el documento
-    (ej: "Se presenta en la sección Metodología con el diagrama de flujo del proceso X").
-    Si AUSENTE → explica qué falta y por qué es importante para este tipo de {tipo_doc}.
-- "sugerencia": SOLO si AUSENTE → indica una acción concreta y específica para
-    incluir este elemento (ej: "Agregar una sección de Conclusiones que relacione
-    los resultados obtenidos con los objetivos planteados").
-- "confidence": 0.0–1.0 (tu certeza; >0.85 solo si la evidencia es clara y directa).
-
-═══════════════════════════════════════════════════
-TAREA 2 — ANÁLISIS DEL DOCUMENTO
-═══════════════════════════════════════════════════
-Proporciona un análisis objetivo del trabajo:
-- descripcion: qué desarrolla o presenta el documento, qué problema aborda (2-3 oraciones).
-- enfoque: enfoque técnico/metodológico principal que usa el estudiante (1-2 oraciones).
-- complejidad: nivel del trabajo ("Básica", "Intermedia" o "Avanzada") con una
-  justificación breve basada en la profundidad, originalidad y cantidad de contenido.
-
-═══════════════════════════════════════════════════
-CONTEXTO DE EVALUACIÓN
-═══════════════════════════════════════════════════
-- Tipo de actividad: {tipo_doc}
-- Carpeta / sección del curso: {section_name}
-- Documento evaluado: {group_name}
-
-REQUISITOS A EVALUAR ({len(params)} en total):
-{reqs_list}
-
-CONTENIDO DEL DOCUMENTO:
-{doc_snippet}
-
-═══════════════════════════════════════════════════
-Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
-{{
-  "requirements": [
-    {{"presente": "Si", "observacion": "Evidencia específica de cómo aparece", "confidence": 0.90}},
-    {{"presente": "No", "observacion": "Qué falta y por qué importa", "sugerencia": "Acción concreta para incluirlo", "confidence": 0.85}},
-    ... ({len(params)} elementos en el mismo orden que la lista)
-  ],
-  "document_analysis": {{
-    "descripcion": "Descripción objetiva del trabajo (2-3 oraciones)",
-    "enfoque": "Enfoque técnico/metodológico principal (1-2 oraciones)",
-    "complejidad": "Básica|Intermedia|Avanzada — justificación en 1 oración"
-  }}
-}}"""
-
-        empty_analysis = {'descripcion': '', 'enfoque': '', 'complejidad': ''}
-
-        def _parse_lab_response(raw: str) -> Tuple[Optional[List], Optional[Dict]]:
-            raw = re.sub(r"^```json?\s*", "", raw.strip())
-            raw = re.sub(r"\s*```$", "", raw)
-            try:
-                data = json.loads(raw)
-                reqs = data.get('requirements', [])
-                analysis = data.get('document_analysis', {})
-                if isinstance(reqs, list) and len(reqs) == len(params):
-                    return reqs, analysis
-            except Exception:
-                pass
-            return None, None
-
-        def _pack(reqs: List, analysis: Optional[Dict]) -> Tuple[List[Dict], Dict]:
-            packed = []
-            for r in reqs:
-                raw_conf = r.get('confidence', None)
-                try:
-                    conf = round(float(raw_conf), 3) if raw_conf is not None else None
-                except (TypeError, ValueError):
-                    conf = None
-                presente = str(r.get('presente', 'No'))
-                packed.append({
-                    'presente':    presente,
-                    'observacion': str(r.get('observacion', '')),
-                    'sugerencia':  str(r.get('sugerencia', '')) if presente != 'Si' else '',
-                    'confidence':  conf,
-                })
-            return packed, analysis or empty_analysis
-
-        import urllib.request, urllib.error
-
-        # ── Prioridad 1: DeepSeek ─────────────────────────────────────────────
-        if self._deepseek_key:
-            payload = json.dumps({
-                "model": "deepseek-chat",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
-                "max_tokens": 4000,
-            }).encode("utf-8")
-            try:
-                req = urllib.request.Request(
-                    "https://api.deepseek.com/v1/chat/completions",
-                    data=payload,
-                    headers={"Authorization": f"Bearer {self._deepseek_key}", "Content-Type": "application/json"},
-                    method="POST",
-                )
-                with urllib.request.urlopen(req, timeout=90) as resp:
-                    content = json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]["content"].strip()
-                reqs, analysis = _parse_lab_response(content)
-                if reqs:
-                    print(f"  🤖 [DeepSeek lab] respondió — complejidad: {(analysis or {}).get('complejidad','?')}")
-                    return _pack(reqs, analysis)
-                print("  ⚠️  DeepSeek lab: respuesta vacía o formato inesperado")
-            except Exception as e:
-                print(f"  ⚠️  DeepSeek lab: {e}")
-
-        # ── Prioridad 2: Gemini con rotación de keys y retry RPM ──────────────
-        MAX_RPM_RETRIES = 4
-        target_model = model_name or GEMINI_MODEL
-
-        for key in self._get_available_keys():
-            short_key = key[:8] + '...'
-            backoff = 5.0
-
-            for rpm_attempt in range(MAX_RPM_RETRIES + 1):
-                try:
-                    raw = self._call_gemini_raw(key, target_model, prompt)
-                    reqs, analysis = _parse_lab_response(raw)
-                    if reqs:
-                        key_idx = self._api_keys.index(key) + 1 if key in self._api_keys else '?'
-                        print(f"  🤖 [Gemini lab / Key #{key_idx}] respondió — complejidad: {(analysis or {}).get('complejidad','?')}")
-                        return _pack(reqs, analysis)
-                    # Respuesta malformada → no reintentamos esta key
-                    break
-
-                except Exception as e:
-                    err_str = str(e)
-                    if '429' in err_str or 'quota' in err_str.lower():
-                        # Distinguir cuota agotada (limit=0) de burst RPM
-                        if 'limit' in err_str.lower() and ('0' in err_str or 'exhausted' in err_str.lower()):
-                            self._exhausted_keys.add(key)
-                            remaining = len([k for k in self._api_keys if k not in self._exhausted_keys])
-                            print(f"  ⚠️  Cuota Gemini agotada ({short_key}) → rotando ({remaining} key(s) restante(s))")
-                            break  # siguiente key
-                        else:
-                            if rpm_attempt >= MAX_RPM_RETRIES:
-                                self._exhausted_keys.add(key)
-                                print(f"  ⚠️  Key ({short_key}) sin respuesta tras {MAX_RPM_RETRIES} reintentos RPM → rotando")
-                                break
-                            wait = min(backoff, 60.0)
-                            print(f"  ⏳ RPM excedido ({short_key}) — esperando {wait:.0f}s (intento {rpm_attempt + 1}/{MAX_RPM_RETRIES})...")
-                            time.sleep(wait)
-                            backoff *= 2
-                    else:
-                        print(f"  ⚠️  Gemini lab ({short_key}): {e}")
-                        break  # error no RPM → siguiente key
-
-        # ── Prioridad 3: Groq ─────────────────────────────────────────────────
-        if self._groq_key:
-            print("  🔄 [lab] Intentando con Groq (respaldo)...")
-            groq_results = self._call_groq_batch(params, doc_snippet, section_name, group_name)
-            if groq_results is not None:
-                print(f"  🤖 [Groq lab] respondió — {len(groq_results)} resultados")
-                return groq_results, empty_analysis
-
-        # ── Prioridad 4: OpenRouter ───────────────────────────────────────────
-        if self._openrouter_key:
-            print("  🔄 [lab] Intentando con OpenRouter (respaldo)...")
-            or_results = self._call_openrouter_batch(params, doc_snippet, section_name, group_name)
-            if or_results is not None:
-                print(f"  🤖 [OpenRouter lab] respondió — {len(or_results)} resultados")
-                return or_results, empty_analysis
-
-        # ── Último recurso: keyword matching ──────────────────────────────────
-        print("  ⚠️  [lab] Todos los proveedores fallaron — usando keywords")
-        fallback = [self._fallback_keyword_check(p['sub_seccion'], doc_text) for p in params]
-        return fallback, empty_analysis
-
     # ──────────────────────────────────────────────────────────────────────────
     # Punto de entrada principal
     # ──────────────────────────────────────────────────────────────────────────
@@ -2309,8 +1564,7 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
         semana_folder_id: str,
         semana_folder_name: str,
         candidate_folder_ids: List[str],
-        db=None,
-        user_id=None,
+        db=None
     ) -> Dict[str, Any]:
         """
         Pipeline completo de validación de contenido para una carpeta Semana_X.
@@ -2325,57 +1579,23 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
         try:
             print(f"\n🧠 Iniciando validación de contenido: '{semana_folder_name}'")
 
-            # 0. Detectar tipo de carpeta
-            folder_type = self._get_folder_type(semana_folder_name)
-            is_lab = folder_type in LAB_FOLDER_TYPES
-            print(f"  🗂️  Tipo de carpeta: {folder_type}")
-
-            # 0b. Leer settings dinámicos desde BD (si db disponible)
-            use_gemini      = self.enabled
+            # 0. Leer settings dinámicos desde BD (si db disponible)
+            use_gemini = self.enabled
             active_model_name = GEMINI_MODEL
-            # Defaults por si no hay BD
-            self._req_use_deepseek    = True
-            self._req_use_groq        = True
-            self._req_use_openrouter  = True
-            self._req_temperature     = 0.05
-            self._req_max_tokens      = 2000
             if db is not None:
                 try:
                     from app.services.settings_service import settings_service
+                    use_gemini = self.enabled and settings_service.get_bool("gemini_enabled", db)
                     active_model_name = settings_service.get("gemini_model", db) or GEMINI_MODEL
-                    self._req_use_deepseek   = settings_service.get_bool("deepseek_enabled", db)
-                    self._req_use_groq       = settings_service.get_bool("groq_enabled", db)
-                    self._req_use_openrouter = settings_service.get_bool("openrouter_enabled", db)
-                    try:
-                        self._req_temperature = float(settings_service.get("ai_temperature", db) or 0.05)
-                    except (ValueError, TypeError):
-                        pass
-                    self._req_max_tokens = settings_service.get_int("ai_max_tokens", db, default=2000)
-                    print(
-                        f"  ⚙️  Proveedores: DeepSeek={'✓' if self._req_use_deepseek else '✗'} "
-                        f"Gemini={'✓' if use_gemini else '✗'} (modelo: {active_model_name}) "
-                        f"Groq={'✓' if self._req_use_groq else '✗'} "
-                        f"OpenRouter={'✓' if self._req_use_openrouter else '✗'} "
-                        f"| temp={self._req_temperature} max_tokens={self._req_max_tokens}"
-                    )
+                    print(f"  ⚙️  Gemini: {'habilitado' if use_gemini else 'deshabilitado'} | modelo: {active_model_name}")
                 except Exception:
                     pass
-
-            # 0c. Recargar API keys desde BD (prioriza keys personales del usuario)
-            self._reload_keys_from_db(db, user_id=user_id)
-
-                # Gemini queda habilitado si existe al menos una key disponible y
-                # la configuración del sistema no lo ha desactivado.
-            if db is not None:
-                use_gemini = bool(self._api_keys) and settings_service.get_bool("gemini_enabled", db)
-            else:
-                use_gemini = bool(self._api_keys)
 
             # 1. Derivar sección
             section_name = self._derive_section_from_folder(semana_folder_name)
             print(f"  📌 Sección: '{section_name}'")
 
-            # 2. Buscar el Excel en cada carpeta candidata (busca en '0. Revision de Material' primero)
+            # 2. Buscar el Excel en cada carpeta candidata
             matrix_info = None
             matrix_folder_id = None
             for fid in candidate_folder_ids:
@@ -2397,50 +1617,19 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
             wb = self.read_workbook(matrix_file_id)
             if wb is None:
                 return {'success': False, 'error': 'No se pudo leer el Excel'}
+            ws = self.get_content_sheet(wb)
+            if ws is None:
+                return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones"'}
 
-            # 3b. Seleccionar hoja y parsear requisitos según tipo de carpeta
-            groups: List[Dict] = []
-            col_map: Dict[str, int] = {}
+            header_row_idx, col_map = self._find_header_row(ws)
 
-            if is_lab:
-                # ── Hojas Proyectos / Practicas / Tareas ─────────────────────
-                ws = self.get_lab_sheet(wb, folder_type)
-                if ws is None:
-                    return {
-                        'success': False,
-                        'error': f'No se encontró la hoja "{LAB_FOLDER_TYPES[folder_type]}" en la Matriz. '
-                                 f'Hojas disponibles: {wb.sheetnames}'
-                    }
-                # Parser dedicado: detecta columnas y agrupa en un solo paso
-                groups, col_map = self._parse_lab_sheet_full(ws)
-
-                if not groups:
-                    return {
-                        'success': False,
-                        'error': (f'No se encontraron criterios en la hoja '
-                                  f'"{LAB_FOLDER_TYPES[folder_type]}". '
-                                  f'Verifica que la hoja tenga encabezados de grupo '
-                                  f'(ej. "Proyecto 1") y criterios de evaluación.')
-                    }
-            else:
-                # ── Hoja Semana (flujo original) ──────────────────────────────
-                ws = self.get_content_sheet(wb)
-                if ws is None:
-                    return {'success': False, 'error': 'No se encontró la hoja "Matriz observaciones"'}
-
-                try:
-                    header_row_idx, col_map = self._find_header_row(ws)
-                except ValueError as hdr_err:
-                    print(f"  ⚠️  No se detectaron encabezados estándar: {hdr_err}")
-                    return {'success': False, 'error': f'Error leyendo encabezados del Excel: {hdr_err}'}
-
-                # 4. Parsear requisitos agrupados por tipo de documento
-                groups = self.parse_requirements_by_group(ws, section_name, col_map, header_row_idx)
-                if not groups:
-                    return {
-                        'success': False,
-                        'error': f'No se encontraron requisitos para la sección "{section_name}"'
-                    }
+            # 4. Parsear requisitos AGRUPADOS por tipo de documento
+            groups = self.parse_requirements_by_group(ws, section_name, col_map, header_row_idx)
+            if not groups:
+                return {
+                    'success': False,
+                    'error': f'No se encontraron requisitos para la sección "{section_name}"'
+                }
 
             # 5. Descargar y extraer texto de TODOS los documentos de la carpeta
             doc_texts, files_metadata = self.download_and_extract_all_docs(semana_folder_id)
@@ -2458,22 +1647,16 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
             total_absent  = 0
 
             for group in groups:
-                # 6a. Buscar el archivo correspondiente al tipo de documento.
-                # Caso especial: grupo "General" (viene del raw fallback) →
-                # concatenar TODOS los documentos de la carpeta.
-                if self._normalize(group['group_name']) == 'general':
-                    doc_text   = '\n\n---\n\n'.join(doc_texts.values())
-                    file_found = len(doc_texts) > 0
-                    matched_name = f"{len(doc_texts)} documento(s)"
-                else:
-                    matched_file = self._match_file_to_group(
-                        group['group_name'], files_metadata, already_matched
-                    )
-                    file_found   = matched_file is not None
-                    matched_name = matched_file['name'] if matched_file else None
-                    if matched_name:
-                        already_matched.add(matched_name)
-                    doc_text = doc_texts.get(matched_name, '') if matched_name else ''
+                # 6a. Buscar el archivo correspondiente al tipo de documento
+                matched_file = self._match_file_to_group(
+                    group['group_name'], files_metadata, already_matched
+                )
+                file_found    = matched_file is not None
+                matched_name  = matched_file['name'] if matched_file else None
+                if matched_name:
+                    already_matched.add(matched_name)
+
+                doc_text = doc_texts.get(matched_name, '') if matched_name else ''
 
                 print(f"\n  📑 Grupo '{group['group_name']}' → "
                       f"{'archivo: ' + matched_name if file_found else '⚠️ sin archivo'}")
@@ -2483,8 +1666,6 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
                 present_in_group = 0
                 absent_in_group  = 0
                 n = len(group['params'])
-
-                doc_analysis: Dict[str, str] = {}
 
                 if not file_found or not doc_text.strip():
                     # Sin archivo → todos ausentes
@@ -2496,28 +1677,21 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
                         }
                         for _ in group['params']
                     ]
-                elif is_lab:
-                    print(f"    🔬 Batch lab ({folder_type}): {n} parámetros + análisis documental...")
-                    batch_evals, doc_analysis = self._evaluate_lab_group_batch(
-                        params       = group['params'],
-                        doc_text     = doc_text,
-                        section_name = section_name,
-                        group_name   = group['group_name'],
-                        folder_type  = folder_type,
-                        use_gemini   = use_gemini,
-                        model_name   = active_model_name,
-                    )
-                    time.sleep(4.5)
                 else:
                     print(f"    🤖 Batch Gemini: {n} parámetros en 1 llamada...")
                     batch_evals = self._evaluate_group_batch(
-                        params       = group['params'],
-                        doc_text     = doc_text,
+                        params     = group['params'],
+                        doc_text   = doc_text,
                         section_name = section_name,
-                        group_name   = group['group_name'],
-                        use_gemini   = use_gemini,
-                        model_name   = active_model_name,
+                        group_name = group['group_name'],
+                        use_gemini = use_gemini,
+                        model_name = active_model_name,
                     )
+                    # Pausa entre grupos para respetar límite de RPM del plan gratuito:
+                    # gemini-2.0-flash = 15 RPM → mínimo 4s entre llamadas.
+                    # Usamos 4.5s para tener margen y evitar ráfagas (burst).
+                    # Si la llamada fue a Groq (no Gemini), el sleep sigue siendo útil
+                    # para no saturar la API alternativa tampoco.
                     time.sleep(4.5)
 
                 for i, (param, eval_r) in enumerate(zip(group['params'], batch_evals), 1):
@@ -2532,7 +1706,7 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
                         'autor':       param['autor'],
                         'presente':    eval_r['presente'],
                         'observacion': eval_r['observacion'],
-                        'row_idx':     param['row_idx'],
+                        'row_idx':     param['row_idx'],   # fila en el Excel para write-back
                     })
 
                 total_present += present_in_group
@@ -2540,31 +1714,17 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
                 g_total = len(group['params'])
                 g_pct   = round(present_in_group / g_total * 100, 2) if g_total else 0
 
-                owner_name = ''
-                if self._normalize(group['group_name']) != 'general' and matched_file:
-                    owner_name = matched_file.get('owner', '')
-
-                group_entry = {
-                    'group_name':            group['group_name'],
-                    'matched_file':          matched_name,
-                    'file_found':            file_found,
-                    'total_params':          g_total,
-                    'present_count':         present_in_group,
-                    'absent_count':          absent_in_group,
+                group_results.append({
+                    'group_name':           group['group_name'],
+                    'matched_file':         matched_name,
+                    'file_found':           file_found,
+                    'total_params':         g_total,
+                    'present_count':        present_in_group,
+                    'absent_count':         absent_in_group,
                     'compliance_percentage': g_pct,
-                    'results':               params_results,
-                    'autor':                 owner_name,
-                    'header_row':            group.get('header_row'),
-                }
-                # Campos extra para carpetas lab
-                if is_lab and doc_analysis:
-                    group_entry['descripcion'] = doc_analysis.get('descripcion', '')
-                    group_entry['enfoque']     = doc_analysis.get('enfoque', '')
-                    group_entry['complejidad'] = doc_analysis.get('complejidad', '')
-
-                group_results.append(group_entry)
-                print(f"  ✅ '{group['group_name']}': {present_in_group}/{g_total} ({g_pct}%)"
-                      + (f" | complejidad: {doc_analysis.get('complejidad','')}" if is_lab and doc_analysis else ""))
+                    'results':              params_results,
+                })
+                print(f"  ✅ '{group['group_name']}': {present_in_group}/{g_total} ({g_pct}%)")
 
             # 7. Estadísticas globales
             total_requirements = total_present + total_absent
@@ -2617,13 +1777,13 @@ Responde ÚNICAMENTE con JSON válido (sin markdown ni texto extra):
             return {
                 'success':               True,
                 'section':               section_name,
-                'folder_type':           folder_type,
-                'is_lab':                is_lab,
                 'total_requirements':    total_requirements,
                 'present_count':         total_present,
                 'absent_count':          total_absent,
                 'compliance_percentage': compliance_pct,
+                # NUEVO: desglose por grupo
                 'groups':                group_results,
+                # Compatibilidad hacia atrás (batch, history)
                 'results':               flat_results,
                 'documents_analyzed':    list(doc_texts.keys()),
                 'report_generated':      report_info is not None,

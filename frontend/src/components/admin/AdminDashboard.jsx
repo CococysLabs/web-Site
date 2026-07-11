@@ -10,7 +10,6 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('overview');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [stats, setStats] = useState({
     totalDocuments: 0,
     validDocuments: 0,
@@ -30,10 +29,6 @@ const AdminDashboard = () => {
   const [systemSettings, setSystemSettings] = useState(null);
   const [settingsForm, setSettingsForm]     = useState({});
   const [savingSettings, setSavingSettings] = useState(null); // categoría que se está guardando
-  const [settingsSection, setSettingsSection] = useState('drive'); // sección activa del settings tab
-  // API Keys state: { gemini_api_keys: ['AIza...', ...], ... }
-  const [newApiKey, setNewApiKey]           = useState({ gemini: '', deepseek: '', groq: '', openrouter: '' });
-  const [apiKeyLoading, setApiKeyLoading]   = useState({});
 
   // Reports state
   const [reportStats, setReportStats]     = useState(null);
@@ -49,19 +44,6 @@ const AdminDashboard = () => {
   const [userFilter, setUserFilter]     = useState({ search: '', role: '', is_active: '' });
   const [userPage, setUserPage]         = useState(0);
   const USER_PAGE_SIZE = 25;
-
-  // Audit log state
-  const [auditLog, setAuditLog]         = useState({ entries: [], total: 0 });
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [auditPage, setAuditPage]       = useState(0);
-  const AUDIT_PAGE_SIZE = 50;
-
-  // Analysis history state (admin: all users)
-  const [analysisHistory, setAnalysisHistory] = useState({ records: [], total: 0 });
-  const [analysisLoading, setAnalysisLoading] = useState(false);
-  const [analysisPage, setAnalysisPage]       = useState(0);
-  const [analysisFilter] = useState({ type: '', user_id: '' });
-  const ANALYSIS_PAGE_SIZE = 25;
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -79,10 +61,6 @@ const AdminDashboard = () => {
     if (activeTab === 'users') {
       loadAllUsers(userFilter, 0);
     }
-    if (activeTab === 'analysis') {
-      loadAnalysisHistory(analysisFilter, 0);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const loadDashboardData = async () => {
@@ -176,46 +154,12 @@ const AdminDashboard = () => {
     setSettingsForm(prev => ({ ...prev, [key]: value }));
   };
 
-  const addApiKey = async (settingKey, providerShort) => {
-    const keyVal = newApiKey[providerShort]?.trim();
-    if (!keyVal) return;
-    setApiKeyLoading(prev => ({ ...prev, [settingKey]: true }));
-    try {
-      const res = await api.post(`/api/admin/settings/api-keys/${settingKey}/add`, { key: keyVal });
-      setNewApiKey(prev => ({ ...prev, [providerShort]: '' }));
-      showToast('success', res.data.message);
-      await loadSettings();
-    } catch (err) {
-      showToast('error', err.response?.data?.detail || 'Error al agregar API key');
-    } finally {
-      setApiKeyLoading(prev => ({ ...prev, [settingKey]: false }));
-    }
-  };
-
-  const removeApiKey = async (settingKey, index) => {
-    setApiKeyLoading(prev => ({ ...prev, [`${settingKey}_${index}`]: true }));
-    try {
-      const res = await api.delete(`/api/admin/settings/api-keys/${settingKey}/${index}`);
-      showToast('success', res.data.message);
-      await loadSettings();
-    } catch (err) {
-      showToast('error', err.response?.data?.detail || 'Error al eliminar API key');
-    } finally {
-      setApiKeyLoading(prev => ({ ...prev, [`${settingKey}_${index}`]: false }));
-    }
-  };
-
-  const API_KEY_SETTINGS = new Set(['gemini_api_keys','deepseek_api_keys','groq_api_keys','openrouter_api_keys']);
-
   const saveSettings = async (category) => {
     if (!systemSettings) return;
     setSavingSettings(category);
     const keysInCategory = Object.keys(systemSettings[category]?.settings || {});
     const payload = {};
-    // Excluir las listas de API keys — se gestionan con endpoints dedicados
-    keysInCategory
-      .filter(k => !API_KEY_SETTINGS.has(k))
-      .forEach(k => { payload[k] = String(settingsForm[k] ?? ''); });
+    keysInCategory.forEach(k => { payload[k] = String(settingsForm[k] ?? ''); });
     try {
       await api.post('/api/admin/settings/bulk', { settings: payload });
       showToast('success', 'Configuración guardada correctamente');
@@ -286,15 +230,6 @@ const AdminDashboard = () => {
     permissions: { can_view_drive: false, can_analyze: false, can_validate_structure: false, can_validate_content: false }
   });
 
-  // Reset password modal state
-  const [resetPasswordModal, setResetPasswordModal] = useState(null); // user object
-  const [resetPasswordForm, setResetPasswordForm] = useState({
-    new_password: '',
-    confirm_password: ''
-  });
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
   const openUserConfigModal = (u) => {
     setUserConfigModal(u);
     setUserConfigForm({
@@ -310,9 +245,7 @@ const AdminDashboard = () => {
     });
   };
 
-  const saveUserConfig = async (event) => {
-    if (event?.preventDefault) event.preventDefault();
-    if (event?.stopPropagation) event.stopPropagation();
+  const saveUserConfig = async () => {
     try {
       await api.patch(`/api/auth/users/${userConfigModal.id}/update-config`, userConfigForm);
       showToast('success', 'Configuración del usuario guardada');
@@ -320,82 +253,6 @@ const AdminDashboard = () => {
       loadAllUsers();
     } catch (err) {
       showToast('error', err.response?.data?.detail || 'Error al guardar');
-    }
-  };
-
-  const openResetPasswordModal = (u) => {
-    setResetPasswordModal(u);
-    setResetPasswordForm({ new_password: '', confirm_password: '' });
-    setShowNewPassword(false);
-    setShowConfirmPassword(false);
-  };
-
-  const handleResetPassword = async () => {
-    try {
-      if (resetPasswordForm.new_password !== resetPasswordForm.confirm_password) {
-        showToast('error', 'Las contraseñas no coinciden');
-        return;
-      }
-      if (resetPasswordForm.new_password.length < 8) {
-        showToast('error', 'La contraseña debe tener al menos 8 caracteres');
-        return;
-      }
-      if (!/[A-Z]/.test(resetPasswordForm.new_password)) {
-        showToast('error', 'La contraseña debe contener al menos una mayúscula');
-        return;
-      }
-      if (!/[a-z]/.test(resetPasswordForm.new_password)) {
-        showToast('error', 'La contraseña debe contener al menos una minúscula');
-        return;
-      }
-      if (!/[0-9]/.test(resetPasswordForm.new_password)) {
-        showToast('error', 'La contraseña debe contener al menos un número');
-        return;
-      }
-
-      await api.post(`/api/auth/users/${resetPasswordModal.id}/reset-password`, {
-        new_password: resetPasswordForm.new_password,
-        confirm_password: resetPasswordForm.confirm_password
-      });
-      showToast('success', `Contraseña reseteada para ${resetPasswordModal.nombre} ${resetPasswordModal.apellidos}`);
-      setResetPasswordModal(null);
-      loadAllUsers();
-    } catch (err) {
-      showToast('error', err.response?.data?.detail || 'Error al resetear contraseña');
-    }
-  };
-
-  const loadAuditLog = async (page) => {
-    const p = page !== undefined ? page : auditPage;
-    setAuditLoading(true);
-    try {
-      const offset = p * AUDIT_PAGE_SIZE;
-      const res = await api.get(`/api/admin/settings/audit-log?limit=${AUDIT_PAGE_SIZE}&offset=${offset}`);
-      setAuditLog(res.data);
-    } catch (_err) {
-      showToast('error', 'Error al cargar log de auditoría');
-    } finally {
-      setAuditLoading(false);
-    }
-  };
-
-  const loadAnalysisHistory = async (filter, page) => {
-    const f = filter !== undefined ? filter : analysisFilter;
-    const p = page !== undefined ? page : analysisPage;
-    setAnalysisLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set('limit', ANALYSIS_PAGE_SIZE);
-      params.set('offset', p * ANALYSIS_PAGE_SIZE);
-      params.set('analysis_type', 'document');
-      if (f.user_id) params.set('user_id', f.user_id);
-      const res = await api.get(`/api/analysis/history?${params.toString()}`);
-      setAnalysisHistory(res.data);
-      setAnalysisPage(p);
-    } catch (_err) {
-      showToast('error', 'Error al cargar historial de análisis');
-    } finally {
-      setAnalysisLoading(false);
     }
   };
 
@@ -437,78 +294,80 @@ const AdminDashboard = () => {
       {/* User config modal */}
       {userConfigModal && (
         <div className="admin-modal-overlay" onClick={() => setUserConfigModal(null)}>
-          <div className="admin-confirm-modal user-config-modal" onClick={e => e.stopPropagation()}>
-            <div className="user-config-header">
-              <div className="user-config-avatar">
+          <div className="admin-confirm-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', textAlign: 'left' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.9rem', flexShrink: 0 }}>
                 {userConfigModal.nombre?.[0]}{userConfigModal.apellidos?.[0]}
               </div>
               <div>
-                <p className="user-config-name">{userConfigModal.nombre} {userConfigModal.apellidos}</p>
-                <p className="user-config-email">{userConfigModal.correo}</p>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: '1rem' }}>{userConfigModal.nombre} {userConfigModal.apellidos}</p>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{userConfigModal.correo}</p>
               </div>
             </div>
 
             {/* Drive folder */}
-            <div className="user-config-section">
-              <p className="user-config-section-title">Carpeta de Google Drive asignada</p>
-              <label className="user-config-label">ID de carpeta</label>
+            <div style={{ marginBottom: '1rem' }}>
+              <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Carpeta de Google Drive asignada</p>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>ID de carpeta</label>
               <input
                 className="settings-input"
                 type="text"
                 placeholder="Ej: 1ABC...xyz"
                 value={userConfigForm.drive_folder_id}
                 onChange={e => setUserConfigForm(f => ({ ...f, drive_folder_id: e.target.value }))}
+                style={{ width: '100%', fontSize: '0.875rem', marginBottom: '8px', boxSizing: 'border-box' }}
               />
-              <label className="user-config-label">Nombre de carpeta (opcional, visible al usuario)</label>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Nombre de carpeta (opcional, visible al usuario)</label>
               <input
                 className="settings-input"
                 type="text"
                 placeholder="Ej: Sistemas Operativos 2025"
                 value={userConfigForm.drive_folder_name}
                 onChange={e => setUserConfigForm(f => ({ ...f, drive_folder_name: e.target.value }))}
+                style={{ width: '100%', fontSize: '0.875rem', boxSizing: 'border-box' }}
               />
             </div>
 
             {/* is_teacher toggle */}
-            <div className="user-config-section user-config-section-divider">
-              <label className="user-config-perm-item">
+            <div style={{ marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-light)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   checked={userConfigForm.is_teacher}
                   onChange={e => setUserConfigForm(f => ({ ...f, is_teacher: e.target.checked }))}
-                  className="checkbox-green"
+                  style={{ accentColor: '#10b981', width: 16, height: 16 }}
                 />
-                <span>Habilitar vista de docente (Mi Curso)</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Habilitar vista de docente (Mi Curso)</span>
               </label>
             </div>
 
             {/* Permissions */}
-            <div>
-              <p className="user-config-perms-title">Permisos de funcionalidades</p>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <p style={{ margin: '0 0 10px', fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-primary)' }}>Permisos de funcionalidades</p>
               {[
                 { key: 'can_view_drive', label: 'Ver explorador de Drive', desc: 'Puede navegar por su carpeta asignada' },
                 { key: 'can_analyze', label: 'Analizar documentos', desc: 'Puede usar el botón Analizar en archivos' },
                 { key: 'can_validate_structure', label: 'Validar estructura', desc: 'Puede ejecutar validación de estructura' },
-                { key: 'can_validate_content', label: 'Validar contenido (IA)', desc: 'Puede ejecutar validación de contenido con IA' },
+                { key: 'can_validate_content', label: 'Validar contenido (IA)', desc: 'Puede ejecutar validación de contenido con Gemini' },
               ].map(({ key, label, desc }) => (
-                <label key={key} className="user-config-perm-item">
+                <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginBottom: '10px' }}>
                   <input
                     type="checkbox"
                     checked={userConfigForm.permissions[key]}
                     onChange={e => setUserConfigForm(f => ({ ...f, permissions: { ...f.permissions, [key]: e.target.checked } }))}
-                    className="checkbox-orange"
+                    style={{ accentColor: 'var(--cococys-orange)', width: 15, height: 15, marginTop: 2, flexShrink: 0 }}
                   />
                   <div>
-                    <span className="user-config-perm-label">{label}</span>
-                    <p className="user-config-perm-desc">{desc}</p>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>{label}</span>
+                    <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{desc}</p>
                   </div>
                 </label>
               ))}
             </div>
 
             <div className="confirm-actions">
-              <button type="button" className="confirm-cancel" onClick={() => setUserConfigModal(null)}>Cancelar</button>
-              <button type="button" className="confirm-ok-orange" onClick={saveUserConfig}>Guardar</button>
+              <button className="confirm-cancel" onClick={() => setUserConfigModal(null)}>Cancelar</button>
+              <button className="confirm-ok" style={{ background: 'var(--cococys-orange)', borderColor: 'var(--cococys-orange)' }} onClick={saveUserConfig}>Guardar</button>
             </div>
           </div>
         </div>
@@ -531,112 +390,17 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
-
-      {/* Reset password modal */}
-      {resetPasswordModal && (
-        <div className="admin-modal-overlay" onClick={() => setResetPasswordModal(null)}>
-          <div className="admin-confirm-modal user-config-modal" onClick={e => e.stopPropagation()}>
-            <div className="user-config-header">
-              <div className="user-table-avatar">
-                {resetPasswordModal.nombre?.[0]}{resetPasswordModal.apellidos?.[0]}
-              </div>
-              <div>
-                <p className="user-config-name">{resetPasswordModal.nombre} {resetPasswordModal.apellidos}</p>
-                <p className="user-config-email">{resetPasswordModal.correo}</p>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Nueva Contraseña
-              </label>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  value={resetPasswordForm.new_password}
-                  onChange={e => setResetPasswordForm({ ...resetPasswordForm, new_password: e.target.value })}
-                  className="settings-input"
-                  placeholder="Mínimo 8 caracteres con mayúscula, minúscula y número"
-                  style={{ width: '100%', paddingRight: '40px' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  style={{
-                    position: 'absolute',
-                    right: '10px',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '1.2rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0',
-                    color: 'var(--text-secondary)'
-                  }}
-                  title={showNewPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {showNewPassword ? '👁️' : '👁️‍🗨️'}
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Confirmar Contraseña
-              </label>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={resetPasswordForm.confirm_password}
-                  onChange={e => setResetPasswordForm({ ...resetPasswordForm, confirm_password: e.target.value })}
-                  className="settings-input"
-                  placeholder="Confirma la contraseña"
-                  style={{ width: '100%', paddingRight: '40px' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={{
-                    position: 'absolute',
-                    right: '10px',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '1.2rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0',
-                    color: 'var(--text-secondary)'
-                  }}
-                  title={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                >
-                  {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
-                </button>
-              </div>
-            </div>
-
-            <div className="confirm-actions">
-              <button className="confirm-cancel" onClick={() => setResetPasswordModal(null)}>Cancelar</button>
-              <button className="confirm-ok" onClick={handleResetPassword} style={{ background: '#3b82f6', borderColor: '#3b82f6' }}>Resetear Contraseña</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Sidebar overlay */}
-      <div className={`admin-sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
-
       {/* Sidebar */}
-      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <aside className="admin-sidebar">
         <div className="sidebar-header">
           <h2>COCOCYS</h2>
           <span className="role-badge admin">Admin</span>
         </div>
         
         <nav className="sidebar-nav">
-          <button
+          <button 
             className={activeTab === 'overview' ? 'active' : ''}
-            onClick={() => { setActiveTab('overview'); setSidebarOpen(false); }}
+            onClick={() => setActiveTab('overview')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -644,9 +408,9 @@ const AdminDashboard = () => {
             Panel General
           </button>
           
-          <button
+          <button 
             className={activeTab === 'drive' ? 'active' : ''}
-            onClick={() => { setActiveTab('drive'); loadDriveFolders(); setSidebarOpen(false); }}
+            onClick={() => { setActiveTab('drive'); loadDriveFolders(); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -654,9 +418,9 @@ const AdminDashboard = () => {
             Google Drive
           </button>
           
-          <button
+          <button 
             className={activeTab === 'documents' ? 'active' : ''}
-            onClick={() => { setActiveTab('documents'); setSidebarOpen(false); }}
+            onClick={() => setActiveTab('documents')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -666,7 +430,7 @@ const AdminDashboard = () => {
           
           <button
             className={activeTab === 'reports' ? 'active' : ''}
-            onClick={() => { setActiveTab('reports'); if (!reportStats) loadReports(); setSidebarOpen(false); }}
+            onClick={() => { setActiveTab('reports'); if (!reportStats) loadReports(); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -675,18 +439,8 @@ const AdminDashboard = () => {
           </button>
 
           <button
-            className={activeTab === 'analysis' ? 'active' : ''}
-            onClick={() => { setActiveTab('analysis'); setSidebarOpen(false); }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-            </svg>
-            Análisis IA
-          </button>
-
-          <button
             className={activeTab === 'users' ? 'active' : ''}
-            onClick={() => { setActiveTab('users'); setSidebarOpen(false); }}
+            onClick={() => setActiveTab('users')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -699,23 +453,13 @@ const AdminDashboard = () => {
 
           <button
             className={activeTab === 'settings' ? 'active' : ''}
-            onClick={() => { setActiveTab('settings'); if (!systemSettings) loadSettings(); setSidebarOpen(false); }}
+            onClick={() => { setActiveTab('settings'); if (!systemSettings) loadSettings(); }}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
             Configuración
-          </button>
-
-          <button
-            className={activeTab === 'audit' ? 'active' : ''}
-            onClick={() => { setActiveTab('audit'); loadAuditLog(0); setAuditPage(0); setSidebarOpen(false); }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-            Auditoría
           </button>
         </nav>
         
@@ -738,17 +482,6 @@ const AdminDashboard = () => {
 
       {/* Main Content */}
       <main className="admin-content">
-        {/* Mobile header with hamburger */}
-        <div className="admin-content-header">
-          <button className="admin-hamburger-btn" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Abrir menú">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-        </div>
-
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="overview-tab">
@@ -825,9 +558,21 @@ const AdminDashboard = () => {
               <>
                 <div style={{ marginBottom: '2rem' }}>
                   <h1>📚 Recursos Educativos COCOCYS</h1>
-                  <p className="subtitle">📁 2025 - Segundo Semestre</p>
-                  <div className="drive-info-notice">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <p className="subtitle">
+                    📁 2025 - Segundo Semestre
+                  </p>
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '8px', 
+                    alignItems: 'center',
+                    marginTop: '12px',
+                    padding: '12px',
+                    background: 'var(--cococys-orange-subtle, rgba(255, 140, 66, 0.08))',
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    color: 'var(--text-secondary, #6b7280)'
+                  }}>
+                    <svg style={{ width: '20px', height: '20px', flexShrink: 0 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span>Selecciona una materia para explorar y analizar sus documentos</span>
@@ -848,50 +593,109 @@ const AdminDashboard = () => {
                     <p>Verifica la configuración de GOOGLE_DRIVE_FOLDER_ID</p>
                   </div>
                 ) : (
-                  <div className="folders-grid">
+                  <div className="folders-grid"  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                     {driveFolders.map((folder) => (
-                      <div
-                        key={folder.id}
+                      <div 
+                        key={folder.id} 
                         className="folder-card"
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(255, 140, 66, 0.03) 0%, rgba(255, 140, 66, 0.08) 100%)',
+                          border: '2px solid var(--border-light, #e5e7eb)',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          cursor: 'pointer'
+                        }}
                         onClick={() => setSelectedFolder(folder)}
                       >
-                        <div className="folder-icon">
-                          <svg viewBox="0 0 24 24" fill="white">
+                        <div className="folder-icon" style={{
+                          width: '64px',
+                          height: '64px',
+                          background: 'linear-gradient(135deg, var(--cococys-orange, #ff8c42), var(--cococys-orange-dark, #e57a32))',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginBottom: '16px'
+                        }}>
+                          <svg style={{ width: '40px', height: '40px' }} viewBox="0 0 24 24" fill="white">
                             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
                           </svg>
                         </div>
                         <div className="folder-info">
-                          <h3>{folder.name}</h3>
-                          <p className="folder-date">
-                            📅 {folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('es-ES', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric'
+                          <h3 style={{ 
+                            fontSize: '1.125rem', 
+                            fontWeight: '600',
+                            color: 'var(--text-primary, #1a1a1a)',
+                            marginBottom: '8px'
+                          }}>
+                            {folder.name}
+                          </h3>
+                          <p className="folder-date" style={{
+                            fontSize: '0.875rem',
+                            color: 'var(--text-secondary, #6b7280)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            📅 {folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('es-ES', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric' 
                             }) : 'Sin fecha'}
                           </p>
                         </div>
-                        <div className="folder-actions">
+                        <div className="folder-actions" style={{ marginTop: '16px' }}>
                           <button
-                            className="btn-primary folder-explore-btn"
+                            className="btn-primary"
+                            style={{
+                              width: '100%',
+                              padding: '12px',
+                              background: 'linear-gradient(135deg, var(--cococys-orange, #ff8c42), var(--cococys-orange-dark, #e57a32))',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '8px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              transition: 'all 0.2s'
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedFolder(folder);
                             }}
                           >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <svg style={{ width: '18px', height: '18px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                             </svg>
                             Explorar Contenido
                           </button>
                           {folder.webViewLink && (
-                            <a
-                              href={folder.webViewLink}
-                              target="_blank"
+                            <a 
+                              href={folder.webViewLink} 
+                              target="_blank" 
                               rel="noopener noreferrer"
-                              className="folder-drive-link"
+                              style={{
+                                marginTop: '8px',
+                                padding: '10px',
+                                background: 'transparent',
+                                color: 'var(--cococys-orange, #ff8c42)',
+                                border: '2px solid var(--cococys-orange, #ff8c42)',
+                                borderRadius: '8px',
+                                fontWeight: '600',
+                                fontSize: '0.875rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                textDecoration: 'none',
+                                transition: 'all 0.2s'
+                              }}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <svg style={{ width: '16px', height: '16px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
                               Abrir en Drive
@@ -905,8 +709,38 @@ const AdminDashboard = () => {
               </>
             ) : (
               <>
-                <button className="drive-back-btn" onClick={() => setSelectedFolder(null)}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <button 
+                  onClick={() => setSelectedFolder(null)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 20px',
+                    marginBottom: '24px',
+                    background: 'transparent',
+                    color: 'var(--cococys-orange, #ff8c42)',
+                    border: '2px solid var(--cococys-orange, #ff8c42)',
+                    borderRadius: '10px',
+                    fontWeight: '600',
+                    fontSize: '0.95rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.2)'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'var(--cococys-orange, #ff8c42)';
+                    e.currentTarget.style.color = 'white';
+                    e.currentTarget.style.transform = 'translateX(-4px)';
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.3)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'var(--cococys-orange, #ff8c42)';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                    e.currentTarget.style.boxShadow = '0 1px 2px 0 rgba(0, 0, 0, 0.2)';
+                  }}
+                >
+                  <svg style={{ width: '20px', height: '20px' }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
                   Volver a Materias
@@ -914,7 +748,6 @@ const AdminDashboard = () => {
                 <DocumentAnalyzer 
                   folderId={selectedFolder.id}
                   folderName={selectedFolder.name}
-                  isAdmin={true}
                 />
               </>
             )}
@@ -955,429 +788,230 @@ const AdminDashboard = () => {
         {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="settings-tab">
-            <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '2rem' }}>
               <h1>Configuración del Sistema</h1>
-              <p className="subtitle">Controla todos los parámetros operativos sin necesidad de reiniciar el servidor.</p>
+              <p className="subtitle">Ajusta los parámetros del sistema sin necesidad de reiniciar el servidor.</p>
             </div>
 
             {!systemSettings ? (
               <div className="loading-state"><div className="spinner"></div><p>Cargando configuración...</p></div>
             ) : (
-              <div className="settings-layout">
+              <div className="settings-grid">
 
-                {/* ── Sidebar nav ── */}
-                <nav className="settings-sidebar">
-                  {[
-                    { id: 'drive',      icon: '🗂️',  label: 'Google Drive' },
-                    { id: 'ai',         icon: '🤖',  label: 'Proveedores IA' },
-                    { id: 'users',      icon: '👥',  label: 'Usuarios' },
-                    { id: 'validation', icon: '✅',  label: 'Validación' },
-                  ].map(s => (
-                    <button
-                      key={s.id}
-                      className={`settings-sidebar-item${settingsSection === s.id ? ' active' : ''}`}
-                      onClick={() => setSettingsSection(s.id)}
+                {/* ── Google Drive ── */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#4285F4,#34A853)' }}>
+                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Google Drive</h3>
+                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Carpeta raíz del sistema</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Carpeta raíz de Google Drive</label>
+                    <p className="settings-hint">ID de la carpeta principal que contiene los cursos</p>
+                    <input
+                      className="settings-input"
+                      type="text"
+                      value={settingsForm.drive_root_folder_id || ''}
+                      onChange={e => handleSettingChange('drive_root_folder_id', e.target.value)}
+                      placeholder="Ej: 1ABC...xyz"
+                    />
+                  </div>
+
+                  <button
+                    className="btn-primary"
+                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='drive'?0.7:1 }}
+                    onClick={() => saveSettings('drive')}
+                    disabled={savingSettings === 'drive'}
+                  >
+                    {savingSettings === 'drive' ? '⏳ Guardando...' : '💾 Guardar Drive'}
+                  </button>
+                </div>
+
+                {/* ── Gemini AI ── */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)' }}>
+                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Gemini AI</h3>
+                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Motor de análisis de contenido</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Modelo de Gemini</label>
+                    <p className="settings-hint">Modelo a usar para la validación de contenido con IA</p>
+                    <select
+                      className="settings-input"
+                      value={settingsForm.gemini_model || 'gemini-2.0-flash'}
+                      onChange={e => handleSettingChange('gemini_model', e.target.value)}
                     >
-                      <span className="settings-sidebar-icon">{s.icon}</span>
-                      <span>{s.label}</span>
-                    </button>
-                  ))}
-                </nav>
+                      <option value="gemini-2.0-flash">gemini-2.0-flash (Recomendado)</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash (Más potente)</option>
+                      <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Más rápido)</option>
+                    </select>
+                  </div>
 
-                {/* ── Content ── */}
-                <div className="settings-content">
+                  <div className="settings-field">
+                    <label className="settings-label">Habilitar análisis con IA</label>
+                    <p className="settings-hint">Si está desactivado, se usa coincidencia de palabras clave</p>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.gemini_enabled === 'true'}
+                        onChange={e => handleSettingChange('gemini_enabled', e.target.checked ? 'true' : 'false')}
+                      />
+                      <span className="toggle-track"><span className="toggle-thumb"></span></span>
+                      <span style={{ fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                        {settingsForm.gemini_enabled === 'true' ? 'Habilitado' : 'Deshabilitado'}
+                      </span>
+                    </label>
+                  </div>
 
-                  {/* ══ DRIVE ══ */}
-                  {settingsSection === 'drive' && (
-                    <div className="settings-section">
-                      <div className="settings-section-header">
-                        <div className="settings-card-icon settings-card-icon--drive">
-                          <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <h2 className="settings-section-title">Google Drive</h2>
-                          <p className="settings-section-subtitle">Carpeta raíz del sistema</p>
-                        </div>
-                      </div>
+                  <button
+                    className="btn-primary"
+                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='ai'?0.7:1 }}
+                    onClick={() => saveSettings('ai')}
+                    disabled={savingSettings === 'ai'}
+                  >
+                    {savingSettings === 'ai' ? '⏳ Guardando...' : '💾 Guardar IA'}
+                  </button>
+                </div>
 
-                      <div className="settings-group">
-                        <div className="settings-field">
-                          <label className="settings-label">ID de carpeta raíz</label>
-                          <p className="settings-hint">Carpeta principal que contiene todos los cursos. Copia el ID desde la URL de Drive.</p>
-                          <input
-                            className="settings-input"
-                            type="text"
-                            value={settingsForm.drive_root_folder_id || ''}
-                            onChange={e => handleSettingChange('drive_root_folder_id', e.target.value)}
-                            placeholder="Ej: 1ABC...xyz"
-                          />
-                        </div>
-                        <div className="drive-info-notice">
-                          <svg style={{ width:16,height:16,flexShrink:0,marginTop:1 }} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                          </svg>
-                          <span>La cuenta de servicio <code style={{ fontSize:'0.75rem' }}>cococys-drive-service@cococys-driv.iam.gserviceaccount.com</code> debe tener acceso de Lector a esta carpeta.</span>
-                        </div>
-                      </div>
-
-                      <div className="settings-actions">
-                        <button className="btn-primary settings-save-btn"
-                          style={{ opacity: savingSettings==='drive'?0.7:1 }}
-                          onClick={() => saveSettings('drive')} disabled={savingSettings === 'drive'}>
-                          {savingSettings === 'drive' ? '⏳ Guardando...' : '💾 Guardar'}
-                        </button>
-                      </div>
+                {/* ── Usuarios ── */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
+                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                      </svg>
                     </div>
-                  )}
-
-                  {/* ══ IA ══ */}
-                  {settingsSection === 'ai' && (
-                    <div className="settings-section">
-                      <div className="settings-section-header">
-                        <div className="settings-card-icon settings-card-icon--ai">
-                          <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <h2 className="settings-section-title">Proveedores de IA</h2>
-                          <p className="settings-section-subtitle">Cadena de proveedores para análisis de contenido</p>
-                        </div>
-                      </div>
-
-                      {/* ── Grupo 1: Cadena de proveedores ── */}
-                      <div className="settings-group">
-                        <p className="settings-group-title">Cadena de proveedores</p>
-                        <div className="provider-chain-visual">
-                          {[
-                            { key:'deepseek_enabled',   label:'DeepSeek',   role:'Principal',  step:1 },
-                            { key:'gemini_enabled',     label:'Gemini',     role:'Fallback 1', step:2 },
-                            { key:'groq_enabled',       label:'Groq',       role:'Fallback 2', step:3 },
-                            { key:'openrouter_enabled', label:'OpenRouter', role:'Fallback 3', step:4 },
-                          ].map(p => {
-                            const isOn = settingsForm[p.key] !== 'false';
-                            return (
-                              <div key={p.key} className="provider-chain-item">
-                                <div className={`provider-chain-node${isOn ? ' active' : ' inactive'}`}>
-                                  <div className="provider-chain-step">{p.step}</div>
-                                  <div className="provider-chain-info-col">
-                                    <span className="provider-chain-name">{p.label}</span>
-                                    <span className="provider-chain-role">{p.role}</span>
-                                  </div>
-                                  <div className={`provider-chain-status${isOn ? ' on' : ' off'}`}>
-                                    {isOn ? '● Activo' : '○ Inactivo'}
-                                  </div>
-                                  <label className="toggle" style={{ margin: 0 }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={isOn}
-                                      onChange={e => handleSettingChange(p.key, e.target.checked ? 'true' : 'false')}
-                                    />
-                                    <span className="toggle-track"><span className="toggle-thumb"></span></span>
-                                  </label>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          <div className="provider-chain-item">
-                            <div className="provider-chain-node inactive" style={{ opacity: 0.6 }}>
-                              <div className="provider-chain-step" style={{ background:'var(--text-muted)' }}>5</div>
-                              <div className="provider-chain-info-col">
-                                <span className="provider-chain-name">Palabras clave</span>
-                                <span className="provider-chain-role">Último recurso</span>
-                              </div>
-                              <div className="provider-chain-status off">● Siempre activo</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ── Grupo 2: Modelo y parámetros ── */}
-                      <div className="settings-group">
-                        <p className="settings-group-title">Modelo y parámetros</p>
-                        <div className="settings-field">
-                          <label className="settings-label">Modelo de Gemini</label>
-                          <p className="settings-hint">Modelo utilizado cuando Gemini actúa como proveedor activo</p>
-                          <select
-                            className="settings-input"
-                            value={settingsForm.gemini_model || 'gemini-2.0-flash'}
-                            onChange={e => handleSettingChange('gemini_model', e.target.value)}
-                          >
-                            <option value="gemini-2.0-flash">gemini-2.0-flash — Recomendado (equilibrio velocidad/calidad)</option>
-                            <option value="gemini-2.5-flash">gemini-2.5-flash — Más potente (mayor latencia)</option>
-                            <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite — Más rápido (menor detalle)</option>
-                          </select>
-                        </div>
-                        <div className="settings-params-grid">
-                          <div className="settings-field">
-                            <label className="settings-label">
-                              Temperatura: <strong>{parseFloat(settingsForm.ai_temperature || 0.05).toFixed(2)}</strong>
-                            </label>
-                            <p className="settings-hint">Aleatoriedad de respuestas. 0.0 = determinista · 1.0 = creativo</p>
-                            <input
-                              className="settings-range"
-                              type="range" min="0" max="1" step="0.05"
-                              value={parseFloat(settingsForm.ai_temperature || 0.05)}
-                              onChange={e => handleSettingChange('ai_temperature', e.target.value)}
-                            />
-                            <div className="range-labels"><span>0.0 Preciso</span><span>1.0 Creativo</span></div>
-                          </div>
-                          <div className="settings-field">
-                            <label className="settings-label">
-                              Tokens máximos: <strong>{settingsForm.ai_max_tokens || 2000}</strong>
-                            </label>
-                            <p className="settings-hint">Límite de respuesta por llamada. Más tokens = observaciones más detalladas</p>
-                            <input
-                              className="settings-range"
-                              type="range" min="500" max="4000" step="100"
-                              value={settingsForm.ai_max_tokens || 2000}
-                              onChange={e => handleSettingChange('ai_max_tokens', e.target.value)}
-                            />
-                            <div className="range-labels"><span>500 (rápido)</span><span>4000 (detallado)</span></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* ── Grupo 3: API Keys ── */}
-                      <div className="settings-group">
-                        <p className="settings-group-title">API Keys por proveedor</p>
-                        <p className="settings-hint" style={{ marginBottom: 16 }}>
-                          Las keys agregadas aquí se combinan con las del entorno. Las de Gemini se rotan automáticamente.
-                          Los valores se almacenan de forma segura — solo se muestran los primeros 8 caracteres.
-                        </p>
-                        <div className="api-keys-grid">
-                          {[
-                            { settingKey: 'gemini_api_keys',      short: 'gemini',      label: 'Gemini',      color: '#4285F4', note: 'Soporta múltiples keys con rotación automática' },
-                            { settingKey: 'deepseek_api_keys',    short: 'deepseek',    label: 'DeepSeek',    color: '#ff8c42', note: 'Primer proveedor activo en la cadena' },
-                            { settingKey: 'groq_api_keys',        short: 'groq',        label: 'Groq',        color: '#F55036', note: 'Fallback 2 — Llama 3' },
-                            { settingKey: 'openrouter_api_keys',  short: 'openrouter',  label: 'OpenRouter',  color: '#7C3AED', note: 'Fallback 3 — múltiples modelos gratuitos' },
-                          ].map(p => {
-                            const storedKeys = settingsForm[p.settingKey];
-                            const keysList = Array.isArray(storedKeys) ? storedKeys : [];
-                            return (
-                              <div key={p.settingKey} className="api-key-card">
-                                <div className="api-key-card-header" style={{ borderColor: p.color }}>
-                                  <span className="api-key-card-label" style={{ color: p.color }}>{p.label}</span>
-                                  <span className="api-key-count">{keysList.length} key{keysList.length !== 1 ? 's' : ''}</span>
-                                </div>
-                                <p className="api-key-note">{p.note}</p>
-                                {keysList.length > 0 && (
-                                  <div className="api-key-list">
-                                    {keysList.map((k, i) => (
-                                      <div key={i} className="api-key-chip">
-                                        <code className="api-key-chip-value">{k}</code>
-                                        <button
-                                          className="api-key-chip-remove"
-                                          disabled={!!apiKeyLoading[`${p.settingKey}_${i}`]}
-                                          onClick={() => removeApiKey(p.settingKey, i)}
-                                          title="Eliminar esta key"
-                                        >
-                                          {apiKeyLoading[`${p.settingKey}_${i}`] ? '⏳' : '×'}
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="api-key-add-row">
-                                  <input
-                                    className="settings-input api-key-input"
-                                    type="password"
-                                    placeholder="Pegar nueva API key..."
-                                    value={newApiKey[p.short]}
-                                    onChange={e => setNewApiKey(prev => ({ ...prev, [p.short]: e.target.value }))}
-                                    onKeyDown={e => { if (e.key === 'Enter') addApiKey(p.settingKey, p.short); }}
-                                  />
-                                  <button
-                                    className="btn-primary api-key-add-btn"
-                                    disabled={!newApiKey[p.short]?.trim() || !!apiKeyLoading[p.settingKey]}
-                                    onClick={() => addApiKey(p.settingKey, p.short)}
-                                  >
-                                    {apiKeyLoading[p.settingKey] ? '⏳' : '+ Agregar'}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="settings-actions">
-                        <button
-                          className="btn-primary settings-save-btn"
-                          style={{ opacity: savingSettings==='ai'?0.7:1 }}
-                          onClick={() => saveSettings('ai')}
-                          disabled={savingSettings === 'ai'}
-                        >
-                          {savingSettings === 'ai' ? '⏳ Guardando...' : '💾 Guardar IA'}
-                        </button>
-                      </div>
+                    <div>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Gestión de Usuarios</h3>
+                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Registro y sesiones</p>
                     </div>
-                  )}
+                  </div>
 
-                  {/* ══ USUARIOS ══ */}
-                  {settingsSection === 'users' && (
-                    <div className="settings-section">
-                      <div className="settings-section-header">
-                        <div className="settings-card-icon settings-card-icon--users">
-                          <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <h2 className="settings-section-title">Gestión de Usuarios</h2>
-                          <p className="settings-section-subtitle">Registro, aprobación y duración de sesión</p>
-                        </div>
-                      </div>
+                  <div className="settings-field">
+                    <label className="settings-label">Auto-aprobar usuarios nuevos</label>
+                    <p className="settings-hint">Si está activo, los estudiantes se aprueban automáticamente al registrarse</p>
+                    <label className="toggle">
+                      <input
+                        type="checkbox"
+                        checked={settingsForm.auto_approve_users === 'true'}
+                        onChange={e => handleSettingChange('auto_approve_users', e.target.checked ? 'true' : 'false')}
+                      />
+                      <span className="toggle-track"><span className="toggle-thumb"></span></span>
+                      <span style={{ fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                        {settingsForm.auto_approve_users === 'true' ? 'Automático' : 'Requiere aprobación manual'}
+                      </span>
+                    </label>
+                  </div>
 
-                      <div className="settings-group">
-                        <div className="settings-field">
-                          <label className="settings-label">Auto-aprobar usuarios nuevos</label>
-                          <p className="settings-hint">Si está activo, los estudiantes entran al sistema automáticamente sin revisión manual</p>
-                          <label className="toggle">
+                  <div className="settings-field">
+                    <label className="settings-label">Duración de sesión: <strong>{settingsForm.jwt_session_minutes || 30} min</strong></label>
+                    <p className="settings-hint">Tiempo antes de que el token JWT expire (5–480 minutos)</p>
+                    <input
+                      className="settings-range"
+                      type="range" min="5" max="480" step="5"
+                      value={settingsForm.jwt_session_minutes || 30}
+                      onChange={e => handleSettingChange('jwt_session_minutes', e.target.value)}
+                    />
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'var(--text-muted)', marginTop:4 }}>
+                      <span>5 min</span><span>480 min (8h)</span>
+                    </div>
+                  </div>
+
+                  <button
+                    className="btn-primary"
+                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='users'?0.7:1 }}
+                    onClick={() => saveSettings('users')}
+                    disabled={savingSettings === 'users'}
+                  >
+                    {savingSettings === 'users' ? '⏳ Guardando...' : '💾 Guardar Usuarios'}
+                  </button>
+                </div>
+
+                {/* ── Validación ── */}
+                <div className="settings-card">
+                  <div className="settings-card-header">
+                    <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))' }}>
+                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Criterios de Validación</h3>
+                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Umbrales y tipos de archivo</p>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Umbral mínimo de cumplimiento: <strong>{settingsForm.compliance_threshold || 70}%</strong></label>
+                    <p className="settings-hint">Porcentaje mínimo de requisitos cubiertos para aprobar</p>
+                    <input
+                      className="settings-range"
+                      type="range" min="0" max="100" step="5"
+                      value={settingsForm.compliance_threshold || 70}
+                      onChange={e => handleSettingChange('compliance_threshold', e.target.value)}
+                    />
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'var(--text-muted)', marginTop:4 }}>
+                      <span>0%</span><span>100%</span>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label className="settings-label">Extensiones de archivo permitidas</label>
+                    <p className="settings-hint">Tipos de documento aceptados para análisis</p>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginTop:8 }}>
+                      {['.pdf', '.docx', '.pptx', '.xlsx'].map(ext => {
+                        let currentExts = [];
+                        try { currentExts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
+                        const checked = currentExts.includes(ext);
+                        return (
+                          <label key={ext} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:'0.875rem' }}>
                             <input
                               type="checkbox"
-                              checked={settingsForm.auto_approve_users === 'true'}
-                              onChange={e => handleSettingChange('auto_approve_users', e.target.checked ? 'true' : 'false')}
+                              checked={checked}
+                              style={{ accentColor:'var(--cococys-orange)', width:16, height:16 }}
+                              onChange={e => {
+                                let exts = [];
+                                try { exts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
+                                if (e.target.checked) {
+                                  if (!exts.includes(ext)) exts.push(ext);
+                                } else {
+                                  exts = exts.filter(x => x !== ext);
+                                }
+                                handleSettingChange('allowed_file_extensions', JSON.stringify(exts));
+                              }}
                             />
-                            <span className="toggle-track"><span className="toggle-thumb"></span></span>
-                            <span className="toggle-value">
-                              {settingsForm.auto_approve_users === 'true' ? '✓ Automático' : '⏳ Requiere aprobación manual'}
-                            </span>
+                            <code style={{ background:'var(--bg-secondary)', padding:'2px 8px', borderRadius:4 }}>{ext}</code>
                           </label>
-                        </div>
-                      </div>
-
-                      <div className="settings-group">
-                        <div className="settings-field">
-                          <label className="settings-label">
-                            Duración de sesión: <strong>{settingsForm.jwt_session_minutes || 30} minutos</strong>
-                            {(settingsForm.jwt_session_minutes || 30) >= 60 && (
-                              <span className="settings-label-sub"> ({Math.round((settingsForm.jwt_session_minutes || 30) / 60 * 10) / 10} h)</span>
-                            )}
-                          </label>
-                          <p className="settings-hint">Tiempo antes de que el token JWT expire y el usuario deba volver a iniciar sesión</p>
-                          <input
-                            className="settings-range"
-                            type="range" min="5" max="480" step="5"
-                            value={settingsForm.jwt_session_minutes || 30}
-                            onChange={e => handleSettingChange('jwt_session_minutes', e.target.value)}
-                          />
-                          <div className="range-labels"><span>5 min</span><span>480 min (8 h)</span></div>
-                        </div>
-                      </div>
-
-                      <div className="settings-actions">
-                        <button
-                          className="btn-primary settings-save-btn"
-                          style={{ opacity: savingSettings==='users'?0.7:1 }}
-                          onClick={() => saveSettings('users')}
-                          disabled={savingSettings === 'users'}
-                        >
-                          {savingSettings === 'users' ? '⏳ Guardando...' : '💾 Guardar Usuarios'}
-                        </button>
-                      </div>
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
 
-                  {/* ══ VALIDACIÓN ══ */}
-                  {settingsSection === 'validation' && (
-                    <div className="settings-section">
-                      <div className="settings-section-header">
-                        <div className="settings-card-icon settings-card-icon--validation">
-                          <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <h2 className="settings-section-title">Criterios de Validación</h2>
-                          <p className="settings-section-subtitle">Umbrales, tipos de archivo y límites del sistema</p>
-                        </div>
-                      </div>
-
-                      <div className="settings-group">
-                        <div className="settings-field">
-                          <label className="settings-label">
-                            Umbral mínimo de cumplimiento: <strong style={{ color: (settingsForm.compliance_threshold || 70) >= 70 ? 'var(--color-success)' : (settingsForm.compliance_threshold || 70) >= 40 ? 'var(--color-warning)' : 'var(--color-danger)' }}>
-                              {settingsForm.compliance_threshold || 70}%
-                            </strong>
-                          </label>
-                          <p className="settings-hint">Porcentaje mínimo de requisitos cubiertos para considerar una sección como aprobada</p>
-                          <input
-                            className="settings-range"
-                            type="range" min="0" max="100" step="5"
-                            value={settingsForm.compliance_threshold || 70}
-                            onChange={e => handleSettingChange('compliance_threshold', e.target.value)}
-                          />
-                          <div className="range-labels"><span>0%</span><span>50%</span><span>100%</span></div>
-                        </div>
-                      </div>
-
-                      <div className="settings-group">
-                        <div className="settings-field">
-                          <label className="settings-label">
-                            Tamaño máximo de archivo: <strong>{settingsForm.max_upload_file_size_mb || 10} MB</strong>
-                          </label>
-                          <p className="settings-hint">Límite de tamaño para archivos procesados en el análisis de documentos</p>
-                          <input
-                            className="settings-range"
-                            type="range" min="1" max="50" step="1"
-                            value={settingsForm.max_upload_file_size_mb || 10}
-                            onChange={e => handleSettingChange('max_upload_file_size_mb', e.target.value)}
-                          />
-                          <div className="range-labels"><span>1 MB</span><span>50 MB</span></div>
-                        </div>
-                      </div>
-
-                      <div className="settings-group">
-                        <div className="settings-field">
-                          <label className="settings-label">Extensiones de archivo permitidas</label>
-                          <p className="settings-hint">Tipos de documento aceptados para análisis de contenido</p>
-                          <div className="ext-list">
-                            {['.pdf', '.docx', '.pptx', '.xlsx'].map(ext => {
-                              let currentExts = [];
-                              try { currentExts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
-                              const checked = currentExts.includes(ext);
-                              return (
-                                <label key={ext} className="ext-label">
-                                  <input
-                                    type="checkbox"
-                                    className="checkbox-orange"
-                                    checked={checked}
-                                    onChange={e => {
-                                      let exts = [];
-                                      try { exts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
-                                      if (e.target.checked) {
-                                        if (!exts.includes(ext)) exts.push(ext);
-                                      } else {
-                                        exts = exts.filter(x => x !== ext);
-                                      }
-                                      handleSettingChange('allowed_file_extensions', JSON.stringify(exts));
-                                    }}
-                                  />
-                                  <code style={{ background:'var(--bg-primary)', padding:'2px 8px', borderRadius:4, fontSize:'0.85rem' }}>{ext}</code>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="settings-actions">
-                        <button
-                          className="btn-primary settings-save-btn"
-                          style={{ opacity: savingSettings==='validation'?0.7:1 }}
-                          onClick={() => saveSettings('validation')}
-                          disabled={savingSettings === 'validation'}
-                        >
-                          {savingSettings === 'validation' ? '⏳ Guardando...' : '💾 Guardar Validación'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
+                  <button
+                    className="btn-primary"
+                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='validation'?0.7:1 }}
+                    onClick={() => saveSettings('validation')}
+                    disabled={savingSettings === 'validation'}
+                  >
+                    {savingSettings === 'validation' ? '⏳ Guardando...' : '💾 Guardar Validación'}
+                  </button>
                 </div>
+
               </div>
             )}
           </div>
@@ -1387,14 +1021,15 @@ const AdminDashboard = () => {
         {activeTab === 'reports' && (
           <div className="reports-tab">
             {/* Header + Filtros */}
-            <div className="reports-tab-header">
+            <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
                 <h1>Reportes de Validaciones</h1>
                 <p className="subtitle">Estadísticas e historial de validaciones del sistema.</p>
               </div>
-              <div className="reports-tab-actions">
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
                 <select
-                  className="settings-input filter-select"
+                  className="settings-input"
+                  style={{ width: 'auto', padding: '8px 12px', fontSize: '0.875rem' }}
                   value={reportFilter.type}
                   onChange={e => {
                     const f = { ...reportFilter, type: e.target.value };
@@ -1408,7 +1043,8 @@ const AdminDashboard = () => {
                   <option value="content">Solo Contenido</option>
                 </select>
                 <select
-                  className="settings-input filter-select"
+                  className="settings-input"
+                  style={{ width: 'auto', padding: '8px 12px', fontSize: '0.875rem' }}
                   value={reportFilter.days}
                   onChange={e => {
                     const f = { ...reportFilter, days: parseInt(e.target.value) };
@@ -1423,13 +1059,17 @@ const AdminDashboard = () => {
                   <option value="365">Último año</option>
                 </select>
                 <button
-                  className="btn-primary settings-save-btn"
+                  className="btn-primary"
+                  style={{ padding: '8px 16px', fontSize: '0.875rem' }}
                   onClick={() => { setHistoryPage(0); loadReports(reportFilter, 0); }}
                   disabled={reportLoading}
                 >
                   {reportLoading ? '⏳' : '🔄 Actualizar'}
                 </button>
-                <button className="btn-success" onClick={handleExportCSV}>
+                <button
+                  style={{ padding: '8px 16px', fontSize: '0.875rem', background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+                  onClick={handleExportCSV}
+                >
                   ⬇️ Exportar CSV
                 </button>
               </div>
@@ -1463,12 +1103,12 @@ const AdminDashboard = () => {
                 {reportStats.by_week?.length > 0 && (
                   <div className="report-table-card">
                     <h3>📚 Cumplimiento por Semana/Carpeta</h3>
-                    <div style={{ overflowX: 'auto', maxHeight: '320px', overflowY: 'auto' }}>
+                    <div style={{ overflowX: 'auto' }}>
                       <table className="report-table">
                         <thead>
                           <tr>
                             {['Carpeta', 'Curso', 'Validaciones', 'Promedio'].map(h => (
-                              <th key={h} style={{ position: 'sticky', top: 0, background: 'var(--bg-card)' }}>{h}</th>
+                              <th key={h}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1507,19 +1147,19 @@ const AdminDashboard = () => {
 
                 {/* Historial */}
                 <div className="report-table-card">
-                  <div className="reports-tab-header">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <h3 style={{ margin: 0 }}>📋 Historial de Validaciones</h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                         {reportHistory.total} registros — pág. {historyPage + 1} / {Math.max(1, Math.ceil(reportHistory.total / HISTORY_PAGE_SIZE))}
                       </span>
                       <button
-                        className="pagination-btn"
+                        style={{ padding: '4px 12px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: historyPage === 0 ? 0.4 : 1 }}
                         disabled={historyPage === 0 || reportLoading}
                         onClick={() => { const p = historyPage - 1; setHistoryPage(p); loadReports(reportFilter, p); }}
                       >← Anterior</button>
                       <button
-                        className="pagination-btn"
+                        style={{ padding: '4px 12px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: (historyPage + 1) * HISTORY_PAGE_SIZE >= reportHistory.total ? 0.4 : 1 }}
                         disabled={(historyPage + 1) * HISTORY_PAGE_SIZE >= reportHistory.total || reportLoading}
                         onClick={() => { const p = historyPage + 1; setHistoryPage(p); loadReports(reportFilter, p); }}
                       >Siguiente →</button>
@@ -1530,21 +1170,17 @@ const AdminDashboard = () => {
                       <p>No hay validaciones en el período seleccionado</p>
                     </div>
                   ) : (
-                    <div className="table-scroll table-scroll--lg">
+                    <div style={{ overflowX: 'auto', maxHeight: '420px', overflowY: 'auto' }}>
                       <table className="report-table">
                         <thead>
                           <tr>
-                            {['Fecha', 'Carpeta', 'Curso', 'Tipo', 'Cumplimiento', 'Estado', 'Proveedor IA', 'Origen key', 'Validado por'].map(h => (
-                              <th key={h}>{h}</th>
+                            {['Fecha', 'Carpeta', 'Curso', 'Tipo', 'Cumplimiento', 'Estado'].map(h => (
+                              <th key={h} style={{ position: 'sticky', top: 0, background: 'var(--bg-card)' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {reportHistory.records.map((r, idx) => {
-                            const provColors = { gemini:'#4285f4', deepseek:'#7c3aed', groq:'#059669', openrouter:'#d97706', basic:'#6b7280', none:'#9ca3af' };
-                            const srcCls = { personal:'success', admin:'warning', env:'info', none:'' };
-                            const pColor = provColors[r.provider] || provColors.none;
-                            return (
+                          {reportHistory.records.map((r, idx) => (
                             <tr key={idx}>
                               <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
                                 {r.created_at
@@ -1554,7 +1190,11 @@ const AdminDashboard = () => {
                               <td style={{ fontWeight: 500 }}>{r.folder_name}</td>
                               <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{r.course_name || '—'}</td>
                               <td>
-                                <span className={`status-badge status-badge--${r.validation_type === 'structure' ? 'structure' : 'content'}`}>
+                                <span style={{
+                                  padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
+                                  background: r.validation_type === 'structure' ? 'rgba(139,92,246,0.2)' : 'rgba(16,185,129,0.2)',
+                                  color: r.validation_type === 'structure' ? '#a78bfa' : '#34d399'
+                                }}>
                                   {r.validation_type === 'structure' ? '📋 Estructura' : '🧠 Contenido'}
                                 </span>
                               </td>
@@ -1580,24 +1220,8 @@ const AdminDashboard = () => {
                                   {r.status === 'compliant' ? '✓ Cumple' : r.status === 'partial' ? '~ Parcial' : '✗ Bajo'}
                                 </span>
                               </td>
-                              <td>
-                                {r.provider && r.provider !== 'none'
-                                  ? <span style={{ fontWeight: 700, color: pColor, fontSize: '0.8rem', textTransform: 'capitalize' }}>{r.provider}</span>
-                                  : <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>—</span>}
-                              </td>
-                              <td>
-                                {r.key_source && r.key_source !== 'none'
-                                  ? <span className={`status-badge ${srcCls[r.key_source] || ''}`} style={{ fontSize: '0.72rem' }}>
-                                      {{ personal: 'Personal', admin: 'Admin', env: 'Sistema' }[r.key_source] || r.key_source}
-                                    </span>
-                                  : <span style={{ color: '#9ca3af' }}>—</span>}
-                              </td>
-                              <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                                {r.validated_by_name || '—'}
-                              </td>
                             </tr>
-                            );
-                          })}
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -1611,131 +1235,6 @@ const AdminDashboard = () => {
                   Cargar Reportes
                 </button>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Analysis History Tab */}
-        {activeTab === 'analysis' && (
-          <div className="reports-tab">
-            <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Análisis de Documentos</h2>
-                <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                  Análisis individuales de archivos con IA — score de calidad, proveedor y origen de key
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <button className="btn-primary" style={{ padding: '0.4rem 0.9rem', fontSize: '0.85rem' }}
-                  onClick={() => loadAnalysisHistory(analysisFilter, analysisPage)}>
-                  Actualizar
-                </button>
-              </div>
-            </div>
-
-            {analysisLoading && analysisHistory.records.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                <div className="spinner" style={{ margin: '0 auto 1rem' }}></div>
-                <p>Cargando historial...</p>
-              </div>
-            ) : analysisHistory.records.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-                <p style={{ fontSize: '2rem', margin: '0 0 0.5rem' }}>🔍</p>
-                <p>No hay registros de análisis aún.</p>
-              </div>
-            ) : (
-              <>
-                <div className="history-table-wrap">
-                  <table className="history-table">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th>
-                        <th>Usuario</th>
-                        <th>Analizado</th>
-                        <th>Proveedor</th>
-                        <th>Origen key</th>
-                        <th>Score</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analysisHistory.records.map(r => {
-                        const providerColors = {
-                          gemini: '#4285f4', deepseek: '#7c3aed',
-                          groq: '#059669', openrouter: '#d97706',
-                          basic: '#6b7280', none: '#9ca3af',
-                        };
-                        const sourceLabels = {
-                          personal: { label: 'Personal', cls: 'success' },
-                          admin:    { label: 'Admin',    cls: 'warning' },
-                          env:      { label: 'Sistema',  cls: 'info'    },
-                          none:     { label: '—',        cls: ''        },
-                        };
-                        const pColor = providerColors[r.provider] || '#6b7280';
-                        const src = sourceLabels[r.key_source] || sourceLabels.none;
-                        return (
-                          <tr key={r.id}>
-                            <td className="history-date" style={{ whiteSpace: 'nowrap' }}>
-                              {new Date(r.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
-                              <br />
-                              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                                {new Date(r.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </td>
-                            <td style={{ fontSize: '0.83rem' }}>
-                              <span style={{ fontWeight: 600 }}>{r.user_name || '—'}</span>
-                            </td>
-                            <td className="history-folder">
-                              <span className="history-folder-name">{r.analyzed_what}</span>
-                              {r.course_name && (
-                                <span className="history-section">{r.course_name}</span>
-                              )}
-                            </td>
-                            <td>
-                              <span style={{ fontWeight: 700, color: pColor, fontSize: '0.82rem', textTransform: 'capitalize' }}>
-                                {r.provider === 'none' ? '—' : r.provider}
-                              </span>
-                            </td>
-                            <td>
-                              {src.label !== '—' ? (
-                                <span className={`status-badge ${src.cls}`} style={{ fontSize: '0.72rem' }}>
-                                  {src.label}
-                                </span>
-                              ) : <span style={{ color: '#9ca3af' }}>—</span>}
-                            </td>
-                            <td>
-                              {r.score != null ? (
-                                <span className={`history-pct history-pct--${r.score >= 70 ? 'success' : r.score >= 40 ? 'warning' : 'danger'}`}>
-                                  {r.score.toFixed(0)}/100
-                                </span>
-                              ) : (
-                                <span style={{ color: '#9ca3af' }}>—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Paginación */}
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', marginTop: '1.25rem' }}>
-                  <button className="history-page-btn"
-                    disabled={analysisPage === 0 || analysisLoading}
-                    onClick={() => loadAnalysisHistory(analysisFilter, analysisPage - 1)}>
-                    ← Anterior
-                  </button>
-                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    {analysisPage + 1} / {Math.max(1, Math.ceil(analysisHistory.total / ANALYSIS_PAGE_SIZE))}
-                    &nbsp;·&nbsp; {analysisHistory.total} registros
-                  </span>
-                  <button className="history-page-btn"
-                    disabled={(analysisPage + 1) * ANALYSIS_PAGE_SIZE >= analysisHistory.total || analysisLoading}
-                    onClick={() => loadAnalysisHistory(analysisFilter, analysisPage + 1)}>
-                    Siguiente →
-                  </button>
-                </div>
-              </>
             )}
           </div>
         )}
@@ -1777,11 +1276,11 @@ const AdminDashboard = () => {
             )}
 
             {/* Filters */}
-            <div className="user-filters">
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <input
                 type="text"
                 className="settings-input"
-                style={{ flex: '1', minWidth: '200px' }}
+                style={{ flex: '1', minWidth: '200px', padding: '8px 12px', fontSize: '0.875rem' }}
                 placeholder="Buscar por nombre o correo..."
                 value={userFilter.search}
                 onChange={e => {
@@ -1844,7 +1343,7 @@ const AdminDashboard = () => {
                         <tr key={u.id}>
                           <td style={{ fontWeight: 500 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <div className="user-table-avatar">
+                              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0 }}>
                                 {u.nombre?.[0]}{u.apellidos?.[0]}
                               </div>
                               {u.nombre} {u.apellidos}
@@ -1852,12 +1351,12 @@ const AdminDashboard = () => {
                           </td>
                           <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{u.correo}</td>
                           <td>
-                            <span className={`status-badge status-badge--${u.role === 'admin' ? 'structure' : 'content'}`}>
+                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, background: u.role === 'admin' ? 'rgba(99,102,241,0.2)' : 'rgba(16,185,129,0.2)', color: u.role === 'admin' ? '#818cf8' : '#34d399' }}>
                               {u.role === 'admin' ? '🛡️ Admin' : '🎓 Estudiante'}
                             </span>
                           </td>
                           <td>
-                            <span className={`status-badge status-badge--${u.is_active ? 'compliant' : 'non-compliant'}`}>
+                            <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, background: u.is_active ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: u.is_active ? '#10b981' : '#ef4444' }}>
                               {u.is_active ? '✓ Activo' : '✗ Inactivo'}
                             </span>
                           </td>
@@ -1868,10 +1367,13 @@ const AdminDashboard = () => {
                             {u.created_at ? new Date(u.created_at).toLocaleDateString('es-ES') : '—'}
                           </td>
                           <td style={{ textAlign: 'center' }}>
-                            {u.is_teacher
-                              ? <span className="status-badge status-badge--compliant">🏫 Docente</span>
-                              : <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>—</span>
-                            }
+                            {u.is_teacher ? (
+                              <span style={{ padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
+                                🏫 Docente
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>—</span>
+                            )}
                           </td>
                           <td style={{ minWidth: 140 }}>
                             {(() => {
@@ -1919,13 +1421,6 @@ const AdminDashboard = () => {
                                 🏫
                               </button>
                               <button
-                                style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, background: 'rgba(59,130,246,0.15)', color: '#3b82f6' }}
-                                onClick={() => openResetPasswordModal(u)}
-                                title="Resetear contraseña"
-                              >
-                                🔑
-                              </button>
-                              <button
                                 style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: '6px', border: 'none', cursor: 'pointer', fontWeight: 600, background: u.is_active ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)', color: u.is_active ? '#ef4444' : '#10b981' }}
                                 onClick={() => setConfirmModal({
                                   message: `¿${u.is_active ? 'Desactivar' : 'Activar'} al usuario ${u.nombre} ${u.apellidos}?`,
@@ -1957,110 +1452,6 @@ const AdminDashboard = () => {
                         style={{ padding: '6px 14px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: (userPage + 1) * USER_PAGE_SIZE >= allUsers.total ? 0.4 : 1 }}
                         disabled={(userPage + 1) * USER_PAGE_SIZE >= allUsers.total}
                         onClick={() => { const p = userPage + 1; setUserPage(p); loadAllUsers(userFilter, p); }}
-                      >Siguiente →</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Audit Log Tab */}
-        {activeTab === 'audit' && (
-          <div className="audit-tab">
-            <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-              <div>
-                <h1>Log de Auditoría</h1>
-                <p className="subtitle">{auditLog.total} acciones registradas</p>
-              </div>
-              <button
-                className="btn-primary"
-                onClick={() => { loadAuditLog(0); setAuditPage(0); }}
-                disabled={auditLoading}
-              >
-                {auditLoading ? 'Cargando...' : '↻ Actualizar'}
-              </button>
-            </div>
-
-            {auditLoading && auditLog.entries.length === 0 ? (
-              <div className="empty-state"><p>Cargando log de auditoría...</p></div>
-            ) : auditLog.entries.length === 0 ? (
-              <div className="empty-state"><p>No hay acciones registradas aún.</p></div>
-            ) : (
-              <div className="table-container">
-                <table className="history-table" style={{ width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th>Fecha</th>
-                      <th>Usuario</th>
-                      <th>Acción</th>
-                      <th>Objetivo</th>
-                      <th>Detalles</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditLog.entries.map(e => {
-                      const actionColors = {
-                        'user.approve': '#22c55e',
-                        'user.reject': '#ef4444',
-                        'user.toggle_active': '#f59e0b',
-                        'user.update_config': '#6366f1',
-                        'settings.update': '#3b82f6',
-                        'settings.bulk_update': '#0ea5e9',
-                        'api_key.add': '#10b981',
-                        'api_key.delete': '#f43f5e',
-                      };
-                      const color = actionColors[e.action] || '#94a3b8';
-                      return (
-                        <tr key={e.id}>
-                          <td className="history-date" style={{ whiteSpace: 'nowrap' }}>
-                            {e.created_at ? new Date(e.created_at).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
-                          </td>
-                          <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                            {e.user_email || '—'}
-                          </td>
-                          <td>
-                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '0.78rem', fontWeight: 600, background: color + '22', color }}>
-                              {e.action}
-                            </span>
-                          </td>
-                          <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                            {e.target_type && <span style={{ marginRight: 4, opacity: 0.7 }}>[{e.target_type}]</span>}
-                            {e.target_id ? <span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{e.target_id.length > 24 ? e.target_id.slice(0, 24) + '…' : e.target_id}</span> : '—'}
-                          </td>
-                          <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', maxWidth: '260px' }}>
-                            {e.details ? (
-                              <details>
-                                <summary style={{ cursor: 'pointer', color: 'var(--accent-blue)' }}>ver</summary>
-                                <pre style={{ margin: '4px 0 0', fontSize: '0.72rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                                  {JSON.stringify(e.details, null, 2)}
-                                </pre>
-                              </details>
-                            ) : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                {/* Pagination */}
-                {auditLog.total > AUDIT_PAGE_SIZE && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                      {auditPage * AUDIT_PAGE_SIZE + 1}–{Math.min((auditPage + 1) * AUDIT_PAGE_SIZE, auditLog.total)} de {auditLog.total}
-                    </span>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        style={{ padding: '6px 14px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: auditPage === 0 ? 0.4 : 1 }}
-                        disabled={auditPage === 0}
-                        onClick={() => { const p = auditPage - 1; setAuditPage(p); loadAuditLog(p); }}
-                      >← Anterior</button>
-                      <button
-                        style={{ padding: '6px 14px', fontSize: '0.8rem', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: '6px', cursor: 'pointer', opacity: (auditPage + 1) * AUDIT_PAGE_SIZE >= auditLog.total ? 0.4 : 1 }}
-                        disabled={(auditPage + 1) * AUDIT_PAGE_SIZE >= auditLog.total}
-                        onClick={() => { const p = auditPage + 1; setAuditPage(p); loadAuditLog(p); }}
                       >Siguiente →</button>
                     </div>
                   </div>

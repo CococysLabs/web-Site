@@ -146,12 +146,10 @@ async def analyze_document(
     """
     Analizar un documento con Gemini
     """
-    is_admin = current_user.role == UserRole.ADMIN
-    perms = getattr(current_user, "permissions", None) or {}
-    if not is_admin and not perms.get("can_analyze", False):
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes permiso para analizar documentos"
+            detail="Solo administradores pueden analizar documentos"
         )
     
     # Buscar documento
@@ -160,12 +158,6 @@ async def analyze_document(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Documento no encontrado"
-        )
-
-    if not is_admin and document.uploaded_by != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes permiso para analizar este documento"
         )
     
     # Actualizar estado
@@ -200,9 +192,7 @@ async def analyze_document(
         # Analizar documento
         analysis_result = analysis_service.analyze_document_structure(
             file_content,
-            required_sections,
-            db=db,
-            user_id=current_user.id,
+            required_sections
         )
         
         # Actualizar documento con resultados

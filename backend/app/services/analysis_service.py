@@ -48,96 +48,17 @@ class DocumentAnalysisService:
     def __init__(self):
         self.model = None
         self.enabled = False
-        self._active_api_key: Optional[str] = None
-        self._key_source: str = "none"
         if GENAI_AVAILABLE:
             api_key = getattr(settings, 'GEMINI_API_KEY', None)
             if api_key and api_key not in ('', 'kjkj'):
                 genai.configure(api_key=api_key)
                 self.model = genai.GenerativeModel(GEMINI_MODEL)
                 self.enabled = True
-                self._active_api_key = api_key
-                self._key_source = "env"
                 print(f"✅ Gemini ({GEMINI_MODEL}) listo para análisis de documentos")
             else:
-                print("⚠️  GEMINI_API_KEY no configurada — se usarán keys de BD si están disponibles")
+                print("⚠️  GEMINI_API_KEY no configurada — modo básico")
         else:
             print("⚠️  google-generativeai no disponible — modo básico")
-
-    @property
-    def provider_name(self) -> str:
-        return "gemini" if self.enabled else "basic"
-
-    @property
-    def key_source(self) -> str:
-        return self._key_source
-
-    def _reload_keys_from_db(self, db, user_id=None) -> None:
-        """
-        Recarga la API key de Gemini desde BD con prioridad:
-          1. Key personal del usuario (si user_id dado y tiene key)
-          2. Keys del sistema (settings admin)
-          3. Key del entorno (.env)
-        """
-        if db is None or not GENAI_AVAILABLE:
-            return
-        try:
-            from app.services.settings_service import settings_service
-            from app.models.user import User
-
-            env_key = getattr(settings, 'GEMINI_API_KEY', None) or ''
-            if env_key in ('', 'kjkj'):
-                env_key = None
-
-            # Keys personales del usuario
-            if user_id is not None:
-                try:
-                    u = db.query(User).filter(User.id == user_id).first()
-                    personal = (getattr(u, 'personal_api_keys', None) or {}).get('gemini', [])
-                    personal = [k.strip() for k in personal if k.strip()]
-                    if personal:
-                        api_key = personal[0]
-                        genai.configure(api_key=api_key)
-                        self.model = genai.GenerativeModel(GEMINI_MODEL)
-                        self.enabled = True
-                        self._active_api_key = api_key
-                        self._key_source = "personal"
-                        print(f"  🔑 Análisis usando key personal de usuario (gemini)")
-                        return
-                except Exception:
-                    pass
-
-            # Keys del sistema en BD
-            db_keys = settings_service.get_json("gemini_api_keys", db, default=[]) or []
-            db_keys = [k.strip() for k in db_keys if k.strip()]
-            if db_keys:
-                api_key = db_keys[0]
-                genai.configure(api_key=api_key)
-                self.model = genai.GenerativeModel(GEMINI_MODEL)
-                self.enabled = True
-                self._active_api_key = api_key
-                self._key_source = "admin"
-                print(f"  🔑 Análisis usando key del sistema (gemini)")
-                return
-
-            # Env var como último recurso
-            if env_key:
-                genai.configure(api_key=env_key)
-                self.model = genai.GenerativeModel(GEMINI_MODEL)
-                self.enabled = True
-                self._active_api_key = env_key
-                self._key_source = "env"
-                return
-
-            # Sin ninguna key disponible
-            self.enabled = False
-            self.model = None
-            self._active_api_key = None
-            self._key_source = "none"
-            print("  ⚠️  Sin API key de Gemini disponible — análisis en modo básico")
-
-        except Exception as e:
-            print(f"  ⚠️  Error recargando key de Gemini desde BD: {e}")
 
     # ──────────────────────────────────────────────────────────────────────────
     # Extracción de texto + metadatos por formato
@@ -375,15 +296,11 @@ class DocumentAnalysisService:
     # Análisis principal: análisis completo con un solo llamado a Gemini
     # ──────────────────────────────────────────────────────────────────────────
 
-    def analyze_complete(self, content: bytes, mime_type: str = "application/pdf",
-                         db=None, user_id=None) -> Dict[str, Any]:
+    def analyze_complete(self, content: bytes, mime_type: str = "application/pdf") -> Dict[str, Any]:
         """
         Análisis completo: existencia + estructura + contexto + calidad académica.
         Usa un solo llamado a Gemini (más coherente y eficiente).
-        Recarga keys desde BD si se pasan db/user_id.
         """
-        if db is not None:
-            self._reload_keys_from_db(db, user_id)
         extracted = self._extract_all(content, mime_type)
         text = extracted.get("text", "")
         word_count = extracted.get("word_count", 0)
@@ -649,62 +566,6 @@ Para el campo "quality.score" usa una escala 0-100:
             result = self._comprehensive_ai_analysis(text, extracted.get("word_count", 0), self._mime_to_hint(mime_type))
             return result.get("context", self._empty_context())
         return self._comprehensive_basic_analysis(text).get("context", self._empty_context())
-
-    def analyze_document_structure(self, content: bytes, required_sections: List[str],
-                                    db=None, user_id=None) -> Dict[str, Any]:
-        """
-        Verifica presencia de secciones requeridas en el documento.
-        Compatible con llamadas legacy desde documents.py.
-        """
-        if db is not None:
-            self._reload_keys_from_db(db, user_id)
-
-        text = self.extract_text(content, "application/pdf")
-        if not text:
-            return {
-                "found_sections": [],
-                "missing_sections": required_sections,
-                "is_valid": False,
-                "summary": "No se pudo extraer texto del documento",
-                "confidence": 0.0,
-            }
-
-        if self.enabled:
-            prompt = f"""Analiza el siguiente documento educativo y determina si contiene estas secciones requeridas:
-
-SECCIONES REQUERIDAS: {', '.join(required_sections)}
-
-TEXTO DEL DOCUMENTO:
-{text[:5000]}
-
-Responde ÚNICAMENTE con JSON válido sin markdown:
-{{
-  "found_sections": ["secciones encontradas"],
-  "missing_sections": ["secciones faltantes"],
-  "is_valid": true,
-  "summary": "Resumen breve",
-  "confidence": 0.95
-}}"""
-            try:
-                response = self.model.generate_content(prompt)
-                raw = response.text.strip()
-                raw = re.sub(r'^```json?\s*', '', raw)
-                raw = re.sub(r'\s*```$', '', raw)
-                return json.loads(raw)
-            except Exception as e:
-                print(f"  ⚠️  Error Gemini en analyze_document_structure: {e}")
-
-        # Fallback básico
-        text_lower = text.lower()
-        found = [s for s in required_sections if s.lower() in text_lower]
-        missing = [s for s in required_sections if s not in found]
-        return {
-            "found_sections": found,
-            "missing_sections": missing,
-            "is_valid": len(missing) == 0,
-            "summary": f"Análisis básico: {len(found)}/{len(required_sections)} secciones encontradas",
-            "confidence": 0.5,
-        }
 
     # ──────────────────────────────────────────────────────────────────────────
     # Helpers vacíos

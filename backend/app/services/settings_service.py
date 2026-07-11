@@ -12,112 +12,39 @@ from app.models.system_setting import SystemSetting
 # ─── Defaults semilla ────────────────────────────────────────────────────────
 
 DEFAULT_SETTINGS: Dict[str, Dict[str, Any]] = {
-    # ── Google Drive ────────────────────────────────────────────────────────────
+    # Google Drive
     "drive_root_folder_id": {
-        "value": "1Zr0uo96b8Nyj97wxzOt17yCdqfgxbWbl",
+        "value": "",
         "value_type": "string",
         "category": "drive",
         "label": "Carpeta raíz de Google Drive",
-        "description": "ID de la carpeta principal de Google Drive que contiene los cursos.",
+        "description": "ID de la carpeta principal de Google Drive que contiene los cursos",
         "is_sensitive": False,
     },
-    # ── Proveedores de IA ───────────────────────────────────────────────────────
-    "deepseek_enabled": {
-        "value": "true",
-        "value_type": "boolean",
+    # Gemini AI
+    "gemini_model": {
+        "value": "gemini-2.0-flash",
+        "value_type": "string",
         "category": "ai",
-        "label": "Habilitar DeepSeek (proveedor principal)",
-        "description": "Proveedor principal de IA. Si se desactiva, el sistema salta directamente a Gemini.",
+        "label": "Modelo de Gemini",
+        "description": "Modelo a usar para validación de contenido con IA (gemini-2.0-flash, gemini-2.5-flash)",
         "is_sensitive": False,
     },
     "gemini_enabled": {
         "value": "true",
         "value_type": "boolean",
         "category": "ai",
-        "label": "Habilitar Gemini (fallback 1)",
-        "description": "Segundo proveedor en la cadena. Actúa como respaldo si DeepSeek falla o está desactivado.",
+        "label": "Habilitar análisis con IA",
+        "description": "Activa o desactiva el análisis de documentos con Gemini. Si está desactivado, se usa coincidencia de palabras clave.",
         "is_sensitive": False,
     },
-    "gemini_model": {
-        "value": "gemini-2.0-flash",
-        "value_type": "string",
-        "category": "ai",
-        "label": "Modelo de Gemini",
-        "description": "Modelo de Gemini a usar cuando actúa como fallback.",
-        "is_sensitive": False,
-    },
-    "groq_enabled": {
-        "value": "true",
-        "value_type": "boolean",
-        "category": "ai",
-        "label": "Habilitar Groq (fallback 2)",
-        "description": "Tercer proveedor en la cadena. Actúa como respaldo si Gemini falla o está desactivado.",
-        "is_sensitive": False,
-    },
-    "openrouter_enabled": {
-        "value": "true",
-        "value_type": "boolean",
-        "category": "ai",
-        "label": "Habilitar OpenRouter (fallback 3)",
-        "description": "Cuarto proveedor en la cadena. Último respaldo antes de la validación por palabras clave.",
-        "is_sensitive": False,
-    },
-    "ai_temperature": {
-        "value": "0.05",
-        "value_type": "string",
-        "category": "ai",
-        "label": "Temperatura de los modelos",
-        "description": "Controla la aleatoriedad de las respuestas (0.0 = determinista, 1.0 = muy creativo). Recomendado: 0.05.",
-        "is_sensitive": False,
-    },
-    "ai_max_tokens": {
-        "value": "2000",
-        "value_type": "integer",
-        "category": "ai",
-        "label": "Tokens máximos por respuesta",
-        "description": "Límite de tokens en la respuesta de cada proveedor. Afecta el costo y la verbosidad de las observaciones.",
-        "is_sensitive": False,
-    },
-    # ── API Keys de proveedores (sensibles, se almacenan encriptadas en BD) ────
-    "gemini_api_keys": {
-        "value": "[]",
-        "value_type": "json",
-        "category": "ai",
-        "label": "API Keys de Gemini",
-        "description": "Lista de API Keys de Google Gemini. Se combinan con las configuradas en variables de entorno. Soporta múltiples keys para rotación automática.",
-        "is_sensitive": True,
-    },
-    "deepseek_api_keys": {
-        "value": "[]",
-        "value_type": "json",
-        "category": "ai",
-        "label": "API Keys de DeepSeek",
-        "description": "Lista de API Keys de DeepSeek. Se combinan con la configurada en variables de entorno.",
-        "is_sensitive": True,
-    },
-    "groq_api_keys": {
-        "value": "[]",
-        "value_type": "json",
-        "category": "ai",
-        "label": "API Keys de Groq",
-        "description": "Lista de API Keys de Groq. Se combinan con la configurada en variables de entorno.",
-        "is_sensitive": True,
-    },
-    "openrouter_api_keys": {
-        "value": "[]",
-        "value_type": "json",
-        "category": "ai",
-        "label": "API Keys de OpenRouter",
-        "description": "Lista de API Keys de OpenRouter. Se combinan con la configurada en variables de entorno.",
-        "is_sensitive": True,
-    },
-    # ── Gestión de usuarios ─────────────────────────────────────────────────────
+    # Gestión de usuarios
     "auto_approve_users": {
         "value": "false",
         "value_type": "boolean",
         "category": "users",
         "label": "Auto-aprobar usuarios nuevos",
-        "description": "Si está activo, los estudiantes se aprueban automáticamente al registrarse sin revisión del administrador.",
+        "description": "Si está activo, los estudiantes se aprueban automáticamente al registrarse sin necesidad de revisión del administrador.",
         "is_sensitive": False,
     },
     "jwt_session_minutes": {
@@ -128,7 +55,7 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Any]] = {
         "description": "Tiempo en minutos antes de que el token JWT expire y el usuario deba volver a iniciar sesión.",
         "is_sensitive": False,
     },
-    # ── Criterios de validación ─────────────────────────────────────────────────
+    # Criterios de validación
     "compliance_threshold": {
         "value": "70",
         "value_type": "integer",
@@ -145,37 +72,13 @@ DEFAULT_SETTINGS: Dict[str, Dict[str, Any]] = {
         "description": "Lista de extensiones de archivo aceptadas para análisis y validación.",
         "is_sensitive": False,
     },
-    "max_upload_file_size_mb": {
-        "value": "10",
-        "value_type": "integer",
-        "category": "validation",
-        "label": "Tamaño máximo de archivo (MB)",
-        "description": "Límite de tamaño para archivos subidos al sistema para análisis.",
-        "is_sensitive": False,
-    },
-    "validation_cache_minutes": {
-        "value": "60",
-        "value_type": "integer",
-        "category": "validation",
-        "label": "Caché de validaciones (minutos)",
-        "description": "Tiempo en minutos durante el cual se reutiliza un resultado de validación previo para la misma carpeta. Poner 0 para desactivar el caché.",
-        "is_sensitive": False,
-    },
-    "min_confidence_threshold": {
-        "value": "0.5",
-        "value_type": "string",
-        "category": "validation",
-        "label": "Umbral mínimo de confianza de IA",
-        "description": "Resultados con confianza menor a este valor se marcan como 'requiere revisión'. Rango: 0.0–1.0.",
-        "is_sensitive": False,
-    },
 }
 
 # Orden de display por categoría
 CATEGORY_ORDER = ["drive", "ai", "users", "validation"]
 CATEGORY_LABELS = {
     "drive":      "Google Drive",
-    "ai":         "Proveedores de IA",
+    "ai":         "Gemini AI",
     "users":      "Gestión de Usuarios",
     "validation": "Criterios de Validación",
 }
@@ -238,37 +141,15 @@ class SettingsService:
             cat = meta["category"]
             row = rows.get(key)
             value = row.value if row else meta["value"]
-            is_sensitive = meta.get("is_sensitive", False)
 
-            # Para API keys (json array sensible): devolver el array de keys
-            # ofuscadas (solo primeros 8 chars + "...") para que el admin
-            # pueda ver cuántas hay y cuáles son sin exponer el valor completo.
-            if is_sensitive and meta["value_type"] == "json":
-                try:
-                    raw_list = json.loads(value or "[]")
-                    display_value = [k[:8] + "..." if len(k) > 8 else k for k in raw_list]
-                    display_count = len(raw_list)
-                except Exception:
-                    display_value = []
-                    display_count = 0
-                grouped[cat]["settings"][key] = {
-                    "value":        display_value,
-                    "key_count":    display_count,
-                    "value_type":   meta["value_type"],
-                    "label":        meta["label"],
-                    "description":  meta["description"],
-                    "is_sensitive": True,
-                    "updated_at":   row.updated_at.isoformat() if row and row.updated_at else None,
-                }
-            else:
-                grouped[cat]["settings"][key] = {
-                    "value":       value if not is_sensitive else "***",
-                    "value_type":  meta["value_type"],
-                    "label":       meta["label"],
-                    "description": meta["description"],
-                    "is_sensitive": is_sensitive,
-                    "updated_at":  row.updated_at.isoformat() if row and row.updated_at else None,
-                }
+            grouped[cat]["settings"][key] = {
+                "value":       value if not meta.get("is_sensitive") else "***",
+                "value_type":  meta["value_type"],
+                "label":       meta["label"],
+                "description": meta["description"],
+                "is_sensitive": meta.get("is_sensitive", False),
+                "updated_at":  row.updated_at.isoformat() if row and row.updated_at else None,
+            }
 
         return grouped
 
