@@ -310,6 +310,39 @@ def _record_folder_result(
     else:
         existing_items.append(item)
 
+import os
+
+@router.get("/debug-config")
+async def debug_drive_structure_config(
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo admin"
+        )
+
+    root_folder_id = _get_structure_root_folder_id()
+    credentials_file = getattr(settings, "GOOGLE_CREDENTIALS_FILE", None)
+
+    metadata = None
+    metadata_error = None
+
+    try:
+        metadata = drive_service.get_file_metadata(root_folder_id)
+    except Exception as exc:
+        metadata_error = str(exc)
+
+    return {
+        "GOOGLE_DRIVE_STRUCTURE_FOLDER_ID": root_folder_id,
+        "GOOGLE_DRIVE_FOLDER_ID": getattr(settings, "GOOGLE_DRIVE_FOLDER_ID", None),
+        "GOOGLE_CREDENTIALS_FILE": credentials_file,
+        "credentials_file_exists": bool(credentials_file and os.path.exists(credentials_file)),
+        "drive_service_initialized": bool(drive_service.service),
+        "structure_folder_accessible": bool(metadata),
+        "structure_folder_metadata": metadata,
+        "metadata_error": metadata_error,
+    }
 
 @router.post("/create-courses")
 async def create_course_folders_from_template(
