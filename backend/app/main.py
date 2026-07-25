@@ -14,6 +14,7 @@ from app.routes import (
     admin_settings,
     course_catalog,
     drive_structures,
+    course_contacts,
 )
 
 app = FastAPI(
@@ -157,7 +158,8 @@ app.include_router(validation.router, tags=["Validación"])
 app.include_router(admin_settings.router, tags=["Configuración"])
 app.include_router(course_catalog.router, tags=["Catálogo de Cursos"])
 app.include_router(drive_structures.router, tags=["Estructuras de Google Drive"])
-
+app.include_router(course_contacts.router, tags=["Contactos de Cursos"],)
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

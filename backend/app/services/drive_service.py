@@ -2,14 +2,15 @@
 Servicio de integración con Google Drive
 """
 import os
+import json
 from typing import List, Optional, Dict, Tuple
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
+from googleapiclient.errors import HttpError
 import io
 
 from app.config import settings
-
 
 class GoogleDriveService:
     """Servicio para interactuar con Google Drive API"""
@@ -250,6 +251,132 @@ class GoogleDriveService:
             else:
                 print(f"  ⚠️  No se pudo guardar reporte en Drive: {e}")
             return None
+        
+    @staticmethod
+    def _format_drive_http_error(exception: HttpError) -> str:
+        """
+        Extraer el status, mensaje y reason de un HttpError de Google Drive.
+        """
+        status_code = getattr(
+            exception.resp,
+            "status",
+            "unknown",
+        )
+
+        try:
+            raw_content = exception.content
+
+            if isinstance(raw_content, bytes):
+                raw_content = raw_content.decode(
+                    "utf-8",
+                    errors="replace",
+                )
+
+            payload = json.loads(raw_content)
+            error_data = payload.get("error", {})
+
+            message = (
+                error_data.get("message")
+                or str(exception)
+            )
+
+            reasons = [
+                item.get("reason")
+                for item in error_data.get("errors", [])
+                if item.get("reason")
+            ]
+
+            reason_text = (
+                ", ".join(reasons)
+                if reasons
+                else "sin reason"
+            )
+
+            return (
+                f"Google Drive API {status_code}: "
+                f"{message} "
+                f"(reason: {reason_text})"
+            )
+
+        except Exception:
+            return (
+                f"Google Drive API {status_code}: "
+                f"{exception}"
+            )
+
+
+    def create_file_or_raise(
+        self,
+        file_bytes: bytes,
+        mime_type: str,
+        filename: str,
+        parent_folder_id: str,
+    ) -> Dict:
+        """
+        Crear un archivo en Drive sin ocultar la excepción real.
+
+        Se usa en procesos donde el llamador necesita informar exactamente
+        por qué Google Drive rechazó la creación.
+        """
+        if not self.service:
+            raise RuntimeError(
+                "El servicio de Google Drive no está inicializado"
+            )
+
+        metadata = {
+            "name": filename,
+            "parents": [parent_folder_id],
+        }
+
+        media = MediaIoBaseUpload(
+            io.BytesIO(file_bytes),
+            mimetype=mime_type,
+            resumable=False,
+        )
+
+        try:
+            result = (
+                self.service.files()
+                .create(
+                    body=metadata,
+                    media_body=media,
+                    fields="id, name, mimeType, webViewLink, parents",
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
+
+            print(
+                f"✅ Archivo creado en Drive: "
+                f"{filename} ({result.get('id')})"
+            )
+
+            return result
+
+        except HttpError as exception:
+            formatted_error = self._format_drive_http_error(
+                exception
+            )
+
+            print(
+                f"❌ No se pudo crear '{filename}' "
+                f"en la carpeta {parent_folder_id}: "
+                f"{formatted_error}"
+            )
+
+            raise RuntimeError(
+                formatted_error
+            ) from exception
+
+        except Exception as exception:
+            print(
+                f"❌ Error inesperado creando '{filename}' "
+                f"en Drive: {exception}"
+            )
+
+            raise RuntimeError(
+                f"Error inesperado de Google Drive: {exception}"
+            ) from exception
 
     def find_file_by_prefix(self, folder_id: str, prefix: str) -> Optional[Dict]:
         """
