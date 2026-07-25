@@ -1,16 +1,25 @@
 """
 Servicio de integración con Google Drive
 """
+import io
 import os
 import json
-from typing import List, Optional, Dict, Tuple
+import traceback
+from time import perf_counter
+from typing import Dict, List, Optional, Tuple
+
+import httplib2
 from google.oauth2 import service_account
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 from googleapiclient.errors import HttpError
-import io
+
 
 from app.config import settings
+
+DRIVE_HTTP_TIMEOUT_SECONDS = 120
+DRIVE_API_RETRIES = 2
 
 class GoogleDriveService:
     """Servicio para interactuar con Google Drive API"""
@@ -22,23 +31,75 @@ class GoogleDriveService:
         self._initialize_service()
     
     def _initialize_service(self):
-        """Inicializar conexión con Drive API"""
+        """
+        Inicializar Google Drive API con un timeout explícito.
+
+        google-api-python-client usa 60 segundos por defecto.
+        Para exportar Google Sheets grandes usamos 120 segundos.
+        """
         try:
-            # Verificar si existe el archivo de credenciales
-            credentials_file = getattr(settings, 'GOOGLE_CREDENTIALS_FILE', None)
-            
-            if credentials_file and os.path.exists(credentials_file):
-                credentials = service_account.Credentials.from_service_account_file(
-                    credentials_file,
-                    scopes=self.scopes
+            credentials_file = getattr(
+                settings,
+                "GOOGLE_CREDENTIALS_FILE",
+                None,
+            )
+
+            if not credentials_file:
+                print(
+                    "⚠️ GOOGLE_CREDENTIALS_FILE no está configurado",
+                    flush=True,
                 )
-                self.service = build('drive', 'v3', credentials=credentials)
-            else:
-                print("⚠️  Google Drive credentials not configured")
-                # Por ahora permitimos que funcione sin credenciales para desarrollo
                 self.service = None
-        except Exception as e:
-            print(f"❌ Error initializing Drive service: {e}")
+                return
+
+            if not os.path.exists(credentials_file):
+                print(
+                    "⚠️ No existe el archivo de credenciales: "
+                    f"{credentials_file}",
+                    flush=True,
+                )
+                self.service = None
+                return
+
+            credentials = (
+                service_account.Credentials
+                .from_service_account_file(
+                    credentials_file,
+                    scopes=self.scopes,
+                )
+            )
+
+            http = httplib2.Http(
+                timeout=DRIVE_HTTP_TIMEOUT_SECONDS,
+            )
+
+            authorized_http = AuthorizedHttp(
+                credentials,
+                http=http,
+            )
+
+            self.service = build(
+                "drive",
+                "v3",
+                http=authorized_http,
+                cache_discovery=False,
+            )
+
+            print(
+                "✅ Google Drive inicializado | "
+                f"timeout={DRIVE_HTTP_TIMEOUT_SECONDS}s",
+                flush=True,
+            )
+
+        except Exception as exc:
+            print(
+                "❌ Error inicializando Google Drive | "
+                f"tipo={type(exc).__name__} | "
+                f"mensaje={exc}",
+                flush=True,
+            )
+
+            traceback.print_exc()
             self.service = None
     
     def list_folders(self, parent_folder_id: Optional[str] = None) -> List[Dict]:
@@ -106,10 +167,20 @@ class GoogleDriveService:
             return None
         
         try:
-            file = self.service.files().get(
-                fileId=file_id,
-                fields="id, name, mimeType, size, webViewLink, createdTime, modifiedTime, owners"
-            ).execute()
+            file = (
+                    self.service.files()
+                    .get(
+                        fileId=file_id,
+                        fields=(
+                            "id,name,mimeType,size,webViewLink,"
+                            "createdTime,modifiedTime,owners"
+                        ),
+                        supportsAllDrives=True,
+                    )
+                    .execute(
+                        num_retries=DRIVE_API_RETRIES,
+                    )
+                )
             return file
         except Exception as e:
             print(f"Error getting file metadata: {e}")
@@ -131,38 +202,148 @@ class GoogleDriveService:
 
     def download_file(self, file_id: str) -> Optional[bytes]:
         """
-        Descarga un archivo de Drive.
-        Para archivos nativos de Google Workspace (Docs/Sheets/Slides),
-        los exporta automáticamente como DOCX/XLSX/PPTX.
+        Descargar o exportar un archivo de Google Drive.
+
+        Los archivos nativos de Google Workspace se exportan:
+        - Google Docs -> DOCX
+        - Google Sheets -> XLSX
+        - Google Slides -> PPTX
         """
         if not self.service:
+            print(
+                "❌ [DRIVE] Servicio no inicializado",
+                flush=True,
+            )
             return None
-        try:
-            # Obtener el MIME real del archivo
-            meta = self.service.files().get(
-                fileId=file_id, fields="mimeType"
-            ).execute()
-            mime = meta.get('mimeType', '')
 
-            export_mime = self.GOOGLE_EXPORT_MAP.get(mime)
-            if export_mime:
-                # Exportar archivo Google Workspace a formato Office
-                request = self.service.files().export_media(
-                    fileId=file_id, mimeType=export_mime
+        started_at = perf_counter()
+
+        try:
+            print(
+                "📥 [DRIVE] Consultando MIME | "
+                f"file_id={file_id}",
+                flush=True,
+            )
+
+            metadata_started_at = perf_counter()
+
+            metadata = (
+                self.service.files()
+                .get(
+                    fileId=file_id,
+                    fields="id,name,mimeType,size",
+                    supportsAllDrives=True,
                 )
-                print(f"  ↳ Exportando Google Workspace file como {export_mime.split('.')[-1]}")
+                .execute(
+                    num_retries=DRIVE_API_RETRIES,
+                )
+            )
+
+            mime_type = metadata.get("mimeType", "")
+            file_name = metadata.get("name", file_id)
+
+            print(
+                "✅ [DRIVE] Metadatos recibidos | "
+                f"archivo={file_name} | "
+                f"mime={mime_type} | "
+                f"segundos={perf_counter() - metadata_started_at:.2f}",
+                flush=True,
+            )
+
+            export_mime = self.GOOGLE_EXPORT_MAP.get(
+                mime_type,
+            )
+
+            if export_mime:
+                print(
+                    "📤 [DRIVE] Iniciando exportación | "
+                    f"archivo={file_name} | "
+                    f"destino={export_mime}",
+                    flush=True,
+                )
+
+                request = (
+                    self.service.files()
+                    .export_media(
+                        fileId=file_id,
+                        mimeType=export_mime,
+                    )
+                )
             else:
-                request = self.service.files().get_media(fileId=file_id)
+                print(
+                    "📥 [DRIVE] Iniciando descarga directa | "
+                    f"archivo={file_name}",
+                    flush=True,
+                )
+
+                request = (
+                    self.service.files()
+                    .get_media(
+                        fileId=file_id,
+                        supportsAllDrives=True,
+                    )
+                )
 
             file_buffer = io.BytesIO()
-            downloader = MediaIoBaseDownload(file_buffer, request)
+
+            downloader = MediaIoBaseDownload(
+                file_buffer,
+                request,
+            )
+
             done = False
+            chunk_number = 0
+
             while not done:
-                _, done = downloader.next_chunk()
-            file_buffer.seek(0)
-            return file_buffer.read()
-        except Exception as e:
-            print(f"Error downloading file: {e}")
+                chunk_number += 1
+                chunk_started_at = perf_counter()
+
+                print(
+                    "📥 [DRIVE] Descargando chunk | "
+                    f"numero={chunk_number}",
+                    flush=True,
+                )
+
+                status, done = downloader.next_chunk(
+                    num_retries=DRIVE_API_RETRIES,
+                )
+
+                progress = (
+                    round(status.progress() * 100, 1)
+                    if status is not None
+                    else 0
+                )
+
+                print(
+                    "✅ [DRIVE] Chunk terminado | "
+                    f"numero={chunk_number} | "
+                    f"progreso={progress}% | "
+                    f"segundos={perf_counter() - chunk_started_at:.2f}",
+                    flush=True,
+                )
+
+            content = file_buffer.getvalue()
+
+            print(
+                "✅ [DRIVE] Archivo obtenido | "
+                f"archivo={file_name} | "
+                f"bytes={len(content)} | "
+                f"total_segundos={perf_counter() - started_at:.2f}",
+                flush=True,
+            )
+
+            return content
+
+        except Exception as exc:
+            print(
+                "❌ [DRIVE] Error descargando archivo | "
+                f"tipo={type(exc).__name__} | "
+                f"mensaje={exc} | "
+                f"segundos={perf_counter() - started_at:.2f}",
+                flush=True,
+            )
+
+            traceback.print_exc()
             return None
     
     def search_files(self, query: str, folder_id: Optional[str] = None) -> List[Dict]:
