@@ -398,14 +398,6 @@ class CourseContactsService:
             MAX_HEADER_SCAN_COLUMNS,
         )
 
-        print(
-            "👥 [CONTACTOS] Buscando encabezados | "
-            f"hoja={worksheet.title} | "
-            f"max_column_declarado={worksheet.max_column} | "
-            f"columnas_revisadas={maximum_columns}",
-            flush=True,
-        )
-
         rows = worksheet.iter_rows(
             min_row=1,
             max_row=MAX_HEADER_SCAN_ROWS,
@@ -450,15 +442,6 @@ class CourseContactsService:
             if required_columns.issubset(
                 found_columns
             ):
-                print(
-                    "✅ [CONTACTOS] Encabezados encontrados | "
-                    f"hoja={worksheet.title} | "
-                    f"fila={row_number} | "
-                    f"columnas={found_columns} | "
-                    f"segundos={perf_counter() - started_at:.2f}",
-                    flush=True,
-                )
-
                 return row_number, found_columns
 
         raise CourseContactsError(
@@ -549,15 +532,6 @@ class CourseContactsService:
             MAX_HEADER_SCAN_COLUMNS,
         )
 
-        print(
-            "👥 [CONTACTOS] Iniciando lectura de hoja | "
-            f"hoja={worksheet.title} | "
-            f"fila_inicial={first_data_row} | "
-            f"fila_limite={last_data_row} | "
-            f"columnas={maximum_column}",
-            flush=True,
-        )
-
         rows = worksheet.iter_rows(
             min_row=first_data_row,
             max_row=last_data_row,
@@ -611,14 +585,6 @@ class CourseContactsService:
                 empty_rows += 1
 
                 if empty_rows >= STOP_AFTER_EMPTY_ROWS:
-                    print(
-                        "ℹ️ [CONTACTOS] Lectura detenida por "
-                        "filas vacías consecutivas | "
-                        f"hoja={worksheet.title} | "
-                        f"fila={row_number} | "
-                        f"filas_vacias={empty_rows}",
-                        flush=True,
-                    )
                     break
 
                 continue
@@ -696,16 +662,6 @@ class CourseContactsService:
                 "Solo se muestran las primeras 50 advertencias."
             )
 
-        print(
-            "✅ [CONTACTOS] Hoja procesada | "
-            f"hoja={worksheet.title} | "
-            f"filas_revisadas={processed_rows} | "
-            f"contactos={len(contacts)} | "
-            f"filas_incompletas={incomplete_rows} | "
-            f"segundos={perf_counter() - started_at:.2f}",
-            flush=True,
-        )
-
         return contacts, warnings
 
     def load_source(
@@ -726,14 +682,7 @@ class CourseContactsService:
         started_at = perf_counter()
         workbook = None
         content = None
-
-        print(
-            "👥 [CONTACTOS] Iniciando carga de fuente | "
-            f"semestre={semester} | "
-            f"año={year}",
-            flush=True,
-        )
-
+        
         if not drive_service.service:
             raise CourseContactsError(
                 "El servicio de Google Drive no está inicializado"
@@ -746,36 +695,18 @@ class CourseContactsService:
 
         spreadsheet_id = self.spreadsheet_id()
 
-        metadata_started_at = perf_counter()
-
         metadata = drive_service.get_file_metadata(
             spreadsheet_id
         )
-
-        print(
-            "👥 [CONTACTOS] Metadatos de fuente terminados | "
-            f"segundos={perf_counter() - metadata_started_at:.2f} | "
-            f"encontrado={bool(metadata)}",
-            flush=True,
-        )
-
+        
         if not metadata:
             raise CourseContactsError(
                 "No se pudo acceder al Google Sheets de contactos. "
                 "Compártelo con la cuenta de servicio."
             )
 
-        download_started_at = perf_counter()
-
         content = drive_service.download_file(
             spreadsheet_id
-        )
-
-        print(
-            "👥 [CONTACTOS] Descarga de fuente terminada | "
-            f"segundos={perf_counter() - download_started_at:.2f} | "
-            f"bytes={len(content) if content else 0}",
-            flush=True,
         )
 
         if not content:
@@ -787,25 +718,11 @@ class CourseContactsService:
         try:
             open_started_at = perf_counter()
 
-            print(
-                "👥 [CONTACTOS] Abriendo XLSX con openpyxl | "
-                f"bytes={len(content)} | "
-                "modo=read_only",
-                flush=True,
-            )
-
             workbook = load_workbook(
                 io.BytesIO(content),
                 read_only=True,
                 data_only=True,
                 keep_links=False,
-            )
-
-            print(
-                "✅ [CONTACTOS] XLSX abierto | "
-                f"segundos={perf_counter() - open_started_at:.2f} | "
-                f"hojas={workbook.sheetnames}",
-                flush=True,
             )
 
             docentes_worksheet = self.get_sheet(
@@ -826,26 +743,12 @@ class CourseContactsService:
                 require_semester_range=False,
             )
 
-            print(
-                "✅ [CONTACTOS] Docentes terminados | "
-                f"cantidad={len(docentes)} | "
-                f"segundos={perf_counter() - docentes_started_at:.2f}",
-                flush=True,
-            )
-
             auxiliares_started_at = perf_counter()
 
             auxiliares, auxiliares_warnings = self.parse_sheet(
                 worksheet=auxiliares_worksheet,
                 default_role="Auxiliar",
                 require_semester_range=True,
-            )
-
-            print(
-                "✅ [CONTACTOS] Auxiliares terminados | "
-                f"cantidad={len(auxiliares)} | "
-                f"segundos={perf_counter() - auxiliares_started_at:.2f}",
-                flush=True,
             )
 
             # Eliminar filas duplicadas exactas.
@@ -888,15 +791,6 @@ class CourseContactsService:
                     docentes_warnings
                     + auxiliares_warnings
                 ),
-            )
-
-            print(
-                "✅ [CONTACTOS] Fuente procesada | "
-                f"docentes={len(docentes)} | "
-                f"auxiliares={len(auxiliares)} | "
-                f"contactos_unicos={len(result.records)} | "
-                f"total_segundos={perf_counter() - started_at:.2f}",
-                flush=True,
             )
 
             return result
@@ -2304,14 +2198,6 @@ class CourseContactsService:
                 contacts=contacts,
                 semester=semester,
                 year=year,
-            )
-
-            print(
-                f"⬆️ Actualizando archivo de contactos | "
-                f"curso={course.code} | "
-                f"archivo={filename} | "
-                f"file_id={existing_file['id']} | "
-                f"tamaño={len(excel_content)} bytes"
             )
 
             updated = drive_service.upload_file(

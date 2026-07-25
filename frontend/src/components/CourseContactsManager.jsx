@@ -353,16 +353,6 @@ const CourseContactsManager = () => {
         const fullURL = `${api.defaults.baseURL || ''}${endpoint}`;
         const startedAt = performance.now();
 
-        console.info(
-            '[CourseContacts] Iniciando preview',
-            {
-                url: fullURL,
-                body,
-                timeoutSeconds: 180,
-                startedAt: new Date().toISOString(),
-            },
-        );
-
         try {
             setPreviewing(true);
             setError('');
@@ -382,14 +372,6 @@ const CourseContactsManager = () => {
                 (performance.now() - startedAt) / 1000
             ).toFixed(2);
 
-            console.info(
-                '[CourseContacts] Preview completado',
-                {
-                    elapsedSeconds,
-                    response: response.data,
-                },
-            );
-
             setPreview(response.data);
 
             setSourceStatus({
@@ -403,20 +385,6 @@ const CourseContactsManager = () => {
             const elapsedSeconds = (
                 (performance.now() - startedAt) / 1000
             ).toFixed(2);
-
-            console.error(
-                '[CourseContacts] Error de preview',
-                {
-                    elapsedSeconds,
-                    message: requestError?.message,
-                    code: requestError?.code,
-                    status: requestError?.response?.status,
-                    response: requestError?.response?.data,
-                    baseURL: requestError?.config?.baseURL,
-                    url: requestError?.config?.url,
-                    timeout: requestError?.config?.timeout,
-                },
-            );
 
             setPreview(null);
             setSourceStatus(null);
