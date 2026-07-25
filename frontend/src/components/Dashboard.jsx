@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '../services/api';
 import DocumentAnalyzer from './admin/DocumentAnalyzer';
 import CourseFolderCreator from './CourseFolderCreator';
+import CourseContactsManager from './CourseContactsManager';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -24,6 +25,7 @@ const Dashboard = () => {
   const isAdmin = user?.role === 'admin';
   const canViewDrive = Boolean(user?.permissions?.can_view_drive && user?.drive_folder_id);
   const canCreateFolders = isTeacher || isAdmin;
+  const canManageCourseContacts = isTeacher || isAdmin;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -109,6 +111,46 @@ const Dashboard = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
               </svg>
               <span>Crear carpetas</span>
+            </button>
+          )}
+
+          {canManageCourseContacts && (
+            <button
+              className={`nav-item ${activeView === 'course-contacts' ? 'active' : ''}`}
+              onClick={() => navTo('course-contacts')}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a4 4 0 00-4-4h-1"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 20H2v-2a4 4 0 014-4h3"
+                />
+                <circle
+                  cx="9"
+                  cy="7"
+                  r="4"
+                  strokeWidth={2}
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 8v6m3-3h-6"
+                />
+              </svg>
+
+              <span>Contactos de cursos</span>
             </button>
           )}
 
@@ -240,6 +282,52 @@ const Dashboard = () => {
                         onClick={() => navTo('crear-carpetas')}
                       />
                     )}
+                    {canManageCourseContacts && (
+                      <FeatureCard
+                        icon={
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="white"
+                            style={{
+                              width: 24,
+                              height: 24,
+                            }}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M17 20h5v-2a4 4 0 00-4-4h-1"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 20H2v-2a4 4 0 014-4h3"
+                            />
+                            <circle
+                              cx="9"
+                              cy="7"
+                              r="4"
+                              strokeWidth={2}
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 8v6m3-3h-6"
+                            />
+                          </svg>
+                        }
+                        iconBg="linear-gradient(135deg,#3b82f6,#2563eb)"
+                        title="Contactos de cursos"
+                        desc="Comprobar y actualizar archivos de contactos"
+                        accent="rgba(59,130,246,0.18)"
+                        border="rgba(59,130,246,0.35)"
+                        onClick={() => navTo('course-contacts')}
+                      />
+                    )}
                     <FeatureCard
                       icon={<svg viewBox="0 0 24 24" fill="none" stroke="white" style={{ width: 24, height: 24 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                       iconBg="linear-gradient(135deg,#6366f1,#4f46e5)"
@@ -305,6 +393,11 @@ const Dashboard = () => {
               {/* ── Crear Carpetas ── */}
               {activeView === 'crear-carpetas' && canCreateFolders && (
                 <CourseFolderCreator />
+              )}
+
+              {/* ── Contactos de cursos ── */}
+              {activeView === 'course-contacts' && canManageCourseContacts && (
+                <CourseContactsManager />
               )}
 
               {/* ── Validaciones ── */}

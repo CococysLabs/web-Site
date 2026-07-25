@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_FILE: Optional[str] = None
     GOOGLE_DRIVE_FOLDER_ID: Optional[str] = None
     GOOGLE_DRIVE_STRUCTURE_FOLDER_ID: Optional[str] = None
+
+    # Archivo maestro de contactos en Google Sheets
+    GOOGLE_CONTACTS_SPREADSHEET_ID: Optional[str] = None
+
+    # Imagen que aparecerá en los Excel generados
+    GOOGLE_CONTACTS_IMAGE_PATH: Optional[str] = None
     
     # Servidor
     HOST: str = "0.0.0.0"

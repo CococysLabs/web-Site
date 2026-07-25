@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import DocumentAnalyzer from './DocumentAnalyzer';
+import CourseContactsManager from '../CourseContactsManager';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  
+
   const [activeTab, setActiveTab] = useState('overview');
   const [stats, setStats] = useState({
     totalDocuments: 0,
@@ -16,7 +17,7 @@ const AdminDashboard = () => {
     pendingAnalysis: 0,
     pendingUsers: 0
   });
-  
+
   const [driveFolders, setDriveFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [documents, setDocuments] = useState([]);
@@ -27,22 +28,22 @@ const AdminDashboard = () => {
 
   // Settings state
   const [systemSettings, setSystemSettings] = useState(null);
-  const [settingsForm, setSettingsForm]     = useState({});
+  const [settingsForm, setSettingsForm] = useState({});
   const [savingSettings, setSavingSettings] = useState(null); // categoría que se está guardando
 
   // Reports state
-  const [reportStats, setReportStats]     = useState(null);
+  const [reportStats, setReportStats] = useState(null);
   const [reportHistory, setReportHistory] = useState({ records: [], total: 0 });
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportFilter, setReportFilter]   = useState({ type: '', days: 30 });
-  const [historyPage, setHistoryPage]     = useState(0);
+  const [reportFilter, setReportFilter] = useState({ type: '', days: 30 });
+  const [historyPage, setHistoryPage] = useState(0);
   const HISTORY_PAGE_SIZE = 20;
 
   // Users state
-  const [allUsers, setAllUsers]         = useState({ users: [], total: 0 });
-  const [userLoading, setUserLoading]   = useState(false);
-  const [userFilter, setUserFilter]     = useState({ search: '', role: '', is_active: '' });
-  const [userPage, setUserPage]         = useState(0);
+  const [allUsers, setAllUsers] = useState({ users: [], total: 0 });
+  const [userLoading, setUserLoading] = useState(false);
+  const [userFilter, setUserFilter] = useState({ search: '', role: '', is_active: '' });
+  const [userPage, setUserPage] = useState(0);
   const USER_PAGE_SIZE = 25;
 
   const showToast = (type, message) => {
@@ -71,17 +72,17 @@ const AdminDashboard = () => {
         api.get('/api/documents/'),
         api.get('/api/auth/pending-users')
       ]);
-      
+
       const docs = docsRes.data;
       setDocuments(docs);
-      
+
       setStats({
         totalDocuments: docs.length,
         validDocuments: docs.filter(d => d.is_valid).length,
         pendingAnalysis: docs.filter(d => d.status === 'pending').length,
         pendingUsers: usersRes.data.length
       });
-      
+
       setPendingUsers(usersRes.data);
     } catch (error) {
       console.error('Error loading dashboard:', error);
@@ -266,7 +267,7 @@ const AdminDashboard = () => {
         const url = window.URL.createObjectURL(new Blob([res.data]));
         const a = document.createElement('a');
         a.href = url;
-        a.download = `validaciones_${new Date().toISOString().slice(0,10)}.csv`;
+        a.download = `validaciones_${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
         window.URL.revokeObjectURL(url);
       })
@@ -396,9 +397,9 @@ const AdminDashboard = () => {
           <h2>COCOCYS</h2>
           <span className="role-badge admin">Admin</span>
         </div>
-        
+
         <nav className="sidebar-nav">
-          <button 
+          <button
             className={activeTab === 'overview' ? 'active' : ''}
             onClick={() => setActiveTab('overview')}
           >
@@ -407,8 +408,8 @@ const AdminDashboard = () => {
             </svg>
             Panel General
           </button>
-          
-          <button 
+
+          <button
             className={activeTab === 'drive' ? 'active' : ''}
             onClick={() => { setActiveTab('drive'); loadDriveFolders(); }}
           >
@@ -417,8 +418,46 @@ const AdminDashboard = () => {
             </svg>
             Google Drive
           </button>
-          
-          <button 
+
+          <button
+            className={activeTab === 'course-contacts' ? 'active' : ''}
+            onClick={() => setActiveTab('course-contacts')}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 20h5v-2a4 4 0 00-4-4h-1"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 20H2v-2a4 4 0 014-4h3"
+              />
+              <circle
+                cx="9"
+                cy="7"
+                r="4"
+                strokeWidth={2}
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 8v6m3-3h-6"
+              />
+            </svg>
+
+            Contactos de cursos
+          </button>
+
+          <button
             className={activeTab === 'documents' ? 'active' : ''}
             onClick={() => setActiveTab('documents')}
           >
@@ -427,7 +466,7 @@ const AdminDashboard = () => {
             </svg>
             Documentos
           </button>
-          
+
           <button
             className={activeTab === 'reports' ? 'active' : ''}
             onClick={() => { setActiveTab('reports'); if (!reportStats) loadReports(); }}
@@ -462,7 +501,7 @@ const AdminDashboard = () => {
             Configuración
           </button>
         </nav>
-        
+
         <div className="sidebar-footer">
           <div className="user-info">
             <div className="avatar">{user?.nombre?.[0]}{user?.apellidos?.[0]}</div>
@@ -486,7 +525,7 @@ const AdminDashboard = () => {
         {activeTab === 'overview' && (
           <div className="overview-tab">
             <h1>Panel de Administración</h1>
-            
+
             <div className="stats-grid">
               <div className="stat-card">
                 <div className="stat-icon documents">
@@ -551,6 +590,10 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {activeTab === 'course-contacts' && (
+          <CourseContactsManager />
+        )}
+
         {/* Drive Tab */}
         {activeTab === 'drive' && (
           <div className="drive-tab">
@@ -561,9 +604,9 @@ const AdminDashboard = () => {
                   <p className="subtitle">
                     📁 2025 - Segundo Semestre
                   </p>
-                  <div style={{ 
-                    display: 'flex', 
-                    gap: '8px', 
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
                     alignItems: 'center',
                     marginTop: '12px',
                     padding: '12px',
@@ -578,7 +621,7 @@ const AdminDashboard = () => {
                     <span>Selecciona una materia para explorar y analizar sus documentos</span>
                   </div>
                 </div>
-                
+
                 {loading ? (
                   <div className="loading-state">
                     <div className="spinner"></div>
@@ -593,10 +636,10 @@ const AdminDashboard = () => {
                     <p>Verifica la configuración de GOOGLE_DRIVE_FOLDER_ID</p>
                   </div>
                 ) : (
-                  <div className="folders-grid"  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                  <div className="folders-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
                     {driveFolders.map((folder) => (
-                      <div 
-                        key={folder.id} 
+                      <div
+                        key={folder.id}
                         className="folder-card"
                         style={{
                           background: 'linear-gradient(135deg, rgba(255, 140, 66, 0.03) 0%, rgba(255, 140, 66, 0.08) 100%)',
@@ -617,12 +660,12 @@ const AdminDashboard = () => {
                           marginBottom: '16px'
                         }}>
                           <svg style={{ width: '40px', height: '40px' }} viewBox="0 0 24 24" fill="white">
-                            <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                            <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                           </svg>
                         </div>
                         <div className="folder-info">
-                          <h3 style={{ 
-                            fontSize: '1.125rem', 
+                          <h3 style={{
+                            fontSize: '1.125rem',
                             fontWeight: '600',
                             color: 'var(--text-primary, #1a1a1a)',
                             marginBottom: '8px'
@@ -636,10 +679,10 @@ const AdminDashboard = () => {
                             alignItems: 'center',
                             gap: '6px'
                           }}>
-                            📅 {folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('es-ES', { 
-                              year: 'numeric', 
-                              month: 'short', 
-                              day: 'numeric' 
+                            📅 {folder.modifiedTime ? new Date(folder.modifiedTime).toLocaleDateString('es-ES', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
                             }) : 'Sin fecha'}
                           </p>
                         </div>
@@ -672,9 +715,9 @@ const AdminDashboard = () => {
                             Explorar Contenido
                           </button>
                           {folder.webViewLink && (
-                            <a 
-                              href={folder.webViewLink} 
-                              target="_blank" 
+                            <a
+                              href={folder.webViewLink}
+                              target="_blank"
                               rel="noopener noreferrer"
                               style={{
                                 marginTop: '8px',
@@ -709,7 +752,7 @@ const AdminDashboard = () => {
               </>
             ) : (
               <>
-                <button 
+                <button
                   onClick={() => setSelectedFolder(null)}
                   style={{
                     display: 'inline-flex',
@@ -745,7 +788,7 @@ const AdminDashboard = () => {
                   </svg>
                   Volver a Materias
                 </button>
-                <DocumentAnalyzer 
+                <DocumentAnalyzer
                   folderId={selectedFolder.id}
                   folderName={selectedFolder.name}
                 />
@@ -802,13 +845,13 @@ const AdminDashboard = () => {
                 <div className="settings-card">
                   <div className="settings-card-header">
                     <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#4285F4,#34A853)' }}>
-                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                      <svg style={{ width: 22, height: 22 }} viewBox="0 0 24 24" fill="none" stroke="white">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Google Drive</h3>
-                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Carpeta raíz del sistema</p>
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Google Drive</h3>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Carpeta raíz del sistema</p>
                     </div>
                   </div>
 
@@ -826,7 +869,7 @@ const AdminDashboard = () => {
 
                   <button
                     className="btn-primary"
-                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='drive'?0.7:1 }}
+                    style={{ marginTop: 8, padding: '10px 20px', fontSize: '0.875rem', opacity: savingSettings === 'drive' ? 0.7 : 1 }}
                     onClick={() => saveSettings('drive')}
                     disabled={savingSettings === 'drive'}
                   >
@@ -838,13 +881,13 @@ const AdminDashboard = () => {
                 <div className="settings-card">
                   <div className="settings-card-header">
                     <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)' }}>
-                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                      <svg style={{ width: 22, height: 22 }} viewBox="0 0 24 24" fill="none" stroke="white">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Gemini AI</h3>
-                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Motor de análisis de contenido</p>
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Gemini AI</h3>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Motor de análisis de contenido</p>
                     </div>
                   </div>
 
@@ -872,7 +915,7 @@ const AdminDashboard = () => {
                         onChange={e => handleSettingChange('gemini_enabled', e.target.checked ? 'true' : 'false')}
                       />
                       <span className="toggle-track"><span className="toggle-thumb"></span></span>
-                      <span style={{ fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                      <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>
                         {settingsForm.gemini_enabled === 'true' ? 'Habilitado' : 'Deshabilitado'}
                       </span>
                     </label>
@@ -880,7 +923,7 @@ const AdminDashboard = () => {
 
                   <button
                     className="btn-primary"
-                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='ai'?0.7:1 }}
+                    style={{ marginTop: 8, padding: '10px 20px', fontSize: '0.875rem', opacity: savingSettings === 'ai' ? 0.7 : 1 }}
                     onClick={() => saveSettings('ai')}
                     disabled={savingSettings === 'ai'}
                   >
@@ -892,13 +935,13 @@ const AdminDashboard = () => {
                 <div className="settings-card">
                   <div className="settings-card-header">
                     <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>
-                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                      <svg style={{ width: 22, height: 22 }} viewBox="0 0 24 24" fill="none" stroke="white">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Gestión de Usuarios</h3>
-                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Registro y sesiones</p>
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Gestión de Usuarios</h3>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Registro y sesiones</p>
                     </div>
                   </div>
 
@@ -912,7 +955,7 @@ const AdminDashboard = () => {
                         onChange={e => handleSettingChange('auto_approve_users', e.target.checked ? 'true' : 'false')}
                       />
                       <span className="toggle-track"><span className="toggle-thumb"></span></span>
-                      <span style={{ fontSize:'0.875rem', color:'var(--text-primary)' }}>
+                      <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>
                         {settingsForm.auto_approve_users === 'true' ? 'Automático' : 'Requiere aprobación manual'}
                       </span>
                     </label>
@@ -927,14 +970,14 @@ const AdminDashboard = () => {
                       value={settingsForm.jwt_session_minutes || 30}
                       onChange={e => handleSettingChange('jwt_session_minutes', e.target.value)}
                     />
-                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'var(--text-muted)', marginTop:4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
                       <span>5 min</span><span>480 min (8h)</span>
                     </div>
                   </div>
 
                   <button
                     className="btn-primary"
-                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='users'?0.7:1 }}
+                    style={{ marginTop: 8, padding: '10px 20px', fontSize: '0.875rem', opacity: savingSettings === 'users' ? 0.7 : 1 }}
                     onClick={() => saveSettings('users')}
                     disabled={savingSettings === 'users'}
                   >
@@ -946,13 +989,13 @@ const AdminDashboard = () => {
                 <div className="settings-card">
                   <div className="settings-card-header">
                     <div className="settings-card-icon" style={{ background: 'linear-gradient(135deg,var(--cococys-orange),var(--cococys-orange-dark))' }}>
-                      <svg style={{ width:22,height:22 }} viewBox="0 0 24 24" fill="none" stroke="white">
+                      <svg style={{ width: 22, height: 22 }} viewBox="0 0 24 24" fill="none" stroke="white">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </div>
                     <div>
-                      <h3 style={{ margin:0, fontSize:'1rem', fontWeight:600 }}>Criterios de Validación</h3>
-                      <p style={{ margin:0, fontSize:'0.75rem', color:'var(--text-muted)' }}>Umbrales y tipos de archivo</p>
+                      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Criterios de Validación</h3>
+                      <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Umbrales y tipos de archivo</p>
                     </div>
                   </div>
 
@@ -965,7 +1008,7 @@ const AdminDashboard = () => {
                       value={settingsForm.compliance_threshold || 70}
                       onChange={e => handleSettingChange('compliance_threshold', e.target.value)}
                     />
-                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.75rem', color:'var(--text-muted)', marginTop:4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
                       <span>0%</span><span>100%</span>
                     </div>
                   </div>
@@ -973,17 +1016,17 @@ const AdminDashboard = () => {
                   <div className="settings-field">
                     <label className="settings-label">Extensiones de archivo permitidas</label>
                     <p className="settings-hint">Tipos de documento aceptados para análisis</p>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:'12px', marginTop:8 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: 8 }}>
                       {['.pdf', '.docx', '.pptx', '.xlsx'].map(ext => {
                         let currentExts = [];
                         try { currentExts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
                         const checked = currentExts.includes(ext);
                         return (
-                          <label key={ext} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', fontSize:'0.875rem' }}>
+                          <label key={ext} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.875rem' }}>
                             <input
                               type="checkbox"
                               checked={checked}
-                              style={{ accentColor:'var(--cococys-orange)', width:16, height:16 }}
+                              style={{ accentColor: 'var(--cococys-orange)', width: 16, height: 16 }}
                               onChange={e => {
                                 let exts = [];
                                 try { exts = JSON.parse(settingsForm.allowed_file_extensions || '[]'); } catch { /* ignore */ }
@@ -995,7 +1038,7 @@ const AdminDashboard = () => {
                                 handleSettingChange('allowed_file_extensions', JSON.stringify(exts));
                               }}
                             />
-                            <code style={{ background:'var(--bg-secondary)', padding:'2px 8px', borderRadius:4 }}>{ext}</code>
+                            <code style={{ background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 4 }}>{ext}</code>
                           </label>
                         );
                       })}
@@ -1004,7 +1047,7 @@ const AdminDashboard = () => {
 
                   <button
                     className="btn-primary"
-                    style={{ marginTop:8, padding:'10px 20px', fontSize:'0.875rem', opacity: savingSettings==='validation'?0.7:1 }}
+                    style={{ marginTop: 8, padding: '10px 20px', fontSize: '0.875rem', opacity: savingSettings === 'validation' ? 0.7 : 1 }}
                     onClick={() => saveSettings('validation')}
                     disabled={savingSettings === 'validation'}
                   >
@@ -1384,9 +1427,9 @@ const AdminDashboard = () => {
                                 if (!iso) return null;
                                 const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
                                 if (diff < 60) return 'hace un momento';
-                                if (diff < 3600) return `hace ${Math.floor(diff/60)} min`;
-                                if (diff < 86400) return `hace ${Math.floor(diff/3600)} h`;
-                                if (diff < 2592000) return `hace ${Math.floor(diff/86400)} días`;
+                                if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+                                if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+                                if (diff < 2592000) return `hace ${Math.floor(diff / 86400)} días`;
                                 return new Date(iso).toLocaleDateString('es-ES');
                               };
                               if (!act || act.validation_count === 0) return (
