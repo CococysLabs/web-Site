@@ -31,10 +31,23 @@ const apiError = (error, fallback) => {
         error?.code === 'ECONNABORTED'
         || String(error?.message || '').toLowerCase().includes('timeout')
     ) {
-        return (
-            `La API tardó más de 60 segundos en responder. `
-            + `Solicitud: ${requestURL}`
+        const timeoutMilliseconds = Number(
+            error?.config?.timeout || 0,
         );
+
+        const timeoutSeconds = timeoutMilliseconds > 0
+            ? Math.round(timeoutMilliseconds / 1000)
+            : null;
+
+        return timeoutSeconds
+            ? (
+                `La API tardó más de ${timeoutSeconds} segundos en responder. `
+                + `Solicitud: ${requestURL}`
+            )
+            : (
+                `La API tardó demasiado en responder. `
+                + `Solicitud: ${requestURL}`
+            );
     }
 
     if (error?.code === 'ERR_NETWORK') {
@@ -338,6 +351,17 @@ const CourseContactsManager = () => {
         const body = buildBody();
         const endpoint = '/api/course-contacts/preview';
         const fullURL = `${api.defaults.baseURL || ''}${endpoint}`;
+        const startedAt = performance.now();
+
+        console.info(
+            '[CourseContacts] Iniciando preview',
+            {
+                url: fullURL,
+                body,
+                timeoutSeconds: 180,
+                startedAt: new Date().toISOString(),
+            },
+        );
 
         try {
             setPreviewing(true);
@@ -346,19 +370,25 @@ const CourseContactsManager = () => {
             setUpdateResult(null);
             setSourceStatus(null);
 
-            const startedAt = performance.now();
-
             const response = await api.post(
                 endpoint,
                 body,
                 {
-                    timeout: 60000,
+                    timeout: 180000,
                 },
             );
 
             const elapsedSeconds = (
                 (performance.now() - startedAt) / 1000
             ).toFixed(2);
+
+            console.info(
+                '[CourseContacts] Preview completado',
+                {
+                    elapsedSeconds,
+                    response: response.data,
+                },
+            );
 
             setPreview(response.data);
 
@@ -370,15 +400,21 @@ const CourseContactsManager = () => {
                 ),
             });
         } catch (requestError) {
+            const elapsedSeconds = (
+                (performance.now() - startedAt) / 1000
+            ).toFixed(2);
+
             console.error(
-                '[CourseContacts] Error de preview:',
+                '[CourseContacts] Error de preview',
                 {
+                    elapsedSeconds,
                     message: requestError?.message,
                     code: requestError?.code,
                     status: requestError?.response?.status,
                     response: requestError?.response?.data,
                     baseURL: requestError?.config?.baseURL,
                     url: requestError?.config?.url,
+                    timeout: requestError?.config?.timeout,
                 },
             );
 
@@ -422,6 +458,9 @@ const CourseContactsManager = () => {
             const response = await api.post(
                 '/api/course-contacts/create',
                 buildBody(),
+                {
+                    timeout: 180000,
+                },
             );
 
             setUpdateResult(response.data);
