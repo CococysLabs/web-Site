@@ -95,6 +95,12 @@ COLUMN_ALIASES = {
     },
 }
 
+# Límites para evitar recorrer rangos enormes generados por
+# formatos residuales dentro de Google Sheets.
+MAX_HEADER_SCAN_ROWS = 15
+MAX_HEADER_SCAN_COLUMNS = 50
+MAX_SOURCE_DATA_ROWS = 5000
+STOP_AFTER_EMPTY_ROWS = 100
 
 class CourseContactsError(RuntimeError):
     """
@@ -364,28 +370,45 @@ class CourseContactsService:
         )
 
     def header_map(
-        self,
-        worksheet,
-    ) -> Tuple[int, Dict[str, int]]:
+    self,
+    worksheet,
+) -> Tuple[int, Dict[str, int]]:
         """
-        Detectar la fila de encabezados sin depender de max_row.
+        Detectar la fila de encabezados sin recorrer todas las columnas
+        declaradas por el XLSX.
 
-        Algunos archivos XLSX exportados desde Google Sheets no incluyen
-        correctamente las dimensiones de la hoja cuando se abren en modo
-        read_only, por lo que worksheet.max_row o worksheet.max_column
-        pueden ser None.
+        Google Sheets puede exportar hojas con dimensiones mayores que
+        el contenido real debido a formatos residuales.
         """
+        started_at = perf_counter()
+
         alias_lookup = {
             self.normalize(alias): canonical
             for canonical, aliases in COLUMN_ALIASES.items()
             for alias in aliases
         }
 
-        maximum_columns = worksheet.max_column or 50
+        declared_columns = (
+            worksheet.max_column
+            or MAX_HEADER_SCAN_COLUMNS
+        )
+
+        maximum_columns = min(
+            declared_columns,
+            MAX_HEADER_SCAN_COLUMNS,
+        )
+
+        print(
+            "👥 [CONTACTOS] Buscando encabezados | "
+            f"hoja={worksheet.title} | "
+            f"max_column_declarado={worksheet.max_column} | "
+            f"columnas_revisadas={maximum_columns}",
+            flush=True,
+        )
 
         rows = worksheet.iter_rows(
             min_row=1,
-            max_row=15,
+            max_row=MAX_HEADER_SCAN_ROWS,
             min_col=1,
             max_col=maximum_columns,
             values_only=True,
@@ -427,13 +450,24 @@ class CourseContactsService:
             if required_columns.issubset(
                 found_columns
             ):
+                print(
+                    "✅ [CONTACTOS] Encabezados encontrados | "
+                    f"hoja={worksheet.title} | "
+                    f"fila={row_number} | "
+                    f"columnas={found_columns} | "
+                    f"segundos={perf_counter() - started_at:.2f}",
+                    flush=True,
+                )
+
                 return row_number, found_columns
 
         raise CourseContactsError(
             f"No se reconocieron los encabezados "
-            f"de la hoja '{worksheet.title}'"
+            f"de la hoja '{worksheet.title}' "
+            f"dentro de las primeras "
+            f"{MAX_HEADER_SCAN_ROWS} filas"
         )
-
+    
     def row_value(
         self,
         row: Sequence[object],
@@ -459,7 +493,7 @@ class CourseContactsService:
         require_semester_range: bool = False,
     ) -> Tuple[List[Contact], List[str]]:
         """
-        Leer contactos de una hoja.
+        Leer contactos de una hoja sin recorrer rangos vacíos enormes.
 
         Docentes:
         - No requieren Semestre Inicial ni Semestre Final.
@@ -467,7 +501,12 @@ class CourseContactsService:
 
         Auxiliares:
         - Sí deben tener Semestre Inicial y Semestre Final.
+
+        La lectura se detiene al encontrar 100 filas principales
+        consecutivas completamente vacías.
         """
+        started_at = perf_counter()
+
         header_row, columns = self.header_map(
             worksheet
         )
@@ -497,19 +536,62 @@ class CourseContactsService:
                 f"{', '.join(missing_semester_columns)}."
             )
 
+        first_data_row = header_row + 1
+
+        last_data_row = (
+            first_data_row
+            + MAX_SOURCE_DATA_ROWS
+            - 1
+        )
+
+        maximum_column = min(
+            max(columns.values()),
+            MAX_HEADER_SCAN_COLUMNS,
+        )
+
+        print(
+            "👥 [CONTACTOS] Iniciando lectura de hoja | "
+            f"hoja={worksheet.title} | "
+            f"fila_inicial={first_data_row} | "
+            f"fila_limite={last_data_row} | "
+            f"columnas={maximum_column}",
+            flush=True,
+        )
+
         rows = worksheet.iter_rows(
-            min_row=header_row + 1,
+            min_row=first_data_row,
+            max_row=last_data_row,
+            min_col=1,
+            max_col=maximum_column,
             values_only=True,
         )
 
+        empty_rows = 0
+        processed_rows = 0
+        incomplete_rows = 0
+
         for row_number, row in enumerate(
             rows,
-            start=header_row + 1,
+            start=first_data_row,
         ):
+            processed_rows += 1
+
+            area = self.row_value(
+                row,
+                columns,
+                "area",
+            )
+
             code = self.row_value(
                 row,
                 columns,
                 "code",
+            )
+
+            course_name = self.row_value(
+                row,
+                columns,
+                "course",
             )
 
             name = self.row_value(
@@ -518,15 +600,44 @@ class CourseContactsService:
                 "name",
             )
 
-            if not code and not name:
+            principal_values = [
+                area,
+                code,
+                course_name,
+                name,
+            ]
+
+            if not any(principal_values):
+                empty_rows += 1
+
+                if empty_rows >= STOP_AFTER_EMPTY_ROWS:
+                    print(
+                        "ℹ️ [CONTACTOS] Lectura detenida por "
+                        "filas vacías consecutivas | "
+                        f"hoja={worksheet.title} | "
+                        f"fila={row_number} | "
+                        f"filas_vacias={empty_rows}",
+                        flush=True,
+                    )
+                    break
+
                 continue
 
+            # Reiniciar porque encontramos una fila con contenido.
+            empty_rows = 0
+
             if not code or not name:
-                warnings.append(
-                    f"Fila {row_number} de "
-                    f"'{worksheet.title}' omitida: "
-                    "falta código o nombre."
-                )
+                incomplete_rows += 1
+
+                # Evitar generar miles de advertencias si la hoja
+                # contiene datos residuales.
+                if incomplete_rows <= 50:
+                    warnings.append(
+                        f"Fila {row_number} de "
+                        f"'{worksheet.title}' omitida: "
+                        "falta código o nombre."
+                    )
+
                 continue
 
             role = (
@@ -540,17 +651,9 @@ class CourseContactsService:
 
             contacts.append(
                 Contact(
-                    area=self.row_value(
-                        row,
-                        columns,
-                        "area",
-                    ),
+                    area=area,
                     code=code,
-                    course=self.row_value(
-                        row,
-                        columns,
-                        "course",
-                    ),
+                    course=course_name,
                     section=self.row_value(
                         row,
                         columns,
@@ -586,6 +689,23 @@ class CourseContactsService:
                 )
             )
 
+        if incomplete_rows > 50:
+            warnings.append(
+                f"La hoja '{worksheet.title}' contiene "
+                f"{incomplete_rows} filas incompletas. "
+                "Solo se muestran las primeras 50 advertencias."
+            )
+
+        print(
+            "✅ [CONTACTOS] Hoja procesada | "
+            f"hoja={worksheet.title} | "
+            f"filas_revisadas={processed_rows} | "
+            f"contactos={len(contacts)} | "
+            f"filas_incompletas={incomplete_rows} | "
+            f"segundos={perf_counter() - started_at:.2f}",
+            flush=True,
+        )
+
         return contacts, warnings
 
     def load_source(
@@ -597,10 +717,23 @@ class CourseContactsService:
         Descargar el Google Sheets como XLSX y leer sus dos hojas.
 
         No usa Google Sheets API. Usa Drive API porque drive_service
-        ya exporta archivos application/vnd.google-apps.spreadsheet
+        exporta archivos application/vnd.google-apps.spreadsheet
         a XLSX.
+
+        El libro se abre en modo read_only para reducir el consumo
+        de memoria dentro de Render.
         """
-        
+        started_at = perf_counter()
+        workbook = None
+        content = None
+
+        print(
+            "👥 [CONTACTOS] Iniciando carga de fuente | "
+            f"semestre={semester} | "
+            f"año={year}",
+            flush=True,
+        )
+
         if not drive_service.service:
             raise CourseContactsError(
                 "El servicio de Google Drive no está inicializado"
@@ -611,23 +744,17 @@ class CourseContactsService:
             year,
         )
 
-        started_at = perf_counter()
-
-        print(
-            "👥 [CONTACTOS] Iniciando carga de fuente | "
-            f"semestre={semester} | año={year}",
-            flush=True,
-        )
-
         spreadsheet_id = self.spreadsheet_id()
+
+        metadata_started_at = perf_counter()
 
         metadata = drive_service.get_file_metadata(
             spreadsheet_id
         )
-        
+
         print(
             "👥 [CONTACTOS] Metadatos de fuente terminados | "
-            f"segundos={perf_counter() - started_at:.2f} | "
+            f"segundos={perf_counter() - metadata_started_at:.2f} | "
             f"encontrado={bool(metadata)}",
             flush=True,
         )
@@ -638,13 +765,15 @@ class CourseContactsService:
                 "Compártelo con la cuenta de servicio."
             )
 
+        download_started_at = perf_counter()
+
         content = drive_service.download_file(
             spreadsheet_id
         )
-        
+
         print(
             "👥 [CONTACTOS] Descarga de fuente terminada | "
-            f"segundos={perf_counter() - started_at:.2f} | "
+            f"segundos={perf_counter() - download_started_at:.2f} | "
             f"bytes={len(content) if content else 0}",
             flush=True,
         )
@@ -656,78 +785,152 @@ class CourseContactsService:
             )
 
         try:
+            open_started_at = perf_counter()
+
+            print(
+                "👥 [CONTACTOS] Abriendo XLSX con openpyxl | "
+                f"bytes={len(content)} | "
+                "modo=read_only",
+                flush=True,
+            )
+
             workbook = load_workbook(
                 io.BytesIO(content),
-                read_only=False,
+                read_only=True,
                 data_only=True,
+                keep_links=False,
             )
+
+            print(
+                "✅ [CONTACTOS] XLSX abierto | "
+                f"segundos={perf_counter() - open_started_at:.2f} | "
+                f"hojas={workbook.sheetnames}",
+                flush=True,
+            )
+
+            docentes_worksheet = self.get_sheet(
+                workbook,
+                period["docentes"],
+            )
+
+            auxiliares_worksheet = self.get_sheet(
+                workbook,
+                period["auxiliares"],
+            )
+
+            docentes_started_at = perf_counter()
+
+            docentes, docentes_warnings = self.parse_sheet(
+                worksheet=docentes_worksheet,
+                default_role="Docente",
+                require_semester_range=False,
+            )
+
+            print(
+                "✅ [CONTACTOS] Docentes terminados | "
+                f"cantidad={len(docentes)} | "
+                f"segundos={perf_counter() - docentes_started_at:.2f}",
+                flush=True,
+            )
+
+            auxiliares_started_at = perf_counter()
+
+            auxiliares, auxiliares_warnings = self.parse_sheet(
+                worksheet=auxiliares_worksheet,
+                default_role="Auxiliar",
+                require_semester_range=True,
+            )
+
+            print(
+                "✅ [CONTACTOS] Auxiliares terminados | "
+                f"cantidad={len(auxiliares)} | "
+                f"segundos={perf_counter() - auxiliares_started_at:.2f}",
+                flush=True,
+            )
+
+            # Eliminar filas duplicadas exactas.
+            # Secciones diferentes no se consideran duplicadas.
+            unique_contacts: Dict[
+                Tuple[str, ...],
+                Contact,
+            ] = {}
+
+            for contact in docentes + auxiliares:
+                key = (
+                    self.canonical_area(
+                        contact.area
+                    ),
+                    contact.code,
+                    self.normalize(
+                        contact.name
+                    ),
+                    self.normalize(
+                        contact.role
+                    ),
+                    self.normalize(
+                        contact.section
+                    ),
+                )
+
+                unique_contacts[key] = contact
+
+            result = ContactsSource(
+                records=list(
+                    unique_contacts.values()
+                ),
+                spreadsheet_name=metadata.get(
+                    "name",
+                    "Contactos",
+                ),
+                docentes_sheet=docentes_worksheet.title,
+                auxiliares_sheet=auxiliares_worksheet.title,
+                warnings=(
+                    docentes_warnings
+                    + auxiliares_warnings
+                ),
+            )
+
+            print(
+                "✅ [CONTACTOS] Fuente procesada | "
+                f"docentes={len(docentes)} | "
+                f"auxiliares={len(auxiliares)} | "
+                f"contactos_unicos={len(result.records)} | "
+                f"total_segundos={perf_counter() - started_at:.2f}",
+                flush=True,
+            )
+
+            return result
+
+        except CourseContactsError:
+            raise
+
         except Exception as exception:
+            print(
+                "❌ [CONTACTOS] Error procesando XLSX | "
+                f"tipo={type(exception).__name__} | "
+                f"mensaje={exception} | "
+                f"total_segundos={perf_counter() - started_at:.2f}",
+                flush=True,
+            )
+
             raise CourseContactsError(
-                f"No se pudo abrir el archivo maestro "
+                f"No se pudo abrir o procesar el archivo maestro "
                 f"de contactos: {exception}"
             ) from exception
 
-        docentes_worksheet = self.get_sheet(
-            workbook,
-            period["docentes"],
-        )
+        finally:
+            if workbook is not None:
+                try:
+                    workbook.close()
+                except Exception as close_exception:
+                    print(
+                        "⚠️ [CONTACTOS] No se pudo cerrar el workbook | "
+                        f"mensaje={close_exception}",
+                        flush=True,
+                    )
 
-        auxiliares_worksheet = self.get_sheet(
-            workbook,
-            period["auxiliares"],
-        )
-
-        docentes, docentes_warnings = self.parse_sheet(
-            worksheet=docentes_worksheet,
-            default_role="Docente",
-            require_semester_range=False,
-        )
-
-        auxiliares, auxiliares_warnings = self.parse_sheet(
-            worksheet=auxiliares_worksheet,
-            default_role="Auxiliar",
-            require_semester_range=True,
-        )
-
-        # Eliminar filas duplicadas exactas.
-        # Secciones diferentes no se consideran duplicadas.
-        unique_contacts: Dict[
-            Tuple[str, ...],
-            Contact,
-        ] = {}
-
-        for contact in docentes + auxiliares:
-            key = (
-                self.canonical_area(contact.area),
-                contact.code,
-                self.normalize(contact.name),
-                self.normalize(contact.role),
-                self.normalize(contact.section),
-            )
-
-            unique_contacts[key] = contact
-
-        print(
-            "✅ [CONTACTOS] Fuente procesada | "
-            f"docentes={len(docentes)} | "
-            f"auxiliares={len(auxiliares)} | "
-            f"total_segundos={perf_counter() - started_at:.2f}",
-            flush=True,
-        )
-
-        return ContactsSource(
-            records=list(unique_contacts.values()),
-            spreadsheet_name=metadata.get(
-                "name",
-                "Contactos",
-            ),
-            docentes_sheet=docentes_worksheet.title,
-            auxiliares_sheet=auxiliares_worksheet.title,
-            warnings=(
-                docentes_warnings
-                + auxiliares_warnings
-            ),
-        )
+            # Liberar la referencia al contenido XLSX.
+            content = None
 
     def contacts_for_course(
         self,
