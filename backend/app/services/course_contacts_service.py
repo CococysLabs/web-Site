@@ -16,7 +16,7 @@ from openpyxl.utils import get_column_letter
 from app.config import settings
 from app.models.course_catalog import CourseCatalog
 from app.services.drive_service import drive_service
-import time
+from time import perf_counter
 
 XLSX_MIME = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -600,6 +600,7 @@ class CourseContactsService:
         ya exporta archivos application/vnd.google-apps.spreadsheet
         a XLSX.
         """
+        
         if not drive_service.service:
             raise CourseContactsError(
                 "El servicio de Google Drive no está inicializado"
@@ -610,10 +611,25 @@ class CourseContactsService:
             year,
         )
 
+        started_at = perf_counter()
+
+        print(
+            "👥 [CONTACTOS] Iniciando carga de fuente | "
+            f"semestre={semester} | año={year}",
+            flush=True,
+        )
+
         spreadsheet_id = self.spreadsheet_id()
 
         metadata = drive_service.get_file_metadata(
             spreadsheet_id
+        )
+        
+        print(
+            "👥 [CONTACTOS] Metadatos de fuente terminados | "
+            f"segundos={perf_counter() - started_at:.2f} | "
+            f"encontrado={bool(metadata)}",
+            flush=True,
         )
 
         if not metadata:
@@ -624,6 +640,13 @@ class CourseContactsService:
 
         content = drive_service.download_file(
             spreadsheet_id
+        )
+        
+        print(
+            "👥 [CONTACTOS] Descarga de fuente terminada | "
+            f"segundos={perf_counter() - started_at:.2f} | "
+            f"bytes={len(content) if content else 0}",
+            flush=True,
         )
 
         if not content:
@@ -683,6 +706,14 @@ class CourseContactsService:
             )
 
             unique_contacts[key] = contact
+
+        print(
+            "✅ [CONTACTOS] Fuente procesada | "
+            f"docentes={len(docentes)} | "
+            f"auxiliares={len(auxiliares)} | "
+            f"total_segundos={perf_counter() - started_at:.2f}",
+            flush=True,
+        )
 
         return ContactsSource(
             records=list(unique_contacts.values()),
