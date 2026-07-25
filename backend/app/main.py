@@ -25,23 +25,19 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Configurar CORS
-allow_origins = [
-    settings.FRONTEND_URL,
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:5175",
-    "http://localhost",
-    "http://localhost:80",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+allow_origins = list(dict.fromkeys([
+    origin
+    for origin in [
+        str(settings.FRONTEND_URL or "").strip().rstrip("/"),
+        "https://cococys-frontend.onrender.com",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost",
+        "http://localhost:80",
+    ]
+    if origin
+]))
 
 
 @app.on_event("startup")
@@ -157,9 +153,25 @@ app.include_router(analysis.router, tags=["Análisis"])
 app.include_router(validation.router, tags=["Validación"])
 app.include_router(admin_settings.router, tags=["Configuración"])
 app.include_router(course_catalog.router, tags=["Catálogo de Cursos"])
-app.include_router(drive_structures.router, tags=["Estructuras de Google Drive"])
-app.include_router(course_contacts.router, tags=["Contactos de Cursos"],)
-    
+app.include_router(
+    drive_structures.router,
+    tags=["Estructuras de Google Drive"],
+)
+app.include_router(
+    course_contacts.router,
+    tags=["Contactos de Cursos"],
+)
+
+app = CORSMiddleware(
+    app=app,
+    allow_origins=allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
+)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
