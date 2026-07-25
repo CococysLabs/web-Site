@@ -23,8 +23,32 @@ const apiError = (error, fallback) => {
         return detail;
     }
 
+    const baseURL = error?.config?.baseURL || api.defaults.baseURL || '';
+    const requestPath = error?.config?.url || '';
+    const requestURL = `${baseURL}${requestPath}`;
+
+    if (
+        error?.code === 'ECONNABORTED'
+        || String(error?.message || '').toLowerCase().includes('timeout')
+    ) {
+        return (
+            `La API tardó más de 60 segundos en responder. `
+            + `Solicitud: ${requestURL}`
+        );
+    }
+
+    if (error?.code === 'ERR_NETWORK') {
+        return (
+            `El navegador no recibió respuesta de la API. `
+            + `Verifica que esta dirección sea accesible: ${requestURL}`
+        );
+    }
+
     if (!error?.response) {
-        return 'No se pudo conectar con la API. Verifica el backend y VITE_API_URL.';
+        return (
+            `No se recibió respuesta de la API. `
+            + `Solicitud: ${requestURL}`
+        );
     }
 
     return error?.message || fallback;
@@ -311,46 +335,55 @@ const CourseContactsManager = () => {
 
         lock.current.preview = true;
 
+        const body = buildBody();
+        const endpoint = '/api/course-contacts/preview';
+        const fullURL = `${api.defaults.baseURL || ''}${endpoint}`;
+
         try {
             setPreviewing(true);
             setError('');
+            setPreview(null);
             setUpdateResult(null);
+            setSourceStatus(null);
 
-            /*
-             * El estado de la fuente se comprueba primero.
-             * Si este endpoint falla, todavía dejamos que preview
-             * intente ejecutarse para mostrar el error real del backend.
-             */
-            try {
-                const statusResponse = await api.get(
-                    '/api/course-contacts/source-status',
-                    {
-                        params: {
-                            semester,
-                            year: Number(year),
-                        },
-                    },
-                );
-
-                setSourceStatus(statusResponse.data);
-            } catch (statusError) {
-                setSourceStatus({
-                    success: false,
-                    message: apiError(
-                        statusError,
-                        'No se pudo comprobar la fuente.',
-                    ),
-                });
-            }
+            const startedAt = performance.now();
 
             const response = await api.post(
-                '/api/course-contacts/preview',
-                buildBody(),
+                endpoint,
+                body,
+                {
+                    timeout: 60000,
+                },
             );
 
+            const elapsedSeconds = (
+                (performance.now() - startedAt) / 1000
+            ).toFixed(2);
+
             setPreview(response.data);
+
+            setSourceStatus({
+                success: true,
+                message: (
+                    `La fuente ${semester} ${year} fue consultada correctamente `
+                    + `en ${elapsedSeconds} segundos.`
+                ),
+            });
         } catch (requestError) {
+            console.error(
+                '[CourseContacts] Error de preview:',
+                {
+                    message: requestError?.message,
+                    code: requestError?.code,
+                    status: requestError?.response?.status,
+                    response: requestError?.response?.data,
+                    baseURL: requestError?.config?.baseURL,
+                    url: requestError?.config?.url,
+                },
+            );
+
             setPreview(null);
+            setSourceStatus(null);
 
             setError(
                 apiError(
@@ -659,11 +692,12 @@ const CourseContactsManager = () => {
 
                     <div>
                         <strong>
-                            Buscando carpetas y archivos
+                            Consultando contactos y archivos
                         </strong>
 
                         <p>
-                            Comprobando los cursos seleccionados en Google Drive.
+                            Estamos comprobando Google Sheets y Google Drive.
+                            Esta operación puede tardar algunos segundos.
                         </p>
                     </div>
                 </section>
