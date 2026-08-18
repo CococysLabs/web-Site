@@ -53,8 +53,8 @@ const FEEDBACK_LABELS = {
 
 const EXPECTED_FILES = [
     {
-        key: 'criterios_expectativas',
-        label: '1_Criterios y Expectativas',
+        key: 'fortalezas_debilidades_recomendaciones',
+        label: '1_Fortalezas_Debilidades_y_Recomendaciones',
         optional: true,
     },
     {
@@ -63,8 +63,8 @@ const EXPECTED_FILES = [
         optional: true,
     },
     {
-        key: 'fortalezas_debilidades_recomendaciones',
-        label: '3_Fortalezas_Debilidades_y_Recomendaciones',
+        key: 'criterios_expectativas',
+        label: '3_Criterios y Expectativas',
         optional: true,
     },
     {
