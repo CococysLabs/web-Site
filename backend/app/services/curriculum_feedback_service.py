@@ -10,9 +10,9 @@ Flujo por curso:
    3_Planeacion_Curricular/
 
 2. Buscar:
-   1_Criterios y Expectativas
+   1_Fortalezas_Debilidades_y_Recomendaciones
    2_Analisis_de_Contexto
-   3_Fortalezas_Debilidades_y_Recomendaciones
+   3_Criterios y Expectativas
    4_Analisis_Internacional
    5_Diseño_Curricular
    6_Diseño_Curricular_Retroalimentacion
@@ -155,8 +155,10 @@ PLANNING_FILES: Tuple[
     ...,
 ] = (
     PlanningFileSpec(
-        key="criterios_expectativas",
-        name="1_Criterios y Expectativas",
+        key="fortalezas_debilidades_recomendaciones",
+        name=(
+            "1_Fortalezas_Debilidades_y_Recomendaciones"
+        ),
     ),
 
     PlanningFileSpec(
@@ -165,10 +167,8 @@ PLANNING_FILES: Tuple[
     ),
 
     PlanningFileSpec(
-        key="fortalezas_debilidades_recomendaciones",
-        name=(
-            "3_Fortalezas_Debilidades_y_Recomendaciones"
-        ),
+        key="criterios_expectativas",
+        name="3_Criterios y Expectativas",
     ),
 
     PlanningFileSpec(
@@ -184,9 +184,7 @@ PLANNING_FILES: Tuple[
 
     PlanningFileSpec(
         key="retroalimentacion",
-        name=(
-            "6_Diseño_Curricular_Retroalimentacion"
-        ),
+        name="6_Diseño_Curricular_Retroalimentacion",
         required_for_write=True,
     ),
 )
@@ -2498,9 +2496,9 @@ La evaluación debe realizarse principalmente sobre:
 
 Los documentos:
 
-1_Criterios y Expectativas
+1_Fortalezas_Debilidades_y_Recomendaciones
 2_Analisis_de_Contexto
-3_Fortalezas_Debilidades_y_Recomendaciones
+3_Criterios y Expectativas
 4_Analisis_Internacional
 
 son únicamente documentos de contexto.
