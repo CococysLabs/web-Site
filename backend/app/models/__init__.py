@@ -7,6 +7,7 @@ from app.models.validation import ValidationCriteria, DriveFolder
 from app.models.system_setting import SystemSetting
 from app.models.validation_record import ValidationRecord
 from app.models.course_catalog import CourseCatalog
+from app.models.curriculum_feedback_job import CurriculumFeedbackJob
 
 __all__ = [
     "User",
@@ -19,5 +20,6 @@ __all__ = [
     "SystemSetting",
     "ValidationRecord",
     "CourseCatalog",
+    "CurriculumFeedbackJob",
 ]
 

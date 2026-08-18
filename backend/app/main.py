@@ -15,6 +15,7 @@ from app.routes import (
     course_catalog,
     drive_structures,
     course_contacts,
+    curriculum_feedback,
 )
 
 app = FastAPI(
@@ -160,6 +161,11 @@ app.include_router(
 app.include_router(
     course_contacts.router,
     tags=["Contactos de Cursos"],
+)
+
+app.include_router(
+    curriculum_feedback.router,
+    tags=["Retroalimentación Curricular"],
 )
 
 app = CORSMiddleware(

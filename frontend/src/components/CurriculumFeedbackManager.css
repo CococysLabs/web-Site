@@ -1,0 +1,883 @@
+.cfm-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    width: 100%;
+}
+
+.cfm-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1.25rem;
+}
+
+.cfm-header h2 {
+    margin: 0;
+    color: var(--color-text-primary);
+    font-size: 1.55rem;
+    font-weight: 700;
+}
+
+.cfm-header p {
+    max-width: 760px;
+    margin: 0.45rem 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.cfm-header-count {
+    display: flex;
+    flex-shrink: 0;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface);
+}
+
+.cfm-header-count strong {
+    color: var(--color-primary);
+    font-size: 1.15rem;
+}
+
+.cfm-header-count span {
+    color: var(--color-text-secondary);
+    font-size: 0.76rem;
+}
+
+
+/* ==========================================================
+   CARD
+========================================================== */
+
+.cfm-card {
+    padding: 1.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-surface);
+}
+
+.cfm-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.1rem;
+}
+
+.cfm-section-heading>div:first-child {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.cfm-section-heading h3 {
+    margin: 0;
+    color: var(--color-text-primary);
+    font-size: 1rem;
+}
+
+.cfm-section-heading p {
+    margin: 0.25rem 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.cfm-step {
+    display: flex;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--color-primary);
+    font-size: 0.85rem;
+    font-weight: 800;
+}
+
+
+/* ==========================================================
+   FORM
+========================================================== */
+
+.cfm-form-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.4fr) 1fr 0.7fr;
+    gap: 1rem;
+}
+
+.cfm-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.cfm-field > span {
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.cfm-field select,
+.cfm-field input {
+    width: 100%;
+    min-height: 42px;
+    padding: 0.65rem 0.75rem;
+
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+
+    outline: none;
+
+    background-color: #151d2e;
+    color: #e5e7eb;
+
+    font: inherit;
+    font-size: 0.84rem;
+
+    color-scheme: dark;
+}
+
+.cfm-field select option {
+    background-color: #151d2e;
+    color: #e5e7eb;
+}
+
+.cfm-field select option:disabled {
+    background-color: #151d2e;
+    color: #64748b;
+}
+
+.cfm-field select:focus,
+.cfm-field input:focus {
+    border-color: var(--color-primary);
+    background-color: #151d2e;
+    color: #e5e7eb;
+}
+
+
+/* ==========================================================
+   COURSE SELECTION
+========================================================== */
+
+.cfm-mini-actions {
+    display: flex;
+    gap: 0.45rem;
+}
+
+.cfm-mini-actions button {
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.cfm-mini-actions button:hover:not(:disabled) {
+    border-color: var(--color-primary);
+}
+
+.cfm-mini-actions button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.cfm-course-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill,
+            minmax(285px, 1fr));
+    gap: 0.65rem;
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+}
+
+.cfm-course-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    min-width: 0;
+    padding: 0.8rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        background 0.15s ease;
+}
+
+.cfm-course-option:hover {
+    border-color: rgba(59, 130, 246, 0.55);
+}
+
+.cfm-course-option.selected {
+    border-color: var(--color-primary);
+    background: rgba(59, 130, 246, 0.07);
+}
+
+.cfm-course-option input {
+    margin-top: 0.15rem;
+    accent-color: var(--color-primary);
+}
+
+.cfm-course-option>div {
+    min-width: 0;
+}
+
+.cfm-course-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+.cfm-course-title strong {
+    flex-shrink: 0;
+    color: var(--color-primary);
+    font-size: 0.8rem;
+}
+
+.cfm-course-title span {
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cfm-course-option small {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--color-text-secondary);
+    font-size: 0.68rem;
+}
+
+.cfm-selection-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.85rem;
+    color: var(--color-text-secondary);
+    font-size: 0.73rem;
+}
+
+.cfm-selection-footer strong {
+    color: var(--color-primary);
+}
+
+
+/* ==========================================================
+   BUTTONS
+========================================================== */
+
+.cfm-primary-button,
+.cfm-generate-button {
+    min-height: 42px;
+    padding: 0.7rem 1.1rem;
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.cfm-primary-button {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.cfm-generate-button {
+    width: 100%;
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 0.88rem;
+}
+
+.cfm-primary-button:disabled,
+.cfm-generate-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+
+/* ==========================================================
+   PREVIEW SUMMARY
+========================================================== */
+
+.cfm-preview {
+    margin-top: 1.15rem;
+}
+
+.cfm-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+}
+
+.cfm-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.8rem;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    text-align: center;
+}
+
+.cfm-summary strong {
+    color: var(--color-text-primary);
+    font-size: 1.25rem;
+}
+
+.cfm-summary span {
+    color: var(--color-text-secondary);
+    font-size: 0.67rem;
+}
+
+.cfm-summary.success strong {
+    color: #16a34a;
+}
+
+.cfm-summary.danger strong {
+    color: #dc2626;
+}
+
+
+/* ==========================================================
+   PREVIEW COURSE
+========================================================== */
+
+.cfm-preview-list,
+.cfm-jobs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.cfm-preview-course {
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-left-width: 3px;
+    border-radius: 10px;
+}
+
+.cfm-preview-course.ready {
+    border-left-color: #16a34a;
+}
+
+.cfm-preview-course.warning {
+    border-left-color: #d97706;
+}
+
+.cfm-preview-course.blocked {
+    border-left-color: #dc2626;
+}
+
+.cfm-preview-course-header,
+.cfm-job-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.cfm-preview-course-header strong {
+    color: var(--color-primary);
+    font-size: 0.78rem;
+}
+
+.cfm-preview-course-header h4 {
+    margin: 0.15rem 0;
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
+}
+
+.cfm-preview-course-header small {
+    color: var(--color-text-secondary);
+    font-size: 0.69rem;
+}
+
+.cfm-status {
+    flex-shrink: 0;
+    padding: 0.3rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 700;
+}
+
+.cfm-status.ready {
+    background: rgba(22, 163, 74, 0.1);
+    color: #16a34a;
+}
+
+.cfm-status.warning {
+    background: rgba(217, 119, 6, 0.1);
+    color: #d97706;
+}
+
+.cfm-status.blocked {
+    background: rgba(220, 38, 38, 0.1);
+    color: #dc2626;
+}
+
+
+/* ==========================================================
+   FILES
+========================================================== */
+
+.cfm-files {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,
+            minmax(240px, 1fr));
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+}
+
+.cfm-file {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    min-width: 0;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+
+.cfm-file-indicator {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 8px;
+    margin-top: 0.23rem;
+    border-radius: 50%;
+}
+
+.cfm-file.found .cfm-file-indicator {
+    background: #16a34a;
+}
+
+.cfm-file.optional .cfm-file-indicator {
+    background: #d97706;
+}
+
+.cfm-file.missing .cfm-file-indicator {
+    background: #dc2626;
+}
+
+.cfm-file>div {
+    min-width: 0;
+}
+
+.cfm-file strong {
+    display: block;
+    overflow: hidden;
+    color: var(--color-text-primary);
+    font-size: 0.68rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cfm-file small {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--color-text-secondary);
+    font-size: 0.62rem;
+}
+
+.cfm-warning-list {
+    margin-top: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 8px;
+    background: rgba(217, 119, 6, 0.08);
+}
+
+.cfm-warning-list p {
+    margin: 0.2rem 0;
+    color: #b45309;
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
+.cfm-course-error {
+    margin-top: 0.75rem;
+    color: #dc2626;
+    font-size: 0.75rem;
+}
+
+.cfm-preview-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 0.8rem;
+}
+
+.cfm-preview-links a {
+    color: var(--color-primary);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.cfm-preview-links a:hover {
+    text-decoration: underline;
+}
+
+
+/* ==========================================================
+   JOBS
+========================================================== */
+
+.cfm-job-area {
+    margin-top: 1rem;
+}
+
+.cfm-job-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    margin-bottom: 0.8rem;
+}
+
+.cfm-job-summary>div {
+    display: flex;
+    flex-direction: column;
+    padding: 0.65rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.cfm-job-summary strong {
+    color: var(--color-text-primary);
+    font-size: 1.05rem;
+}
+
+.cfm-job-summary span {
+    color: var(--color-text-secondary);
+    font-size: 0.64rem;
+}
+
+.cfm-job-card {
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+}
+
+.cfm-job-card.completed {
+    border-left: 3px solid #16a34a;
+}
+
+.cfm-job-card.failed {
+    border-left: 3px solid #dc2626;
+}
+
+.cfm-job-card.processing {
+    border-left: 3px solid var(--color-primary);
+}
+
+.cfm-job-card.waiting {
+    opacity: 0.7;
+}
+
+.cfm-job-card-header>div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.cfm-job-card-header strong {
+    color: var(--color-primary);
+    font-size: 0.77rem;
+}
+
+.cfm-job-card-header span:not(.cfm-job-status) {
+    color: var(--color-text-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.cfm-job-status {
+    flex-shrink: 0;
+    padding: 0.27rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--color-text-secondary);
+    font-size: 0.64rem;
+    font-weight: 700;
+}
+
+.cfm-job-status.completed {
+    background: rgba(22, 163, 74, 0.1);
+    color: #16a34a;
+}
+
+.cfm-job-status.failed {
+    background: rgba(220, 38, 38, 0.1);
+    color: #dc2626;
+}
+
+.cfm-job-status.processing,
+.cfm-job-status.queued,
+.cfm-job-status.creating {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--color-primary);
+}
+
+.cfm-progress-track {
+    height: 5px;
+    margin-top: 0.75rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(127, 127, 127, 0.15);
+}
+
+.cfm-progress-value {
+    height: 100%;
+    border-radius: inherit;
+    background: var(--color-primary);
+    transition: width 0.3s ease;
+}
+
+.cfm-job-muted {
+    margin: 0.65rem 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.71rem;
+}
+
+.cfm-job-error {
+    margin-top: 0.7rem;
+    padding: 0.7rem;
+    border-radius: 8px;
+    background: rgba(220, 38, 38, 0.07);
+}
+
+.cfm-job-error p {
+    margin: 0 0 0.55rem;
+    color: #dc2626;
+    font-size: 0.72rem;
+}
+
+.cfm-job-error button {
+    padding: 0.4rem 0.65rem;
+    border: 1px solid #dc2626;
+    border-radius: 7px;
+    background: transparent;
+    color: #dc2626;
+    cursor: pointer;
+    font-size: 0.7rem;
+}
+
+
+/* ==========================================================
+   COMPLETED
+========================================================== */
+
+.cfm-completed-info {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.55rem;
+    margin-top: 0.8rem;
+}
+
+.cfm-completed-info>div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+    padding: 0.55rem;
+    border: 1px solid var(--color-border);
+    border-radius: 7px;
+}
+
+.cfm-completed-info span {
+    color: var(--color-text-secondary);
+    font-size: 0.62rem;
+}
+
+.cfm-completed-info strong {
+    color: var(--color-text-primary);
+    font-size: 0.75rem;
+}
+
+.cfm-general-summary,
+.cfm-result-warnings {
+    margin-top: 0.7rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+}
+
+.cfm-general-summary {
+    background: rgba(59, 130, 246, 0.06);
+}
+
+.cfm-result-warnings {
+    background: rgba(217, 119, 6, 0.07);
+}
+
+.cfm-general-summary>strong,
+.cfm-result-warnings>strong {
+    color: var(--color-text-primary);
+    font-size: 0.73rem;
+}
+
+.cfm-general-summary p,
+.cfm-result-warnings li {
+    color: var(--color-text-secondary);
+    font-size: 0.71rem;
+    line-height: 1.55;
+}
+
+.cfm-general-summary p {
+    margin: 0.35rem 0 0;
+}
+
+.cfm-result-warnings ul {
+    margin: 0.4rem 0 0;
+    padding-left: 1.1rem;
+}
+
+
+/* ==========================================================
+   FEEDBACK
+========================================================== */
+
+.cfm-feedback-details {
+    margin-top: 0.75rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.cfm-feedback-details summary {
+    cursor: pointer;
+    color: var(--color-primary);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.cfm-feedback-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.7rem;
+}
+
+.cfm-feedback-item {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.cfm-feedback-item:last-child {
+    border-bottom: 0;
+}
+
+.cfm-feedback-item strong {
+    color: var(--color-text-primary);
+    font-size: 0.7rem;
+}
+
+.cfm-feedback-item p {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.71rem;
+    line-height: 1.5;
+}
+
+
+/* ==========================================================
+   ALERTS
+========================================================== */
+
+.cfm-alert {
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+}
+
+.cfm-alert.error {
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    background: rgba(220, 38, 38, 0.07);
+}
+
+.cfm-alert strong {
+    color: #dc2626;
+    font-size: 0.78rem;
+}
+
+.cfm-alert p {
+    margin: 0.3rem 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.75rem;
+}
+
+.cfm-blocked-message,
+.cfm-placeholder {
+    padding: 1rem;
+    border: 1px dashed var(--color-border);
+    border-radius: 9px;
+    color: var(--color-text-secondary);
+    text-align: center;
+    font-size: 0.78rem;
+}
+
+
+/* ==========================================================
+   RESPONSIVE
+========================================================== */
+
+@media (max-width: 900px) {
+    .cfm-form-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .cfm-summary-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .cfm-header {
+        flex-direction: column;
+    }
+
+    .cfm-header-count {
+        align-self: flex-start;
+    }
+
+    .cfm-form-grid,
+    .cfm-summary-grid,
+    .cfm-job-summary,
+    .cfm-completed-info {
+        grid-template-columns: 1fr;
+    }
+
+    .cfm-section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .cfm-course-grid,
+    .cfm-files {
+        grid-template-columns: 1fr;
+    }
+
+    .cfm-feedback-item {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
+
+    .cfm-preview-course-header,
+    .cfm-job-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
