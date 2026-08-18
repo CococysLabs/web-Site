@@ -313,7 +313,7 @@ class DocumentContentValidationService:
         )
 
         payload = json.dumps({
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-flash",
             "messages": [
                 {"role": "system", "content": system_msg},
                 {"role": "user",   "content": user_msg},
