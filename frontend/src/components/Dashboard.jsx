@@ -5,6 +5,7 @@ import api from '../services/api';
 import DocumentAnalyzer from './admin/DocumentAnalyzer';
 import CourseFolderCreator from './CourseFolderCreator';
 import CourseContactsManager from './CourseContactsManager';
+import CurriculumFeedbackManager from './CurriculumFeedbackManager';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -26,6 +27,7 @@ const Dashboard = () => {
   const canViewDrive = Boolean(user?.permissions?.can_view_drive && user?.drive_folder_id);
   const canCreateFolders = isTeacher || isAdmin;
   const canManageCourseContacts = isTeacher || isAdmin;
+  const canManageCurriculumFeedback = isTeacher || isAdmin;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -151,6 +153,51 @@ const Dashboard = () => {
               </svg>
 
               <span>Contactos de cursos</span>
+            </button>
+          )}
+
+          {canManageCurriculumFeedback && (
+            <button
+              className={
+                `nav-item ${activeView === 'curriculum-feedback'
+                  ? 'active'
+                  : ''
+                }`
+              }
+              onClick={() => {
+                navTo('curriculum-feedback');
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4"
+                />
+
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"
+                />
+
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 7h6"
+                />
+              </svg>
+
+              <span>
+                Planeación Curricular
+              </span>
             </button>
           )}
 
@@ -399,6 +446,12 @@ const Dashboard = () => {
               {activeView === 'course-contacts' && canManageCourseContacts && (
                 <CourseContactsManager />
               )}
+
+              {/* ── Retroalimentación de Planeación Curricular ── */}
+              {activeView === 'curriculum-feedback'
+                && canManageCurriculumFeedback && (
+                  <CurriculumFeedbackManager />
+                )}
 
               {/* ── Validaciones ── */}
               {activeView === 'validations' && (

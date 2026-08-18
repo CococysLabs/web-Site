@@ -346,6 +346,110 @@ class GoogleDriveService:
             traceback.print_exc()
             return None
     
+    def export_workspace_file(
+        self,
+        file_id: str,
+        export_mime: str,
+    ) -> bytes:
+        """
+        Exportar temporalmente un archivo nativo de Google Workspace.
+
+        Ejemplo:
+            Google Sheets -> application/pdf
+
+        IMPORTANTE:
+        - El archivo se mantiene únicamente en memoria.
+        - NO crea ningún PDF en Google Drive.
+        - NO modifica el archivo original.
+        """
+        if not self.service:
+            raise RuntimeError(
+                "El servicio de Google Drive no está inicializado"
+            )
+
+        started_at = perf_counter()
+
+        try:
+            metadata = (
+                self.service.files()
+                .get(
+                    fileId=file_id,
+                    fields="id,name,mimeType",
+                    supportsAllDrives=True,
+                )
+                .execute(
+                    num_retries=DRIVE_API_RETRIES
+                )
+            )
+
+            file_name = metadata.get(
+                "name",
+                file_id,
+            )
+
+            original_mime = metadata.get(
+                "mimeType",
+                "",
+            )
+
+            if not original_mime.startswith(
+                "application/vnd.google-apps."
+            ):
+                raise ValueError(
+                    f"'{file_name}' no es un archivo "
+                    "nativo de Google Workspace"
+                )
+
+            print(
+                "📤 [DRIVE] Exportación temporal | "
+                f"archivo={file_name} | "
+                f"destino={export_mime}",
+                flush=True,
+            )
+
+            request = self.service.files().export_media(
+                fileId=file_id,
+                mimeType=export_mime,
+            )
+
+            buffer = io.BytesIO()
+
+            downloader = MediaIoBaseDownload(
+                buffer,
+                request,
+            )
+
+            done = False
+
+            while not done:
+                _, done = downloader.next_chunk(
+                    num_retries=DRIVE_API_RETRIES
+                )
+
+            content = buffer.getvalue()
+
+            print(
+                "✅ [DRIVE] Exportación temporal terminada | "
+                f"archivo={file_name} | "
+                f"bytes={len(content)} | "
+                f"segundos={perf_counter() - started_at:.2f}",
+                flush=True,
+            )
+
+            return content
+
+        except Exception as exc:
+            print(
+                "❌ [DRIVE] Error exportando archivo temporal | "
+                f"file_id={file_id} | "
+                f"destino={export_mime} | "
+                f"tipo={type(exc).__name__} | "
+                f"mensaje={exc}",
+                flush=True,
+            )
+
+            raise
+    
     def search_files(self, query: str, folder_id: Optional[str] = None) -> List[Dict]:
         """Buscar archivos por nombre"""
         if not self.service:
