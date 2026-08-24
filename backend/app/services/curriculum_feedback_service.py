@@ -97,7 +97,7 @@ MAX_CONTEXT_CHARS = 2_500_000
 MAX_XLSX_ROWS = 20_000
 MAX_XLSX_COLUMNS = 150
 STOP_AFTER_EMPTY_ROWS = 150
-
+MIN_CURRICULUM_CONTENT_CHARS = 2_000
 
 GOOGLE_SHEET_MIME = (
     "application/vnd.google-apps.spreadsheet"
@@ -156,9 +156,7 @@ PLANNING_FILES: Tuple[
 ] = (
     PlanningFileSpec(
         key="fortalezas_debilidades_recomendaciones",
-        name=(
-            "1_Fortalezas_Debilidades_y_Recomendaciones"
-        ),
+        name="1_Fortalezas_Debilidades_y_Recomendaciones",
     ),
 
     PlanningFileSpec(
@@ -181,33 +179,32 @@ PLANNING_FILES: Tuple[
         name="5_Diseño_Curricular",
         required_for_analysis=True,
     ),
-
-    PlanningFileSpec(
-        key="retroalimentacion",
-        name="6_Diseño_Curricular_Retroalimentacion",
-        required_for_write=True,
-    ),
 )
 
 
 OPTIONAL_CONTEXT_KEYS = {
-    "criterios_expectativas",
-    "analisis_contexto",
     "fortalezas_debilidades_recomendaciones",
+    "analisis_contexto",
+    "criterios_expectativas",
     "analisis_internacional",
 }
 
 MAIN_INPUT_KEY = "diseno_curricular"
 
-OUTPUT_KEY = "retroalimentacion"
+MATRIX_FOLDER_NAME = (
+    "0_Revision_de_Material"
+)
+
+MATRIX_FILE_NAME = (
+    "02_Matriz observaciones estructura"
+)
+
+MATRIX_AI_COLUMN = "G"
 
 
-# ============================================================
-# SALIDA ESPERADA DE DEEPSEEK
-# ============================================================
-
-FEEDBACK_KEYS: Tuple[str, ...] = (
+CURRICULUM_SHEET_ORDER: Tuple[str, ...] = (
     "competencias",
+    "diseno",
     "semana_diagnostico",
     "s2",
     "s3",
@@ -224,132 +221,106 @@ FEEDBACK_KEYS: Tuple[str, ...] = (
     "tareas",
 )
 
-GEMINI_FEEDBACK_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "retroalimentacion": {
-            "type": "OBJECT",
-            "properties": {
-                "competencias": {
-                    "type": "STRING",
-                },
-                "semana_diagnostico": {
-                    "type": "STRING",
-                },
-                "s2": {
-                    "type": "STRING",
-                },
-                "s3": {
-                    "type": "STRING",
-                },
-                "s4": {
-                    "type": "STRING",
-                },
-                "s5": {
-                    "type": "STRING",
-                },
-                "s6": {
-                    "type": "STRING",
-                },
-                "s7": {
-                    "type": "STRING",
-                },
-                "s8": {
-                    "type": "STRING",
-                },
-                "s9": {
-                    "type": "STRING",
-                },
-                "s10": {
-                    "type": "STRING",
-                },
-                "s11": {
-                    "type": "STRING",
-                },
-                "proyectos": {
-                    "type": "STRING",
-                },
-                "practicas": {
-                    "type": "STRING",
-                },
-                "tareas": {
-                    "type": "STRING",
-                },
-            },
-            "required": [
-                "competencias",
-                "semana_diagnostico",
-                "s2",
-                "s3",
-                "s4",
-                "s5",
-                "s6",
-                "s7",
-                "s8",
-                "s9",
-                "s10",
-                "s11",
-                "proyectos",
-                "practicas",
-                "tareas",
-            ],
-        },
-        "resumen_general": {
-            "type": "STRING",
-        },
-        "advertencias": {
-            "type": "ARRAY",
-            "items": {
-                "type": "STRING",
-            },
-        },
-    },
-    "required": [
-        "retroalimentacion",
-        "resumen_general",
-        "advertencias",
-    ],
-}
 
-
-OUTPUT_LABEL_ALIASES: Dict[
+CURRICULUM_SHEET_ALIASES: Dict[
     str,
     Tuple[str, ...],
 ] = {
     "competencias": (
-        "competencias",
-    ),
-    
-    "semana_diagnostico": (
-        "semana de diagnostico",
-        "semana de diagnóstico",
-        "semana diagnostico",
+        "Competencias",
     ),
 
-    "s2": ("s2",),
-    "s3": ("s3",),
-    "s4": ("s4",),
-    "s5": ("s5",),
-    "s6": ("s6",),
-    "s7": ("s7",),
-    "s8": ("s8",),
-    "s9": ("s9",),
-    "s10": ("s10",),
-    "s11": ("s11",),
+    "diseno": (
+        "Diseño",
+        "Diseno",
+    ),
+
+    "semana_diagnostico": (
+        "Semana Diagnostico",
+        "Semana Diagnóstico",
+        "Semana de Diagnostico",
+        "Semana de Diagnóstico",
+    ),
+
+    "s2": (
+        "S.2",
+        "S2",
+        "Semana 2",
+    ),
+
+    "s3": (
+        "S.3",
+        "S3",
+        "Semana 3",
+    ),
+
+    "s4": (
+        "S.4",
+        "S4",
+        "Semana 4",
+    ),
+
+    "s5": (
+        "S.5",
+        "S5",
+        "Semana 5",
+    ),
+
+    "s6": (
+        "S.6",
+        "S6",
+        "Semana 6",
+    ),
+
+    "s7": (
+        "S.7",
+        "S7",
+        "Semana 7",
+    ),
+
+    "s8": (
+        "S.8",
+        "S8",
+        "Semana 8",
+    ),
+
+    "s9": (
+        "S.9",
+        "S9",
+        "Semana 9",
+    ),
+
+    "s10": (
+        "S.10",
+        "S10",
+        "Semana 10",
+    ),
+
+    "s11": (
+        "S.11",
+        "S11",
+        "Semana 11",
+    ),
 
     "proyectos": (
-        "proyectos",
+        "Proyectos",
     ),
 
     "practicas": (
-        "practicas",
-        "prácticas",
+        "Practicas",
+        "Prácticas",
     ),
 
     "tareas": (
-        "tareas",
+        "Tareas",
     ),
 }
+
+# ============================================================
+# SALIDA ESPERADA DE DEEPSEEK
+# ============================================================
+
+
 
 
 class CurriculumFeedbackError(
@@ -360,10 +331,813 @@ class CurriculumFeedbackError(
 
 class CurriculumFeedbackService:
 
+    def _canonical_curriculum_sheet(
+    self,
+    sheet_title: str,
+    ) -> Optional[str]:
+
+        normalized_title = self.normalize(
+            sheet_title
+        )
+
+        for key, aliases in (
+            CURRICULUM_SHEET_ALIASES.items()
+        ):
+
+            for alias in aliases:
+
+                if (
+                    normalized_title
+                    == self.normalize(alias)
+                ):
+                    return key
+
+        return None
+
+    def _curriculum_google_sheet_to_text(
+        self,
+        spreadsheet_id: str,
+    ) -> Tuple[
+        str,
+        Dict[str, Any],
+    ]:
+        """
+        Leer directamente 5_Diseño_Curricular mediante
+        Google Sheets API.
+
+        A diferencia de openpyxl data_only=True,
+        obtiene los valores visibles/calculados de
+        las celdas de Google Sheets.
+        """
+
+        sheet_titles = (
+            google_sheets_service
+            .get_sheet_titles(
+                spreadsheet_id
+            )
+        )
+
+        found_by_key: Dict[
+            str,
+            str,
+        ] = {}
+
+        for title in sheet_titles:
+
+            canonical_key = (
+                self._canonical_curriculum_sheet(
+                    title
+                )
+            )
+
+            if canonical_key:
+
+                if canonical_key in found_by_key:
+
+                    raise CurriculumFeedbackError(
+                        "5_Diseño_Curricular contiene "
+                        "más de una hoja equivalente a "
+                        f"'{canonical_key}'"
+                    )
+
+                found_by_key[
+                    canonical_key
+                ] = title
+
+        parts: List[str] = []
+        found: List[
+            Dict[str, Any]
+        ] = []
+        missing: List[str] = []
+
+        for key in CURRICULUM_SHEET_ORDER:
+
+            title = found_by_key.get(
+                key
+            )
+
+            if not title:
+
+                missing.append(
+                    key
+                )
+
+                parts.append(
+                    "========================================\n"
+                    f"HOJA NO ENCONTRADA: {key}\n"
+                    "========================================"
+                )
+
+                continue
+
+            values = (
+                google_sheets_service
+                .get_sheet_values(
+                    spreadsheet_id,
+                    title,
+                )
+            )
+
+            lines: List[str] = []
+
+            non_empty_cells = 0
+
+            for row_number, row in enumerate(
+                values,
+                start=1,
+            ):
+
+                cells: List[str] = []
+
+                for column_index, value in enumerate(
+                    row,
+                    start=1,
+                ):
+
+                    if value is None:
+                        continue
+
+                    text = str(
+                        value
+                    ).strip()
+
+                    if not text:
+                        continue
+
+                    text = re.sub(
+                        r"\s*\n\s*",
+                        " / ",
+                        text,
+                    )
+
+                    text = re.sub(
+                        r"\s+",
+                        " ",
+                        text,
+                    ).strip()
+
+                    column_letter = (
+                        openpyxl.utils
+                        .get_column_letter(
+                            column_index
+                        )
+                    )
+
+                    cells.append(
+                        f"{column_letter}"
+                        f"{row_number}={text}"
+                    )
+
+                    non_empty_cells += 1
+
+                if cells:
+
+                    lines.append(
+                        " | ".join(
+                            cells
+                        )
+                    )
+
+            text = "\n".join(
+                lines
+            )
+
+            found.append(
+                {
+                    "key": key,
+                    "title": title,
+                    "rows": len(
+                        values
+                    ),
+                    "non_empty_cells": (
+                        non_empty_cells
+                    ),
+                    "chars": len(
+                        text
+                    ),
+                }
+            )
+
+            parts.append(
+                "========================================\n"
+                f"HOJA: {title}\n"
+                f"CLAVE: {key}\n"
+                f"FILAS_LEIDAS: {len(values)}\n"
+                f"CELDAS_CON_CONTENIDO: {non_empty_cells}\n"
+                "========================================\n"
+                f"{text}"
+            )
+
+        if not found:
+
+            raise CurriculumFeedbackError(
+                "5_Diseño_Curricular no contiene "
+                "ninguna de las hojas esperadas"
+            )
+
+        return (
+            "\n\n".join(
+                parts
+            ),
+            {
+                "found": found,
+                "missing": missing,
+            },
+        )
+
+    def _curriculum_xlsx_to_text(
+        self,
+        content: bytes,
+    ) -> Tuple[
+        str,
+        Dict[str, Any],
+    ]:
+        """
+        Fallback para leer 5_Diseño_Curricular como XLSX.
+
+        Se utiliza solamente si la lectura directa mediante
+        Google Sheets API falla.
+
+        data_only=False conserva fórmulas en lugar de convertirlas
+        potencialmente en None.
+        """
+
+        workbook = (
+            openpyxl.load_workbook(
+                io.BytesIO(
+                    content
+                ),
+                read_only=True,
+                data_only=False,
+                keep_links=True,
+            )
+        )
+
+        found: List[
+            Dict[str, Any]
+        ] = []
+
+        extracted: Dict[
+            str,
+            Dict[str, Any]
+        ] = {}
+
+        missing: List[str] = []
+
+        try:
+
+            for worksheet in workbook.worksheets:
+
+                canonical_key = (
+                    self._canonical_curriculum_sheet(
+                        worksheet.title
+                    )
+                )
+
+                if not canonical_key:
+                    continue
+
+                lines: List[str] = []
+
+                non_empty_cells = 0
+
+                maximum_rows = min(
+                    worksheet.max_row or 1,
+                    MAX_XLSX_ROWS,
+                )
+
+                maximum_columns = min(
+                    worksheet.max_column or 1,
+                    MAX_XLSX_COLUMNS,
+                )
+
+                empty_rows = 0
+
+                for row in worksheet.iter_rows(
+                    min_row=1,
+                    max_row=maximum_rows,
+                    min_col=1,
+                    max_col=maximum_columns,
+                ):
+
+                    cells: List[str] = []
+
+                    for cell in row:
+
+                        value = cell.value
+
+                        if value is None:
+                            continue
+
+                        cell_text = str(
+                            value
+                        ).strip()
+
+                        if not cell_text:
+                            continue
+
+                        cell_text = re.sub(
+                            r"\s*\n\s*",
+                            " / ",
+                            cell_text,
+                        )
+
+                        cell_text = re.sub(
+                            r"\s+",
+                            " ",
+                            cell_text,
+                        ).strip()
+
+                        cells.append(
+                            f"{cell.coordinate}={cell_text}"
+                        )
+
+                        non_empty_cells += 1
+
+                    if not cells:
+
+                        empty_rows += 1
+
+                        if (
+                            empty_rows
+                            >= STOP_AFTER_EMPTY_ROWS
+                        ):
+                            break
+
+                        continue
+
+                    empty_rows = 0
+
+                    lines.append(
+                        " | ".join(
+                            cells
+                        )
+                    )
+
+                sheet_text = "\n".join(
+                    lines
+                )
+
+                extracted[
+                    canonical_key
+                ] = {
+                    "title": worksheet.title,
+                    "text": sheet_text,
+                    "rows": maximum_rows,
+                    "non_empty_cells": (
+                        non_empty_cells
+                    ),
+                    "chars": len(
+                        sheet_text
+                    ),
+                }
+
+        finally:
+
+            workbook.close()
+
+        parts: List[str] = []
+
+        for key in CURRICULUM_SHEET_ORDER:
+
+            sheet = extracted.get(
+                key
+            )
+
+            if not sheet:
+
+                missing.append(
+                    key
+                )
+
+                parts.append(
+                    "========================================\n"
+                    f"HOJA NO ENCONTRADA: {key}\n"
+                    "========================================"
+                )
+
+                continue
+
+            found.append(
+                {
+                    "key": key,
+                    "title": sheet[
+                        "title"
+                    ],
+                    "rows": sheet[
+                        "rows"
+                    ],
+                    "non_empty_cells": sheet[
+                        "non_empty_cells"
+                    ],
+                    "chars": sheet[
+                        "chars"
+                    ],
+                }
+            )
+
+            parts.append(
+                "========================================\n"
+                f"HOJA: {sheet['title']}\n"
+                f"CLAVE: {key}\n"
+                f"FILAS_LEIDAS: {sheet['rows']}\n"
+                "CELDAS_CON_CONTENIDO: "
+                f"{sheet['non_empty_cells']}\n"
+                "========================================\n"
+                f"{sheet['text']}"
+            )
+
+        if not found:
+
+            raise CurriculumFeedbackError(
+                "5_Diseño_Curricular no contiene "
+                "ninguna de las hojas esperadas"
+            )
+
+        return (
+            "\n\n".join(
+                parts
+            ),
+            {
+                "found": found,
+                "missing": missing,
+            },
+        )
+
+    def _validate_curriculum_extraction(
+        self,
+        text: str,
+        workbook_info: Dict[
+            str,
+            Any
+        ],
+    ) -> None:
+        """
+        Impedir que se mande a IA una extracción incompleta
+        de 5_Diseño_Curricular.
+        """
+
+        if len(
+            text.strip()
+        ) < MIN_CURRICULUM_CONTENT_CHARS:
+
+            raise CurriculumFeedbackError(
+                "5_Diseño_Curricular produjo solamente "
+                f"{len(text)} caracteres de contenido. "
+                "La extracción parece incompleta."
+            )
+
+        required_content_sheets = {
+            "competencias",
+            "diseno",
+            "semana_diagnostico",
+            "s2",
+            "s3",
+            "s4",
+            "s5",
+            "s6",
+            "s7",
+            "s8",
+            "s9",
+            "s10",
+            "s11",
+        }
+
+        found_sheets = (
+            workbook_info.get(
+                "found",
+                [],
+            )
+        )
+
+        suspicious_empty = [
+            sheet.get(
+                "title",
+                sheet.get(
+                    "key",
+                    "desconocida",
+                ),
+            )
+
+            for sheet in found_sheets
+
+            if (
+                sheet.get(
+                    "key"
+                )
+                in required_content_sheets
+
+                and int(
+                    sheet.get(
+                        "non_empty_cells",
+                        0,
+                    )
+                    or 0
+                )
+                == 0
+            )
+        ]
+
+        if suspicious_empty:
+
+            raise CurriculumFeedbackError(
+                "La lectura de "
+                "5_Diseño_Curricular devolvió "
+                "hojas obligatorias sin contenido: "
+                + ", ".join(
+                    suspicious_empty
+                )
+            )
+
+    def _extract_curriculum_source(
+        self,
+        file: Dict[str, Any],
+    ) -> Tuple[
+        str,
+        str,
+        List[str],
+        Dict[str, Any],
+    ]:
+
+        file_id = file[
+            "id"
+        ]
+
+        file_name = file.get(
+            "name",
+            file_id,
+        )
+
+        mime_type = file.get(
+            "mimeType",
+            "",
+        )
+
+        warnings: List[str] = []
+
+        direct_error: Optional[
+            Exception
+        ] = None
+
+        # ========================================================
+        # 1. GOOGLE SHEETS NATIVO
+        # ========================================================
+
+        if mime_type == GOOGLE_SHEET_MIME:
+
+            print(
+                "📊 [CURRICULUM] Leyendo "
+                "5_Diseño_Curricular directamente "
+                "con Google Sheets API | "
+                f"archivo={file_name}",
+                flush=True,
+            )
+
+            try:
+
+                (
+                    text,
+                    workbook_info,
+                ) = (
+                    self
+                    ._curriculum_google_sheet_to_text(
+                        file_id
+                    )
+                )
+
+                # -----------------------------------------------
+                # VALIDAR ANTES DEL RETURN
+                # -----------------------------------------------
+
+                self._validate_curriculum_extraction(
+                    text,
+                    workbook_info,
+                )
+
+                if workbook_info.get(
+                    "missing"
+                ):
+
+                    warnings.append(
+                        "5_Diseño_Curricular no contiene "
+                        "las siguientes hojas esperadas: "
+                        + ", ".join(
+                            workbook_info[
+                                "missing"
+                            ]
+                        )
+                    )
+
+                print(
+                    "✅ [CURRICULUM] "
+                    "5_Diseño_Curricular leído "
+                    "con Google Sheets API | "
+                    f"hojas="
+                    f"{len(workbook_info['found'])} | "
+                    f"chars={len(text)}",
+                    flush=True,
+                )
+
+                for sheet in workbook_info.get(
+                    "found",
+                    [],
+                ):
+
+                    print(
+                        "   📄 "
+                        f"{sheet['title']} | "
+                        f"filas={sheet['rows']} | "
+                        f"celdas="
+                        f"{sheet['non_empty_cells']} | "
+                        f"chars={sheet['chars']}",
+                        flush=True,
+                    )
+
+                return (
+                    text,
+                    "google_sheets_values",
+                    warnings,
+                    workbook_info,
+                )
+
+            except Exception as exc:
+
+                direct_error = exc
+
+                warnings.append(
+                    "No se pudo leer "
+                    "5_Diseño_Curricular directamente "
+                    "con Google Sheets API. "
+                    "Se utilizará XLSX como respaldo. "
+                    f"Motivo: {exc}"
+                )
+
+                print(
+                    "⚠️ [CURRICULUM] "
+                    "Sheets API falló; "
+                    "usando XLSX fallback | "
+                    f"tipo={type(exc).__name__} | "
+                    f"error={exc}",
+                    flush=True,
+                )
+
+        # ========================================================
+        # 2. COMPROBAR FORMATO PARA FALLBACK
+        # ========================================================
+
+        if mime_type not in {
+            GOOGLE_SHEET_MIME,
+            XLSX_MIME,
+            "application/vnd.ms-excel",
+        }:
+
+            raise CurriculumFeedbackError(
+                f"'{file_name}' debe ser un "
+                "Google Sheets o XLSX"
+            )
+
+        # ========================================================
+        # 3. XLSX FALLBACK
+        # ========================================================
+
+        print(
+            "📥 [CURRICULUM] "
+            "Leyendo 5_Diseño_Curricular "
+            "mediante XLSX fallback | "
+            f"archivo={file_name}",
+            flush=True,
+        )
+
+        content = (
+            drive_service.download_file(
+                file_id
+            )
+        )
+
+        if not content:
+
+            raise CurriculumFeedbackError(
+                "No se pudo obtener "
+                "5_Diseño_Curricular como XLSX"
+            )
+
+        try:
+
+            (
+                text,
+                workbook_info,
+            ) = (
+                self._curriculum_xlsx_to_text(
+                    content
+                )
+            )
+
+        except Exception as exc:
+
+            message = (
+                "No se pudo leer "
+                "5_Diseño_Curricular mediante XLSX"
+            )
+
+            if direct_error:
+
+                message += (
+                    ". La lectura directa con "
+                    "Google Sheets API también falló: "
+                    f"{direct_error}"
+                )
+
+            message += (
+                f". Error XLSX: {exc}"
+            )
+
+            raise CurriculumFeedbackError(
+                message
+            ) from exc
+
+        finally:
+
+            content = None
+
+        # ========================================================
+        # 4. VALIDAR FALLBACK
+        # ========================================================
+
+        try:
+
+            self._validate_curriculum_extraction(
+                text,
+                workbook_info,
+            )
+
+        except CurriculumFeedbackError as exc:
+
+            if direct_error:
+
+                raise CurriculumFeedbackError(
+                    "La lectura directa de "
+                    "5_Diseño_Curricular falló y el "
+                    "XLSX de respaldo también produjo "
+                    "una extracción incompleta. "
+                    f"Sheets API: {direct_error}. "
+                    f"XLSX: {exc}"
+                ) from exc
+
+            raise
+
+        if workbook_info.get(
+            "missing"
+        ):
+
+            warnings.append(
+                "5_Diseño_Curricular no contiene "
+                "las siguientes hojas esperadas: "
+                + ", ".join(
+                    workbook_info[
+                        "missing"
+                    ]
+                )
+            )
+
+        print(
+            "✅ [CURRICULUM] "
+            "5_Diseño_Curricular leído mediante "
+            "XLSX fallback | "
+            f"hojas="
+            f"{len(workbook_info['found'])} | "
+            f"chars={len(text)}",
+            flush=True,
+        )
+
+        for sheet in workbook_info.get(
+            "found",
+            [],
+        ):
+
+            print(
+                "   📄 "
+                f"{sheet['title']} | "
+                f"filas={sheet['rows']} | "
+                f"celdas="
+                f"{sheet['non_empty_cells']} | "
+                f"chars={sheet['chars']}",
+                flush=True,
+            )
+
+        return (
+            text,
+            "xlsx_structured_fallback",
+            warnings,
+            workbook_info,
+        )
+    
     def _call_ai(
         self,
         system_message: str,
         user_message: str,
+        response_schema: Optional[
+            Dict[str, Any]
+        ] = None,
     ) -> Dict[str, Any]:
         """
         Cadena de proveedores para retroalimentación curricular.
@@ -384,6 +1158,9 @@ class CurriculumFeedbackService:
             return self._call_gemini(
                 system_message,
                 user_message,
+                response_schema=(
+                    response_schema
+                ),
             )
 
         except Exception as exc:
@@ -671,6 +1448,9 @@ class CurriculumFeedbackService:
         self,
         system_message: str,
         user_message: str,
+        response_schema: Optional[
+            Dict[str, Any]
+        ] = None,
     ) -> Dict[str, Any]:
         """
         Ejecuta Gemini mediante streamGenerateContent.
@@ -687,6 +1467,24 @@ class CurriculumFeedbackService:
             raise CurriculumFeedbackError(
                 "No hay ninguna GEMINI_API_KEY configurada"
             )
+
+        generation_config = {
+            "temperature": 0.1,
+
+            "maxOutputTokens": (
+                GEMINI_MAX_OUTPUT_TOKENS
+            ),
+
+            "responseMimeType": (
+                "application/json"
+            ),
+        }
+
+        if response_schema:
+
+            generation_config[
+                "responseSchema"
+            ] = response_schema
 
         payload = json.dumps(
             {
@@ -709,21 +1507,9 @@ class CurriculumFeedbackService:
                     }
                 ],
 
-                "generationConfig": {
-                    "temperature": 0.1,
-
-                    "maxOutputTokens": (
-                        GEMINI_MAX_OUTPUT_TOKENS
-                    ),
-
-                    "responseMimeType": (
-                        "application/json"
-                    ),
-
-                    "responseSchema": (
-                        GEMINI_FEEDBACK_SCHEMA
-                    ),
-                },
+                "generationConfig": (
+                    generation_config
+                ),
             },
             ensure_ascii=False,
         ).encode("utf-8")
@@ -1131,6 +1917,28 @@ class CurriculumFeedbackService:
                     continue
 
                 if exc.code == 400:
+
+                    # Una API key inválida es un problema de ESA key,
+                    # no necesariamente de la petición.
+                    #
+                    # Por lo tanto, probamos la siguiente key.
+                    if (
+                        "API_KEY_INVALID" in body
+                        or "API key not valid" in body
+                    ):
+
+                        print(
+                            "🔑 [CURRICULUM] "
+                            "Gemini key inválida; "
+                            "probando siguiente key | "
+                            f"key={key_index}/{len(keys)}",
+                            flush=True,
+                        )
+
+                        continue
+
+                    # Otros HTTP 400 sí suelen indicar que
+                    # la petición/schema enviado es inválido.
                     break
 
                 if exc.code in {
@@ -1616,69 +2424,419 @@ class CurriculumFeedbackService:
         semester: str,
         year: int,
     ) -> Dict[str, Any]:
+        """
+        Comprobar un curso sin utilizar IA ni modificar archivos.
+
+        Valida:
+
+        3_Planeacion_Curricular/
+            1_Fortalezas_Debilidades_y_Recomendaciones   opcional
+            2_Analisis_de_Contexto                       opcional
+            3_Criterios y Expectativas                   opcional
+            4_Analisis_Internacional                     opcional
+            5_Diseño_Curricular                          obligatorio
+
+        0_Revision_de_Material/
+            02_Matriz observaciones estructura           obligatorio
+        """
 
         try:
+            # ====================================================
+            # 1. LOCALIZAR CURSO
+            # ====================================================
+
             locations = self.locate_course(
                 course,
                 semester,
                 year,
             )
 
-            files = (
-                self.locate_planning_files(
-                    locations[
-                        "planning"
-                    ]["id"]
+            # ====================================================
+            # 2. ARCHIVOS DE PLANEACIÓN
+            # ====================================================
+
+            files = self.locate_planning_files(
+                locations["planning"]["id"]
+            )
+
+            # ====================================================
+            # 3. CARPETA 0_Revision_de_Material
+            # ====================================================
+
+            revision_folder = (
+                self._find_revision_folder(
+                    locations["course"]["id"]
                 )
             )
 
+            matrix_file = None
+            matrix_sheet_title = None
+            matrix_targets: List[
+                Dict[str, Any]
+            ] = []
+
+            # ====================================================
+            # 4. MATRIZ
+            # ====================================================
+
+            if revision_folder:
+
+                matrix_file = (
+                    self._find_matrix_file(
+                        revision_folder["id"]
+                    )
+                )
+
+                if matrix_file:
+
+                    (
+                        matrix_sheet_title,
+                        matrix_targets,
+                    ) = self._matrix_targets(
+                        matrix_file["id"]
+                    )
+
         except CurriculumFeedbackError as exc:
+
             return {
                 "code": str(
                     course.code
                 ),
+
                 "name": course.name,
+
                 "area": course.area,
 
                 "success": False,
+
                 "ready_for_analysis": False,
+
                 "ready_for_write": False,
 
                 "warnings": [],
-                "error": str(exc),
+
+                "error": str(
+                    exc
+                ),
+
+                "locations": {},
+
                 "files": {},
             }
 
+        except Exception as exc:
+
+            return {
+                "code": str(
+                    course.code
+                ),
+
+                "name": course.name,
+
+                "area": course.area,
+
+                "success": False,
+
+                "ready_for_analysis": False,
+
+                "ready_for_write": False,
+
+                "warnings": [],
+
+                "error": (
+                    "Error inesperado durante la comprobación: "
+                    f"{exc}"
+                ),
+
+                "locations": {},
+
+                "files": {},
+            }
+
+        # ========================================================
+        # 5. ADVERTENCIAS
+        # ========================================================
+
         warnings: List[str] = []
 
+        # 1..4 son opcionales.
         for spec in PLANNING_FILES[:4]:
 
             if not files.get(
                 spec.key
             ):
+
                 warnings.append(
                     f"No se encontró {spec.name}. "
-                    "El análisis continuará, pero el "
-                    "contexto puede variar."
+                    "El análisis podrá continuar, "
+                    "pero dispondrá de menos contexto."
                 )
 
-        if not files.get(
+        # ========================================================
+        # 6. 5_Diseño_Curricular
+        # ========================================================
+
+        main_file = files.get(
             MAIN_INPUT_KEY
-        ):
+        )
+
+        main_file_valid = False
+
+        if not main_file:
+
             warnings.append(
                 "No se encontró 5_Diseño_Curricular. "
-                "No es posible generar retroalimentación."
+                "El curso no puede analizarse."
             )
 
-        if not files.get(
-            OUTPUT_KEY
-        ):
+        else:
+
+            main_mime = main_file.get(
+                "mimeType",
+                "",
+            )
+
+            main_file_valid = (
+                main_mime
+                in {
+                    GOOGLE_SHEET_MIME,
+                    XLSX_MIME,
+                    "application/vnd.ms-excel",
+                }
+            )
+
+            if not main_file_valid:
+
+                warnings.append(
+                    "5_Diseño_Curricular existe, "
+                    "pero no es un Google Sheets o "
+                    "archivo Excel compatible."
+                )
+
+        # ========================================================
+        # 7. MATRIZ
+        # ========================================================
+
+        if not revision_folder:
+
+            warnings.append(
+                "No se encontró la carpeta "
+                "0_Revision_de_Material."
+            )
+
+        elif not matrix_file:
+
             warnings.append(
                 "No se encontró "
-                "6_Diseño_Curricular_Retroalimentacion. "
-                "Se puede generar el análisis, pero no "
-                "guardar la retroalimentación."
+                "02_Matriz observaciones estructura."
             )
+
+        elif not matrix_targets:
+
+            warnings.append(
+                "02_Matriz observaciones estructura "
+                "no contiene secciones reconocibles."
+            )
+
+        matrix_valid = bool(
+            matrix_file
+            and matrix_targets
+        )
+
+        # ========================================================
+        # 8. ESTADO
+        # ========================================================
+
+        ready_for_analysis = bool(
+            main_file_valid
+            and matrix_valid
+        )
+
+        ready_for_write = (
+            ready_for_analysis
+        )
+
+        # ========================================================
+        # 9. LOCATIONS
+        # ========================================================
+
+        locations_response = {
+            key: {
+                "id": value.get(
+                    "id"
+                ),
+
+                "name": value.get(
+                    "name"
+                ),
+
+                "webViewLink": value.get(
+                    "webViewLink"
+                ),
+            }
+
+            for key, value
+            in locations.items()
+        }
+
+        locations_response[
+            "revision"
+        ] = (
+            {
+                "id": revision_folder.get(
+                    "id"
+                ),
+
+                "name": revision_folder.get(
+                    "name"
+                ),
+
+                "webViewLink": revision_folder.get(
+                    "webViewLink"
+                ),
+            }
+
+            if revision_folder
+            else None
+        )
+
+        # ========================================================
+        # 10. ARCHIVOS 1..5
+        # ========================================================
+
+        files_response = {
+            spec.key: {
+                "expected_name": spec.name,
+
+                "found": bool(
+                    files.get(
+                        spec.key
+                    )
+                ),
+
+                "optional": (
+                    spec.key
+                    in OPTIONAL_CONTEXT_KEYS
+                ),
+
+                "id": (
+                    files[
+                        spec.key
+                    ].get(
+                        "id"
+                    )
+                    if files.get(
+                        spec.key
+                    )
+                    else None
+                ),
+
+                "name": (
+                    files[
+                        spec.key
+                    ].get(
+                        "name"
+                    )
+                    if files.get(
+                        spec.key
+                    )
+                    else None
+                ),
+
+                "mimeType": (
+                    files[
+                        spec.key
+                    ].get(
+                        "mimeType"
+                    )
+                    if files.get(
+                        spec.key
+                    )
+                    else None
+                ),
+
+                "webViewLink": (
+                    files[
+                        spec.key
+                    ].get(
+                        "webViewLink"
+                    )
+                    if files.get(
+                        spec.key
+                    )
+                    else None
+                ),
+            }
+
+            for spec
+            in PLANNING_FILES
+        }
+
+        # ========================================================
+        # 11. MATRIZ
+        # ========================================================
+
+        files_response[
+            "matrix"
+        ] = {
+            "expected_name": (
+                MATRIX_FILE_NAME
+            ),
+
+            "found": bool(
+                matrix_file
+            ),
+
+            "optional": False,
+
+            "id": (
+                matrix_file.get(
+                    "id"
+                )
+                if matrix_file
+                else None
+            ),
+
+            "name": (
+                matrix_file.get(
+                    "name"
+                )
+                if matrix_file
+                else None
+            ),
+
+            "mimeType": (
+                matrix_file.get(
+                    "mimeType"
+                )
+                if matrix_file
+                else None
+            ),
+
+            "webViewLink": (
+                matrix_file.get(
+                    "webViewLink"
+                )
+                if matrix_file
+                else None
+            ),
+
+            "sheet": (
+                matrix_sheet_title
+            ),
+
+            "targets": len(
+                matrix_targets
+            ),
+
+            "sections": (
+                matrix_targets
+            ),
+        }
+
+        # ========================================================
+        # 12. RESULTADO
+        # ========================================================
 
         return {
             "code": str(
@@ -1696,102 +2854,27 @@ class CurriculumFeedbackService:
 
             "success": True,
 
-            "ready_for_analysis": bool(
-                files.get(
-                    MAIN_INPUT_KEY
-                )
+            "ready_for_analysis": (
+                ready_for_analysis
             ),
 
-            "ready_for_write": bool(
-                files.get(
-                    MAIN_INPUT_KEY
-                )
-                and files.get(
-                    OUTPUT_KEY
-                )
+            "ready_for_write": (
+                ready_for_write
             ),
 
             "warnings": warnings,
 
-            "locations": {
-                key: {
-                    "id": value.get(
-                        "id"
-                    ),
-                    "name": value.get(
-                        "name"
-                    ),
-                    "webViewLink": value.get(
-                        "webViewLink"
-                    ),
-                }
-                for key, value
-                in locations.items()
-            },
+            "error": None,
 
-            "files": {
-                spec.key: {
-                    "expected_name": spec.name,
+            "locations": (
+                locations_response
+            ),
 
-                    "found": bool(
-                        files.get(
-                            spec.key
-                        )
-                    ),
-
-                    "id": (
-                        files[
-                            spec.key
-                        ].get(
-                            "id"
-                        )
-                        if files.get(
-                            spec.key
-                        )
-                        else None
-                    ),
-
-                    "name": (
-                        files[
-                            spec.key
-                        ].get(
-                            "name"
-                        )
-                        if files.get(
-                            spec.key
-                        )
-                        else None
-                    ),
-
-                    "mimeType": (
-                        files[
-                            spec.key
-                        ].get(
-                            "mimeType"
-                        )
-                        if files.get(
-                            spec.key
-                        )
-                        else None
-                    ),
-
-                    "webViewLink": (
-                        files[
-                            spec.key
-                        ].get(
-                            "webViewLink"
-                        )
-                        if files.get(
-                            spec.key
-                        )
-                        else None
-                    ),
-                }
-
-                for spec
-                in PLANNING_FILES
-            },
+            "files": (
+                files_response
+            ),
         }
+
 
     def preview(
         self,
@@ -1801,6 +2884,9 @@ class CurriculumFeedbackService:
         semester: str,
         year: int,
     ) -> Dict[str, Any]:
+        """
+        Comprobar varios cursos sin llamar a IA.
+        """
 
         items = [
             self.preview_course(
@@ -1808,7 +2894,8 @@ class CurriculumFeedbackService:
                 semester,
                 year,
             )
-            for course in courses
+            for course
+            in courses
         ]
 
         return {
@@ -1844,6 +2931,14 @@ class CurriculumFeedbackService:
                     )
                 ),
 
+                "with_warnings": sum(
+                    1
+                    for item in items
+                    if item.get(
+                        "warnings"
+                    )
+                ),
+
                 "with_errors": sum(
                     1
                     for item in items
@@ -1851,11 +2946,19 @@ class CurriculumFeedbackService:
                         "success"
                     )
                 ),
+
+                "blocked": sum(
+                    1
+                    for item in items
+                    if not item.get(
+                        "ready_for_analysis"
+                    )
+                ),
             },
 
             "courses": items,
         }
-
+        
     # ========================================================
     # PDF -> TEXTO
     # ========================================================
@@ -2246,13 +3349,28 @@ class CurriculumFeedbackService:
 
             try:
 
-                (
-                    text,
-                    extraction_method,
-                    extraction_warnings,
-                ) = self._extract_source_text(
-                    file
-                )
+                workbook_info = None
+
+                if spec.key == MAIN_INPUT_KEY:
+
+                    (
+                        text,
+                        extraction_method,
+                        extraction_warnings,
+                        workbook_info,
+                    ) = self._extract_curriculum_source(
+                        file
+                    )
+
+                else:
+
+                    (
+                        text,
+                        extraction_method,
+                        extraction_warnings,
+                    ) = self._extract_source_text(
+                        file
+                    )
 
             except Exception as exc:
 
@@ -2299,26 +3417,296 @@ class CurriculumFeedbackService:
                 spec.key
             ] = {
                 "name": (
-                    file.get(
-                        "name"
-                    )
+                    file.get("name")
                     or spec.name
                 ),
 
                 "text": text,
 
-                "chars": len(
-                    text
-                ),
+                "chars": len(text),
 
                 "extraction_method": (
                     extraction_method
+                ),
+
+                "workbook": (
+                    workbook_info
+                    if spec.key == MAIN_INPUT_KEY
+                    else None
                 ),
             }
 
         return (
             documents,
             warnings,
+        )
+
+
+    def _find_revision_folder(
+        self,
+        course_folder_id: str,
+    ) -> Optional[Dict[str, Any]]:
+
+        folders = (
+            drive_service.list_folders(
+                course_folder_id
+            )
+        )
+
+        expected_names = {
+            self.normalize(
+                "0_Revision_de_Material"
+            ),
+            self.normalize(
+                "Revision_de_Material"
+            ),
+        }
+
+        matches = [
+            folder
+            for folder in folders
+            if self.normalize(
+                folder.get(
+                    "name"
+                )
+            )
+            in expected_names
+        ]
+
+        if len(matches) > 1:
+
+            raise CurriculumFeedbackError(
+                "Se encontraron varias carpetas "
+                "0_Revision_de_Material"
+            )
+
+        return (
+            matches[0]
+            if matches
+            else None
+        )
+
+
+    def _find_matrix_file(
+        self,
+        revision_folder_id: str,
+    ) -> Optional[Dict[str, Any]]:
+
+        files = (
+            drive_service.list_files(
+                revision_folder_id
+            )
+        )
+
+        expected_names = {
+            self.normalize(
+                "02_Matriz observaciones estructura"
+            ),
+            self.normalize(
+                "Matriz observaciones estructura"
+            ),
+        }
+
+        matches = [
+            file
+            for file in files
+            if self.normalize(
+                file.get(
+                    "name"
+                )
+            )
+            in expected_names
+        ]
+
+        if len(matches) > 1:
+
+            raise CurriculumFeedbackError(
+                "Se encontraron varias matrices llamadas "
+                "02_Matriz observaciones estructura"
+            )
+
+        if not matches:
+            return None
+
+        matrix = matches[0]
+
+        if (
+            matrix.get(
+                "mimeType"
+            )
+            != GOOGLE_SHEET_MIME
+        ):
+
+            raise CurriculumFeedbackError(
+                "02_Matriz observaciones estructura "
+                "debe ser un Google Sheets nativo"
+            )
+
+        return matrix
+
+    def _is_matrix_target(
+        self,
+        label: str,
+    ) -> bool:
+
+        normalized = self.normalize(
+            label
+        )
+
+        fixed = {
+            self.normalize(
+                "Análisis Internacional y Local"
+            ),
+            self.normalize(
+                "Competencias"
+            ),
+            self.normalize(
+                "Diseño curricular"
+            ),
+            self.normalize(
+                "Semana Diagnostico"
+            ),
+            self.normalize(
+                "Semana de Diagnóstico"
+            ),
+        }
+
+        if normalized in fixed:
+            return True
+
+        if re.fullmatch(
+            r"semana\s+\d+",
+            normalized,
+        ):
+            return True
+
+        if re.fullmatch(
+            r"proyecto\s+\d+",
+            normalized,
+        ):
+            return True
+
+        if re.fullmatch(
+            r"practica\s+\d+",
+            normalized,
+        ):
+            return True
+
+        if normalized.startswith(
+            "tarea "
+        ):
+            return True
+
+        return False
+
+    def _matrix_target_id(
+        self,
+        label: str,
+    ) -> str:
+
+        normalized = self.normalize(
+            label
+        )
+
+        normalized = normalized.replace(
+            ".",
+            ""
+        )
+
+        target_id = re.sub(
+            r"[^a-z0-9]+",
+            "_",
+            normalized,
+        ).strip("_")
+
+        return target_id
+
+    def _matrix_targets(
+        self,
+        spreadsheet_id: str,
+    ) -> Tuple[
+        str,
+        List[Dict[str, Any]],
+    ]:
+
+        sheet_title = (
+            google_sheets_service
+            .get_first_sheet_title(
+                spreadsheet_id
+            )
+        )
+
+        values = (
+            google_sheets_service
+            .get_column_values(
+                spreadsheet_id,
+                sheet_title,
+                "A",
+            )
+        )
+
+        targets: List[
+            Dict[str, Any]
+        ] = []
+
+        target_ids = set()
+
+        for row_number, row in enumerate(
+            values,
+            start=1,
+        ):
+
+            if not row:
+                continue
+
+            label = str(
+                row[0]
+                or ""
+            ).strip()
+
+            if not label:
+                continue
+
+            if not self._is_matrix_target(
+                label
+            ):
+                continue
+
+            target_id = (
+                self._matrix_target_id(
+                    label
+                )
+            )
+
+            if target_id in target_ids:
+
+                raise CurriculumFeedbackError(
+                    "La matriz contiene una sección "
+                    f"duplicada: {label}"
+                )
+
+            target_ids.add(
+                target_id
+            )
+
+            targets.append(
+                {
+                    "id": target_id,
+                    "label": label,
+                    "row": row_number,
+                }
+            )
+
+        if not targets:
+
+            raise CurriculumFeedbackError(
+                "No se encontraron secciones "
+                "utilizables en la matriz"
+            )
+
+        return (
+            sheet_title,
+            targets,
         )
 
     # ========================================================
@@ -2446,671 +3834,637 @@ class CurriculumFeedbackService:
             True,
         )
 
+    def _matrix_response_schema(
+        self,
+        targets: List[
+            Dict[str, Any]
+        ],
+    ) -> Dict[str, Any]:
+
+        properties = {
+            target["id"]: {
+                "type": "STRING",
+            }
+            for target
+            in targets
+        }
+
+        required = [
+            target["id"]
+            for target
+            in targets
+        ]
+
+        return {
+            "type": "OBJECT",
+
+            "properties": {
+                "observaciones": {
+                    "type": "OBJECT",
+                    "properties": properties,
+                    "required": required,
+                },
+
+                "resumen_general": {
+                    "type": "STRING",
+                },
+
+                "advertencias": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "STRING",
+                    },
+                },
+            },
+
+            "required": [
+                "observaciones",
+                "resumen_general",
+                "advertencias",
+            ],
+        }
+
     # ========================================================
     # PROMPT
     # ========================================================
-
-    @staticmethod
-    def _feedback_schema_example(
-    ) -> str:
-
-        fields = ",\n".join(
-            (
-                f'    "{key}": '
-                '"retroalimentación concreta"'
-            )
-            for key
-            in FEEDBACK_KEYS
-        )
-
-        return (
-            "{\n"
-            '  "retroalimentacion": {\n'
-            f"{fields}\n"
-            "  },\n"
-            '  "resumen_general": "síntesis breve",\n'
-            '  "advertencias": []\n'
-            "}"
-        )
 
     def _build_prompt(
         self,
         course: CourseCatalog,
         context_text: str,
         warnings: List[str],
+        matrix_targets: List[
+            Dict[str, Any]
+        ],
     ) -> Tuple[
         str,
         str,
     ]:
 
         system_message = """
-Eres un especialista en diseño curricular universitario encargado de
-revisar una planificación académica y generar retroalimentación técnica,
-concreta y útil para su mejora.
+    Eres un especialista en diseño curricular universitario.
 
-FUENTE PRINCIPAL
+    Tu tarea es revisar el Diseño Curricular de un curso y generar
+    observaciones de revisión para una matriz institucional.
 
-La evaluación debe realizarse principalmente sobre:
+    FUENTES
 
-5_Diseño_Curricular
+    La fuente principal es:
 
-Los documentos:
+    5_Diseño_Curricular
 
-1_Fortalezas_Debilidades_y_Recomendaciones
-2_Analisis_de_Contexto
-3_Criterios y Expectativas
-4_Analisis_Internacional
+    Los archivos:
 
-son únicamente documentos de contexto.
+    1_Fortalezas_Debilidades_y_Recomendaciones
+    2_Analisis_de_Contexto
+    3_Criterios y Expectativas
+    4_Analisis_Internacional
 
-REGLAS FUNDAMENTALES
+    son únicamente fuentes contextuales.
 
-1. 5_Diseño_Curricular es siempre la fuente principal de la evaluación.
+    5_Diseño_Curricular prevalece siempre sobre los demás documentos.
 
-2. Los documentos 1, 2, 3 y 4 pueden utilizarse para comprender el
-   contexto, contrastar información y enriquecer la revisión, pero nunca
-   deben sustituir, modificar ni prevalecer sobre lo establecido en
-   5_Diseño_Curricular.
+    OBJETIVO DE LA REVISIÓN
 
-3. No inventes:
-   - requisitos;
-   - criterios;
-   - ponderaciones;
-   - competencias;
-   - actividades;
-   - contenidos;
-   - tiempos;
-   - proyectos;
-   - prácticas;
-   - tareas;
-   - errores;
-   - recomendaciones institucionales.
+    Analiza si cada apartado del diseño curricular es coherente,
+    suficiente y consistente con el resto de la planificación.
 
-4. Toda observación debe estar sustentada por información presente en
-   los documentos proporcionados.
+    Las observaciones deben indicar qué se encuentra correctamente
+    estructurado y qué requiere corrección cuando corresponda.
 
-5. Si los documentos no proporcionan suficiente evidencia para afirmar
-   algo, no lo afirmes.
+    NO estás realizando un análisis FODA.
 
-6. La retroalimentación debe evaluar, no resumir. Evita volver a contar
-   el contenido del documento salvo cuando sea necesario para explicar
-   claramente una inconsistencia o una fortaleza.
+    REGLAS
 
-7. Prioriza:
-   - errores;
-   - contradicciones;
-   - omisiones;
-   - inconsistencias;
-   - problemas de coherencia;
-   - referencias rotas;
-   - problemas de ponderación;
-   - problemas de tiempo;
-   - oportunidades concretas de mejora.
+    1. No inventes requisitos, errores, ponderaciones, tiempos,
+    actividades, competencias ni criterios.
 
-8. Cuando un apartado esté correcto y no exista una observación negativa
-   relevante, indica brevemente la fortaleza concreta. No inventes una
-   recomendación únicamente para llenar la respuesta.
+    2. Toda observación debe estar sustentada por la información
+    proporcionada.
 
-9. Las respuestas deben ser breves, específicas, académicas y
-   accionables.
+    3. Evalúa el contenido; no hagas únicamente un resumen.
 
-10. Responde únicamente con JSON válido y respeta exactamente la
-    estructura solicitada.
-""".strip()
+    4. La salida debe ser una OBSERVACIÓN DE REVISIÓN.
+
+    5. NO utilices etiquetas o encabezados como:
+    "Fortaleza:",
+    "Debilidad:",
+    "Aspecto positivo:",
+    "Aspecto negativo:",
+    "Correcto:",
+    "Incorrecto:".
+
+    6. Tampoco describas los apartados como "fortalezas" o
+    "debilidades" dentro de la oración.
+
+    7. Si un apartado está correctamente elaborado, indica directamente
+    qué aspecto mantiene coherencia o cumple con la estructura
+    esperada, sin llamarlo fortaleza.
+
+    8. Si existe un problema, indica directamente:
+    - qué se detectó;
+    - dónde se encuentra, cuando pueda determinarse;
+    - qué efecto tiene sobre la planificación;
+    - qué debe corregirse, cuando la evidencia permita determinarlo.
+
+    9. Señala contradicciones, ausencias, errores de referencia,
+    problemas de ponderación, problemas de tiempo y problemas de
+    coherencia únicamente cuando realmente existan.
+
+    10. No inventes recomendaciones o problemas solamente para llenar
+        una celda.
+
+    11. Si no se detectan problemas relevantes, redacta una observación
+        breve indicando la consistencia encontrada.
+
+    12. Las observaciones serán escritas directamente en la columna
+        "Observaciones Generales por la IA".
+
+    13. No escribas información destinada a las columnas:
+        Aplica, Autor, Presente u Observaciones Tutor COCOCYS.
+
+    14. Las hojas S.2 a S.11 representan SEMANAS, nunca sesiones.
+
+    15. Distingue entre la ESTRUCTURA VACÍA de una plantilla y
+    contenido realmente ingresado por el autor.
+
+    La presencia de títulos, etiquetas, nombres de campos,
+    opciones como "Obligatorio" u "Optativa", o encabezados
+    numerados no demuestra que una actividad exista.
+
+    Si un proyecto, práctica o tarea tiene únicamente la
+    estructura de plantilla y carece de datos sustantivos,
+    devuelve "" para esa posición.
+
+    16. Responde únicamente JSON válido.
+
+    EJEMPLOS DE ESTILO
+
+    INCORRECTO:
+    "Fortaleza: Las competencias están claramente definidas."
+
+    CORRECTO:
+    "Las competencias están formuladas con verbos observables y mantienen
+    coherencia con los resultados esperados del curso."
+
+    INCORRECTO:
+    "Fortaleza: La Semana 3 presenta una buena distribución."
+
+    CORRECTO:
+    "La distribución de contenidos, actividades y tiempos mantiene
+    coherencia con la planificación establecida."
+
+    INCORRECTO:
+    "Debilidad: Existe un error #REF!."
+
+    CORRECTO:
+    "Se detecta un error de referencia (#REF!) en la celda indicada, por
+    lo que debe corregirse para evitar inconsistencias en la planificación."
+    """.strip()
 
         warning_text = (
             "\n".join(
                 f"- {warning}"
-                for warning
-                in warnings
+                for warning in warnings
             )
             or "- Ninguna"
         )
 
+        target_text = "\n".join(
+            (
+                f'- {target["id"]}: '
+                f'{target["label"]}'
+            )
+            for target
+            in matrix_targets
+        )
+
+        example_fields = ",\n".join(
+            (
+                f'    "{target["id"]}": '
+                '"observación correspondiente"'
+            )
+            for target
+            in matrix_targets
+        )
+
         user_message = f"""
-CURSO
-Código: {course.code}
-Nombre: {course.name}
+    CURSO
 
-ADVERTENCIAS SOBRE LAS FUENTES
-
-{warning_text}
-
+    Código: {course.code}
+    Nombre: {course.name}
 
-============================================================
-OBJETIVO
-============================================================
 
-Analiza integralmente el Diseño Curricular del curso y genera
-retroalimentación independiente para los siguientes 15 apartados:
+    ADVERTENCIAS DE CONTEXTO
 
-- Competencias
-- Semana de Diagnóstico
-- S2
-- S3
-- S4
-- S5
-- S6
-- S7
-- S8
-- S9
-- S10
-- S11
-- Proyectos
-- Prácticas
-- Tareas
+    {warning_text}
 
-NO existe una salida independiente llamada "Diseño".
 
-La hoja "Diseño" del documento principal sí debe analizarse y utilizarse
-para comprobar la coherencia general, pero cualquier problema encontrado
-allí debe reflejarse en el apartado directamente relacionado.
+    ============================================================
+    OBJETIVO
+    ============================================================
 
+    Genera observaciones de revisión curricular que indiquen, para cada
+    apartado, si la información presentada es coherente, suficiente y
+    consistente con el resto del diseño curricular.
 
-============================================================
-ESTRUCTURA DE 5_Diseño_Curricular
-============================================================
+    Las observaciones deben reflejar lo que está correcto y lo que requiere
+    corrección, pero NO deben clasificarse como fortalezas o debilidades.
+    "Observaciones Generales por la IA" de:
 
-5_Diseño_Curricular proviene de un libro de Google Sheets que fue
-exportado temporalmente a PDF.
+    02_Matriz observaciones estructura
 
-El documento puede contener las siguientes hojas:
+    Debes generar exactamente una salida para cada sección indicada
+    más abajo.
 
-- Resumen
-- Competencias
-- Diseño
-- Semana Diagnostico
-- S.2
-- S.3
-- S.4
-- S.5
-- S.6
-- S.7
-- S.8
-- S.9
-- S.10
-- S.11
-- Proyectos
-- Practicas
-- Tareas
-- Metadata
 
-Debes considerar el documento completo.
+    ============================================================
+    5_Diseño_Curricular
+    ============================================================
 
-NO analices únicamente las primeras páginas.
+    5_Diseño_Curricular fue leído directamente como XLSX.
 
-La exportación a PDF puede hacer que las hojas aparezcan de manera
-consecutiva y que una misma hoja ocupe varias páginas. Utiliza el
-contenido y su contexto para interpretar correctamente cada sección.
+    Por tanto, dentro del contenido encontrarás las hojas identificadas
+    explícitamente mediante encabezados como:
 
+    HOJA: Competencias
+    HOJA: Diseño
+    HOJA: Semana Diagnostico
+    HOJA: S.2
+    ...
+    HOJA: S.11
+    HOJA: Proyectos
+    HOJA: Practicas
+    HOJA: Tareas
 
-============================================================
-FUNCIÓN DE CADA HOJA
-============================================================
+    Las coordenadas como A1, B4, C7, etc. corresponden a las celdas
+    del libro.
 
-RESUMEN
+    Utiliza esta estructura para evitar mezclar el contenido de una
+    hoja con otra.
 
-Utilízala como referencia general para comprobar, cuando la información
-esté disponible:
 
-- distribución de ponderaciones;
-- actividades;
-- horas;
-- estructura general;
-- totales;
-- coherencia con el detalle de las demás hojas.
+    ============================================================
+    CORRESPONDENCIA
+    ============================================================
 
-No genera una retroalimentación independiente.
+    Análisis Internacional y Local:
+    utiliza principalmente los documentos contextuales, especialmente
+    4_Analisis_Internacional, y contrasta con los demás cuando exista
+    información suficiente.
 
+    Competencias:
+    utiliza la hoja Competencias.
 
-COMPETENCIAS
+    Diseño curricular:
+    utiliza la hoja Diseño.
 
-Evalúa:
+    Semana Diagnostico:
+    utiliza la hoja Semana Diagnostico.
 
-- claridad;
-- formulación;
-- coherencia;
-- relación con contenidos;
-- relación con actividades;
-- relación con proyectos;
-- relación con prácticas, cuando existan;
-- relación con tareas, cuando existan.
+    Semana 2 a Semana 11:
+    utiliza respectivamente S.2 a S.11.
 
-La retroalimentación correspondiente se devuelve en:
+    Las semanas NO son sesiones.
 
-"competencias"
+    No utilices "sesión 2", "sesión 3", etc.
 
+    Proyectos:
+    utiliza la hoja Proyectos.
 
-DISEÑO
+    Prácticas:
+    utiliza la hoja Practicas.
 
-Utilízala para revisar la estructura general y contrastarla con las
-demás hojas.
+    Tareas:
+    utiliza la hoja Tareas.
 
-Puede servir para detectar diferencias entre la planificación general
-y el detalle.
+    ============================================================
+    PROYECTOS
+    ============================================================
 
-NO devuelvas una clave "diseno".
+    La hoja "Proyectos" contiene espacios de plantilla para hasta
+    tres proyectos.
 
-Si encuentras una inconsistencia en esta hoja, colócala en el apartado
-al que realmente corresponda.
+    La correspondencia con la matriz es:
 
+    - "Primer Proyecto", "Proyecto 1", "Proyecto No. 1",
+    "Proyecto No 1" o equivalente
+    -> proyecto_1
 
-SEMANA DIAGNOSTICO
+    - "Segundo Proyecto", "Proyecto 2", "Proyecto No. 2",
+    "Proyecto No 2" o equivalente
+    -> proyecto_2
 
-Evalúa específicamente el diagnóstico inicial, sus actividades,
-propósito, tiempos y relación con los conocimientos previos requeridos.
+    - "Tercer Proyecto", "Proyecto 3", "Proyecto No. 3",
+    "Proyecto No 3" o equivalente
+    -> proyecto_3
 
-La retroalimentación se devuelve en:
+    IMPORTANTE:
 
-"semana_diagnostico"
+    La sola existencia del encabezado de un proyecto NO significa
+    que el proyecto exista.
 
+    La plantilla puede contener encabezados y etiquetas vacías como:
 
-S.2 A S.11
+    - Primer Proyecto
+    - Segundo Proyecto
+    - Tercer Proyecto
+    - Obligatorio
+    - Optativa
+    - Competencia a desarrollar
+    - Titulo
+    - Tecnologías
+    - Descripción
+    - Ponderación
+    - Horas para realizarlo
 
-S.2 corresponde a Semana 2.
-S.3 corresponde a Semana 3.
-S.4 corresponde a Semana 4.
-S.5 corresponde a Semana 5.
-S.6 corresponde a Semana 6.
-S.7 corresponde a Semana 7.
-S.8 corresponde a Semana 8.
-S.9 corresponde a Semana 9.
-S.10 corresponde a Semana 10.
-S.11 corresponde a Semana 11.
+    Estas etiquetas forman parte de la estructura de la plantilla
+    y NO deben considerarse contenido de un proyecto.
 
-IMPORTANTE:
+    "Obligatorio" u "Optativa" por sí solos tampoco significan que
+    el proyecto tenga contenido.
 
-Estas hojas representan SEMANAS de planificación.
+    Un proyecto debe considerarse REAL únicamente cuando su bloque
+    contenga información sustantiva ingresada por el autor, por
+    ejemplo uno o varios de estos elementos con un valor real:
 
-NO representan sesiones.
+    - competencia a desarrollar;
+    - título;
+    - tecnologías, lenguajes o plataformas;
+    - descripción;
+    - ponderación;
+    - horas de realización.
 
-Nunca utilices expresiones como:
+    Si un bloque contiene solamente el nombre del proyecto,
+    "Obligatorio" u "Optativa" y las etiquetas de la plantilla,
+    pero los campos correspondientes están vacíos, entonces ese
+    proyecto está VACÍO.
 
-- "sesión 2";
-- "sesión 3";
-- "sesión 4";
-- "la sesión";
-- "esta sesión".
+    Cuando un proyecto esté vacío, devuelve EXACTAMENTE:
 
-Evalúa cada semana individualmente y también su coherencia con:
+    ""
 
-- las competencias;
-- la planificación general;
-- las semanas anteriores;
-- las semanas posteriores;
-- proyectos;
-- prácticas, cuando existan;
-- tareas, cuando existan.
+    No escribas una observación indicando que está vacío.
+    No expliques que es optativo.
+    No indiques que no tiene requerimientos.
+    No evalúes un espacio de plantilla vacío.
 
+    Ejemplo:
 
-PROYECTOS
+    Si Primer Proyecto y Segundo Proyecto tienen contenido,
+    pero Tercer Proyecto solo contiene:
 
-Debe existir como mínimo UN proyecto definido.
+    "3. Tercer Proyecto"
+    "Optativa"
+    "Competencia a desarrollar"
+    "Titulo"
+    "Descripción de lo que se realizara"
 
-Si no existe ningún proyecto, debes señalarlo como una omisión
-importante en:
+    sin valores reales asociados, entonces:
 
-"proyectos"
+    "proyecto_1": "observación del primer proyecto",
+    "proyecto_2": "observación del segundo proyecto",
+    "proyecto_3": ""
 
-Si existen proyectos, evalúa:
+    Debe existir como mínimo un proyecto real.
 
-- coherencia con las competencias;
-- relación con los contenidos;
-- relación con las semanas;
-- ponderación;
-- alcance;
-- consistencia entre el resumen y el detalle;
-- posibles contradicciones.
+    Si no existe ningún proyecto real, únicamente proyecto_1 puede
+    indicar la ausencia del proyecto obligatorio y los demás deben
+    devolver "".
 
+    ============================================================
+    PRACTICAS
+    ============================================================
 
-PRACTICAS
+    La hoja "Practicas" puede identificar las prácticas mediante
+    ordinales escritos con palabras.
 
-Las prácticas son OPCIONALES.
+    La correspondencia es:
 
-Un curso puede tener:
+    - "Primera Practica", "Primera Práctica", "Practica 1",
+    "Práctica 1" -> practica_1
 
-- ninguna práctica;
-- una práctica;
-- varias prácticas.
+    - "Segunda Practica", "Segunda Práctica", "Practica 2",
+    "Práctica 2" -> practica_2
 
-Si no existe ninguna práctica real que evaluar:
+    - "Tercera Practica", "Tercera Práctica", "Practica 3",
+    "Práctica 3" -> practica_3
 
-"practicas": ""
+    - "Cuarta Practica", "Cuarta Práctica", "Practica 4",
+    "Práctica 4" -> practica_4
 
-La ausencia de prácticas NO debe:
+    - "Quinta Practica", "Quinta Práctica", "Practica 5",
+    "Práctica 5" -> practica_5
 
-- tratarse como error;
-- generar advertencia;
-- generar recomendación;
-- provocar que sugieras crear una práctica.
+    - "Sexta Practica", "Sexta Práctica", "Practica 6",
+    "Práctica 6" -> practica_6
 
-Si sí existen prácticas, evalúa normalmente su coherencia, ponderación,
-alcance y relación con las competencias y contenidos.
+    - "Séptima Practica", "Séptima Práctica", "Practica 7",
+    "Práctica 7" -> practica_7
 
+    Las prácticas son opcionales.
 
-TAREAS
+    Evalúa únicamente las prácticas que realmente existan.
 
-Las tareas son OPCIONALES.
+    No determines que una práctica está ausente solamente porque
+    la hoja no diga literalmente "Practica 1".
 
-Un curso puede tener:
+    Si una posición de la matriz no corresponde a una práctica
+    real, devuelve "".
 
-- ninguna tarea;
-- una tarea;
-- varias tareas.
+    No recomiendes agregar prácticas solamente porque existan
+    espacios vacíos en la matriz.
 
-Si no existe ninguna tarea real que evaluar:
 
-"tareas": ""
+    ============================================================
+    TAREAS
+    ============================================================
 
-La ausencia de tareas NO debe:
+    La hoja "Tareas" utiliza nombres propios para identificar las
+    actividades.
 
-- tratarse como error;
-- generar advertencia;
-- generar recomendación;
-- provocar que sugieras crear tareas.
+    La correspondencia principal es:
 
-Si sí existen tareas, evalúa normalmente su coherencia, ponderación,
-alcance y relación con las competencias y contenidos.
+    - "Tarea de fortalecimiento académico"
+    -> tarea_fortalecimiento
 
+    También acepta variantes mínimas de acentuación o mayúsculas,
+    pero NO debes confundirla con una tarea numerada.
 
-METADATA
+    Las tareas numeradas pueden aparecer con ordinales escritos
+    con palabras:
 
-Utilízala únicamente como información auxiliar para interpretar,
-identificar o validar el documento.
+    - "Primera Tarea", "Tarea 1"
+    -> tarea_1
 
-No genera una retroalimentación independiente.
+    - "Segunda Tarea", "Tarea 2"
+    -> tarea_2
 
+    - "Tercera Tarea", "Tarea 3"
+    -> tarea_3
 
-============================================================
-REVISIÓN OBLIGATORIA DE CONSISTENCIA
-============================================================
+    - "Cuarta Tarea", "Tarea 4"
+    -> tarea_4
 
-Antes de redactar las respuestas finales, compara entre sí las
-diferentes partes de 5_Diseño_Curricular.
+    - "Quinta Tarea", "Tarea 5"
+    -> tarea_5, únicamente si dicha posición existe en la matriz
 
-Comprueba especialmente:
+    - "Sexta Tarea", "Tarea 6"
+    -> tarea_6
 
-1. PONDERACIONES
+    - "Séptima Tarea", "Tarea 7"
+    -> tarea_7
 
-- Compara los valores generales contra el detalle.
-- Verifica sumatorias cuando existan datos suficientes.
-- No declares que una ponderación es correcta sin contrastarla
-  con la información relacionada.
+    IMPORTANTE:
 
-Ejemplo:
+    "Tarea de fortalecimiento académico" es una actividad diferente
+    de "Primera Tarea".
 
-Si Resumen indica 10 puntos para Tareas pero el detalle de Tareas suma
-14 puntos, debes señalar la inconsistencia en "tareas".
+    No las combines.
 
+    Las tareas son opcionales.
 
-2. TIEMPOS
+    Evalúa únicamente aquellas que realmente existan.
 
-Compara:
+    Para cualquier posición de matriz sin tarea correspondiente,
+    devuelve "".
 
-- tiempo declarado;
-- tiempo asignado;
-- duración de actividades;
-- duración de recursos;
-- totales de cada semana;
 
-cuando esos valores estén disponibles.
+    ============================================================
+    SEMANAS
+    ============================================================
 
-Si existen valores contradictorios, señálalos.
+    La correspondencia es EXACTA:
 
+    - hoja "Semana Diagnostico"
+    -> semana_diagnostico
 
-3. REFERENCIAS Y ERRORES DE HOJA DE CÁLCULO
+    - hoja "S.2"
+    -> semana_2
 
-Detecta, cuando aparezcan:
+    - hoja "S.3"
+    -> semana_3
 
-- #REF!
-- #VALUE!
-- #N/A
-- #DIV/0!
-- #NAME?
-- u otros errores visibles.
+    - hoja "S.4"
+    -> semana_4
 
-Indica el problema en el apartado correspondiente.
+    - hoja "S.5"
+    -> semana_5
 
+    - hoja "S.6"
+    -> semana_6
 
-4. ACTIVIDADES
+    - hoja "S.7"
+    -> semana_7
 
-Comprueba, cuando sea posible:
+    - hoja "S.8"
+    -> semana_8
 
-- actividades mencionadas en semanas contra las actividades
-  realmente definidas;
-- entregas mencionadas contra proyectos, prácticas o tareas;
-- actividades sin definición;
-- actividades duplicadas;
-- diferencias de ponderación.
+    - hoja "S.9"
+    -> semana_9
 
+    - hoja "S.10"
+    -> semana_10
 
-5. COMPETENCIAS
+    - hoja "S.11"
+    -> semana_11
 
-Comprueba si existe relación entre las competencias y:
+    Las hojas S.2 a S.11 son SEMANAS, no sesiones.
 
-- contenidos;
-- semanas;
-- actividades;
-- proyectos;
-- prácticas, cuando existan;
-- tareas, cuando existan.
+    Debes revisar todos los valores recibidos dentro de la hoja,
+    incluidos aquellos provenientes de fórmulas calculadas.
 
-No exijas que una competencia aparezca literalmente repetida en cada
-hoja; evalúa la coherencia académica real.
+    No declares que una semana está vacía si dentro del bloque
+    HOJA correspondiente existe al menos una celda de contenido
+    además de títulos o encabezados.
 
+    Si la hoja posee contenido, evalúalo.
 
-6. SECUENCIA
+    No repitas el nombre o número de la semana al comienzo de
+    la observación.
 
-Comprueba la continuidad entre S2 y S11:
 
-- progresión de contenidos;
-- duplicaciones injustificadas;
-- saltos evidentes;
-- dependencias;
-- relación entre actividades y contenidos.
+    ============================================================
+    CONSISTENCIA GLOBAL
+    ============================================================
 
+    Antes de responder compara:
 
-7. CAMPOS VACÍOS
+    - competencias contra actividades;
+    - diseño contra semanas;
+    - ponderaciones generales contra el detalle;
+    - tiempos declarados contra tiempos asignados;
+    - proyectos contra competencias;
+    - prácticas contra competencias, cuando existan;
+    - tareas contra competencias, cuando existan;
+    - actividades mencionadas en semanas contra proyectos,
+    prácticas o tareas;
+    - secuencia de S.2 a S.11.
 
-No todos los campos vacíos representan errores.
+    Detecta también:
 
-En particular:
+    - #REF!
+    - #VALUE!
+    - #N/A
+    - #DIV/0!
+    - referencias rotas;
+    - campos obligatorios incompletos;
+    - sumatorias contradictorias;
+    - duplicaciones;
+    - actividades inexistentes mencionadas en otra hoja.
+    
+    RESUMEN GENERAL
 
-- Prácticas puede estar vacío.
-- Tareas puede estar vacío.
+    El resumen debe sintetizar el estado general del diseño curricular.
 
-No señales un campo vacío como problema a menos que, según la estructura
-y evidencia del propio documento, ese dato realmente sea requerido.
+    NO utilices expresiones como:
+    - "fortalezas";
+    - "debilidades";
+    - "fortalezas significativas";
+    - "aspectos positivos";
+    - "aspectos negativos".
 
-Proyectos es diferente: debe existir al menos uno.
+    En su lugar, describe:
+    - nivel general de coherencia;
+    - principales inconsistencias encontradas;
+    - aspectos que requieren corrección;
+    - elementos que se encuentran correctamente estructurados.
 
 
-============================================================
-REGLAS DE REDACCIÓN
-============================================================
+    ============================================================
+    SECCIONES DE LA MATRIZ
+    ============================================================
 
-Cada respuesta será escrita en una celda de Google Sheets cuya columna
-A ya identifica el apartado.
+    Debes devolver exactamente estas claves:
 
-Por esa razón, NO debes repetir innecesariamente la etiqueta.
+    {target_text}
 
-PARA S2 A S11:
+    No agregues otras claves.
 
-No comiences con:
+    Para cualquier sección opcional sin contenido real utiliza "".
 
-- "La Semana 2..."
-- "La semana 3..."
-- "En la Semana 4..."
-- "S5 presenta..."
-- "S6 contiene..."
-- "La sesión 7..."
-- "La Sesión 8..."
 
-Empieza directamente con la observación.
+    ============================================================
+    DOCUMENTOS
+    ============================================================
 
-INCORRECTO:
+    {context_text}
 
-"La sesión 8 presenta una inconsistencia en el recurso de video."
 
-CORRECTO:
+    ============================================================
+    FORMATO JSON
+    ============================================================
 
-"El recurso de video presenta una inconsistencia de duración: se
-asignan 10 minutos frente al valor indicado como máximo en la
-planificación."
+    Responde únicamente:
 
-INCORRECTO:
-
-"La Semana 5 contiene errores #REF!."
-
-CORRECTO:
-
-"Se detectan errores de referencia (#REF!) en las celdas de contenido;
-deben corregirse para mantener la integridad de la planificación."
-
-
-EVITA REDACCIONES GENÉRICAS
-
-Evita frases como:
-
-- "está bien estructurado";
-- "es adecuado";
-- "cumple correctamente";
-- "presenta una estructura sólida";
-- "se encuentra bien diseñado";
-
-si no explicas concretamente por qué.
-
-Prefiere observaciones sustentadas y específicas.
-
-
-NO INVENTES CRITERIOS
-
-No utilices expresiones como:
-
-- "máximo institucional";
-- "estándar institucional";
-- "ponderación requerida";
-- "tiempo permitido";
-- "criterio obligatorio";
-
-a menos que esa regla aparezca explícitamente en los documentos
-proporcionados.
-
-
-FORTALEZAS
-
-Si no existe ningún problema relevante, puedes indicar una fortaleza
-real y concreta.
-
-Ejemplo:
-
-"Existe coherencia entre la actividad práctica, el contenido trabajado
-y la competencia asociada; no se identifican inconsistencias
-relevantes."
-
-No inventes problemas para producir una recomendación.
-
-
-============================================================
-RESUMEN GENERAL Y ADVERTENCIAS
-============================================================
-
-"resumen_general":
-
-Debe sintetizar los hallazgos globales más importantes.
-
-No debe repetir las 15 respuestas una por una.
-
-Debe mencionar principalmente:
-
-- fortalezas generales relevantes;
-- inconsistencias importantes;
-- problemas que requieren corrección.
-
-
-"advertencias":
-
-Incluye únicamente hallazgos que merezcan atención especial.
-
-No conviertas todas las observaciones menores en advertencias.
-
-Si no existen advertencias relevantes:
-
-"advertencias": []
-
-
-Cuando debas identificar semanas dentro del resumen o las advertencias,
-utiliza:
-
-- S2, S3, S4, ..., S11
-
-o:
-
-- Semana 2, Semana 3, ..., Semana 11
-
-Nunca utilices:
-
-- Sesión 2
-- Sesión 3
-- Sesión 4
-- etc.
-
-
-============================================================
-SALIDAS OBLIGATORIAS
-============================================================
-
-Debes devolver exactamente estas claves dentro de
-"retroalimentacion":
-
-- competencias
-- semana_diagnostico
-- s2
-- s3
-- s4
-- s5
-- s6
-- s7
-- s8
-- s9
-- s10
-- s11
-- proyectos
-- practicas
-- tareas
-
-No agregues otras claves.
-
-No agregues:
-
-- diseno
-- resumen
-- metadata
-
-dentro de "retroalimentacion".
-
-
-============================================================
-DOCUMENTOS
-============================================================
-
-{context_text}
-
-
-============================================================
-FORMATO JSON OBLIGATORIO
-============================================================
-
-Responde ÚNICAMENTE con un objeto JSON válido.
-
-No escribas explicaciones antes del JSON.
-No escribas explicaciones después del JSON.
-No utilices bloques Markdown.
-
-La estructura debe ser exactamente:
-
-{self._feedback_schema_example()}
-""".strip()
+    {{
+    "observaciones": {{
+    {example_fields}
+    }},
+    "resumen_general": "síntesis global breve",
+    "advertencias": []
+    }}
+    """.strip()
 
         return (
             system_message,
@@ -3406,66 +4760,66 @@ La estructura debe ser exactamente:
     # VALIDAR JSON DE IA
     # ========================================================
 
-    @staticmethod
     def _validate_feedback_payload(
+        self,
         payload: Dict[str, Any],
+        matrix_targets: List[
+            Dict[str, Any]
+        ],
     ) -> Dict[str, Any]:
 
-        feedback = payload.get(
-            "retroalimentacion"
+        observations = payload.get(
+            "observaciones"
         )
 
         if not isinstance(
-            feedback,
+            observations,
             dict,
         ):
 
             raise CurriculumFeedbackError(
-                "El proveedor de IA no devolvió el objeto "
-                "'retroalimentacion'"
+                "La IA no devolvió el objeto "
+                "'observaciones'"
             )
-            
+
+        expected_ids = [
+            target["id"]
+            for target
+            in matrix_targets
+        ]
+
         missing = [
-            key
-            for key
-            in FEEDBACK_KEYS
-            if key not in feedback
+            target_id
+            for target_id
+            in expected_ids
+            if target_id
+            not in observations
         ]
 
         if missing:
 
             raise CurriculumFeedbackError(
-                "La respuesta del proveedor de IA está "
-                "incompleta. Faltan: "
+                "La respuesta de IA está incompleta. "
+                "Faltan: "
                 + ", ".join(
                     missing
                 )
             )
 
-        clean_feedback: Dict[
-            str,
-            str,
-        ] = {}
-
-        for key in FEEDBACK_KEYS:
-
-            value = feedback.get(
-                key
-            )
-
-            if value is None:
-                value = ""
-
-            clean_feedback[
-                key
-            ] = str(
-                value
+        clean = {
+            target_id: str(
+                observations.get(
+                    target_id
+                )
+                or ""
             ).strip()
 
-        ai_warnings = (
-            payload.get(
-                "advertencias"
-            )
+            for target_id
+            in expected_ids
+        }
+
+        ai_warnings = payload.get(
+            "advertencias"
         )
 
         if not isinstance(
@@ -3475,9 +4829,7 @@ La estructura debe ser exactamente:
             ai_warnings = []
 
         return {
-            "retroalimentacion": (
-                clean_feedback
-            ),
+            "observaciones": clean,
 
             "resumen_general": str(
                 payload.get(
@@ -3486,161 +4838,33 @@ La estructura debe ser exactamente:
                 or ""
             ).strip(),
 
-            "advertencias": (
-                ai_warnings
-            ),
+            "advertencias": [
+                str(item).strip()
+                for item
+                in ai_warnings
+                if str(item).strip()
+            ],
         }
-
-    # ========================================================
-    # LEER FILAS DEL ARCHIVO 6
-    # ========================================================
-
-    def _output_row_map(
-        self,
-        spreadsheet_id: str,
-    ) -> Tuple[
-        str,
-        Dict[str, int],
-    ]:
-
-        sheet_title = (
-            google_sheets_service
-            .get_first_sheet_title(
-                spreadsheet_id
-            )
-        )
-
-        values = (
-            google_sheets_service
-            .get_column_values(
-                spreadsheet_id,
-                sheet_title,
-                "A",
-            )
-        )
-
-        alias_lookup: Dict[
-            str,
-            str,
-        ] = {}
-
-        for (
-            feedback_key,
-            aliases,
-        ) in OUTPUT_LABEL_ALIASES.items():
-
-            for alias in aliases:
-
-                alias_lookup[
-                    self.normalize(
-                        alias
-                    )
-                ] = feedback_key
-
-        row_map: Dict[
-            str,
-            int,
-        ] = {}
-
-        for row_number, row in enumerate(
-            values,
-            start=1,
-        ):
-
-            if not row:
-                continue
-
-            label = self.normalize(
-                row[0]
-            )
-
-            feedback_key = (
-                alias_lookup
-                .get(
-                    label
-                )
-            )
-
-            if (
-                feedback_key
-                and feedback_key
-                not in row_map
-            ):
-                row_map[
-                    feedback_key
-                ] = row_number
-
-        return (
-            sheet_title,
-            row_map,
-        )
-
+        
+        
     # ========================================================
     # ESCRIBIR ARCHIVO 6
     # ========================================================
 
-    def write_feedback(
+    def write_matrix_feedback(
         self,
         spreadsheet_id: str,
-        feedback: Dict[str, str],
-        feedback_column: str,
+        sheet_title: str,
+        matrix_targets: List[
+            Dict[str, Any]
+        ],
+        observations: Dict[
+            str,
+            str
+        ],
     ) -> Dict[str, Any]:
-        """
-        NO se hardcodea la fila.
 
-        Busca:
-        Competencias
-        Diseño
-        Semana de Diagnóstico
-        S2...
-        Tareas
-
-        en la columna A y escribe en la columna indicada.
-
-        feedback_column se recibe desde el endpoint porque todavía
-        no hemos definido qué columna de la plantilla es la oficial.
-        """
-        feedback_column = str(
-            feedback_column
-        ).strip().upper()
-
-        if not re.fullmatch(
-            r"[A-Z]{1,3}",
-            feedback_column,
-        ):
-
-            raise CurriculumFeedbackError(
-                "La columna de retroalimentación "
-                "no es válida"
-            )
-
-        (
-            sheet_title,
-            row_map,
-        ) = self._output_row_map(
-            spreadsheet_id
-        )
-
-        missing_rows = [
-            key
-            for key
-            in FEEDBACK_KEYS
-            if key not in row_map
-        ]
-
-        if missing_rows:
-
-            raise CurriculumFeedbackError(
-                "El archivo "
-                "6_Diseño_Curricular_Retroalimentacion "
-                "no contiene todas las etiquetas esperadas "
-                "en la columna A. Faltan: "
-                + ", ".join(
-                    missing_rows
-                )
-            )
-
-        escaped_sheet_title = (
+        escaped_title = (
             sheet_title.replace(
                 "'",
                 "''",
@@ -3651,25 +4875,34 @@ La estructura debe ser exactamente:
             Dict[str, Any]
         ] = []
 
-        for key in FEEDBACK_KEYS:
+        for target in matrix_targets:
 
-            row_number = row_map[
-                key
+            target_id = target[
+                "id"
             ]
 
+            row_number = target[
+                "row"
+            ]
+
+            # G es Observaciones Generales por la IA.
             cell_range = (
-                f"'{escaped_sheet_title}'!"
-                f"{feedback_column}"
+                f"'{escaped_title}'!"
+                f"{MATRIX_AI_COLUMN}"
                 f"{row_number}"
             )
 
             updates.append(
                 {
                     "range": cell_range,
+
+                    # También escribimos "".
+                    # Así se eliminan observaciones antiguas
+                    # de prácticas/tareas que ya no existan.
                     "values": [
                         [
-                            feedback.get(
-                                key,
+                            observations.get(
+                                target_id,
                                 "",
                             )
                         ]
@@ -3685,11 +4918,31 @@ La estructura debe ser exactamente:
             )
         )
 
+        updated_cells = (
+            result.get(
+                "updated"
+            )
+            if isinstance(
+                result,
+                dict,
+            )
+            else None
+        )
+
+        if updated_cells is None:
+            updated_cells = result.get(
+                "totalUpdatedCells",
+                0,
+            )
+
         return {
             "success": True,
             "sheet": sheet_title,
-            "column": feedback_column,
-            **result,
+            "column": MATRIX_AI_COLUMN,
+            "updated": updated_cells,
+            "targets": len(
+                matrix_targets
+            ),
         }
 
     # ========================================================
@@ -3702,9 +4955,6 @@ La estructura debe ser exactamente:
         semester: str,
         year: int,
         write_output: bool = False,
-        feedback_column: Optional[
-            str
-        ] = None,
     ) -> Dict[str, Any]:
         """
         Análisis completo de UN curso.
@@ -3736,6 +4986,36 @@ La estructura debe ser exactamente:
             semester,
             year,
         )
+        
+        revision_folder = (
+            self._find_revision_folder(
+                locations[
+                    "course"
+                ]["id"]
+            )
+        )
+
+        if not revision_folder:
+
+            raise CurriculumFeedbackError(
+                "No se encontró "
+                "0_Revision_de_Material"
+            )
+
+        matrix_file = (
+            self._find_matrix_file(
+                revision_folder[
+                    "id"
+                ]
+            )
+        )
+
+        if not matrix_file:
+
+            raise CurriculumFeedbackError(
+                "No se encontró "
+                "02_Matriz observaciones estructura"
+            )
 
         # ----------------------------------------------------
         # 2. Archivos
@@ -3746,7 +5026,7 @@ La estructura debe ser exactamente:
                 "planning"
             ]["id"]
         )
-
+        
         if not files.get(
             MAIN_INPUT_KEY
         ):
@@ -3754,28 +5034,6 @@ La estructura debe ser exactamente:
             raise CurriculumFeedbackError(
                 "No se encontró "
                 "5_Diseño_Curricular"
-            )
-
-        if (
-            write_output
-            and not files.get(
-                OUTPUT_KEY
-            )
-        ):
-
-            raise CurriculumFeedbackError(
-                "No se encontró "
-                "6_Diseño_Curricular_Retroalimentacion"
-            )
-
-        if (
-            write_output
-            and not feedback_column
-        ):
-
-            raise CurriculumFeedbackError(
-                "Debes indicar feedback_column "
-                "para escribir la retroalimentación"
             )
 
         # ----------------------------------------------------
@@ -3798,6 +5056,15 @@ La estructura debe ser exactamente:
         ) = self._context_text(
             documents
         )
+        
+        (
+            matrix_sheet_title,
+            matrix_targets,
+        ) = self._matrix_targets(
+            matrix_file[
+                "id"
+            ]
+        )
 
         if context_truncated:
 
@@ -3818,17 +5085,25 @@ La estructura debe ser exactamente:
             course,
             context_text,
             warnings,
+            matrix_targets,
+        )
+
+        response_schema = (
+            self._matrix_response_schema(
+                matrix_targets
+            )
         )
 
         # ----------------------------------------------------
         # 6. DeepSeek
         # ----------------------------------------------------
 
-        ai_result = (
-            self._call_ai(
-                system_message,
-                user_message,
-            )
+        ai_result = self._call_ai(
+            system_message,
+            user_message,
+            response_schema=(
+                response_schema
+            ),
         )
 
         print(
@@ -3851,13 +5126,14 @@ La estructura debe ser exactamente:
             self._validate_feedback_payload(
                 ai_result[
                     "data"
-                ]
+                ],
+                matrix_targets,
             )
         )
         
         print(
-            "✅ [CURRICULUM] JSON de retroalimentación válido | "
-            f"apartados={len(validated.get('retroalimentacion', {}))}",
+            "✅ [CURRICULUM] JSON de observaciones válido | "
+            f"apartados={len(validated.get('observaciones', {}))}",
             flush=True,
         )
 
@@ -3869,31 +5145,27 @@ La estructura debe ser exactamente:
 
         if write_output:
 
-            output_file = files[
-                OUTPUT_KEY
-            ]
-
-            if (
-                output_file.get(
-                    "mimeType"
-                )
-                != GOOGLE_SHEET_MIME
-            ):
-
-                raise CurriculumFeedbackError(
-                    "6_Diseño_Curricular_Retroalimentacion "
-                    "debe ser un Google Sheets nativo"
-                )
-
             write_result = (
-                self.write_feedback(
-                    output_file[
-                        "id"
-                    ],
-                    validated[
-                        "retroalimentacion"
-                    ],
-                    feedback_column,
+                self.write_matrix_feedback(
+                    spreadsheet_id=(
+                        matrix_file[
+                            "id"
+                        ]
+                    ),
+
+                    sheet_title=(
+                        matrix_sheet_title
+                    ),
+
+                    matrix_targets=(
+                        matrix_targets
+                    ),
+
+                    observations=(
+                        validated[
+                            "observaciones"
+                        ]
+                    ),
                 )
             )
 
@@ -3985,6 +5257,33 @@ La estructura debe ser exactamente:
                 time.perf_counter()
                 - started_at,
                 2,
+            ),
+            "matrix": {
+                "id": matrix_file.get(
+                    "id"
+                ),
+
+                "name": matrix_file.get(
+                    "name"
+                ),
+
+                "webViewLink": (
+                    matrix_file.get(
+                        "webViewLink"
+                    )
+                ),
+
+                "sheet": (
+                    matrix_sheet_title
+                ),
+
+                "column": (
+                    MATRIX_AI_COLUMN
+                ),
+            },
+
+            "matrix_targets": (
+                matrix_targets
             ),
         }
 
