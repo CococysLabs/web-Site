@@ -1,18 +1,23 @@
 """
-Servicio mínimo para Google Sheets.
+Servicio de integración con Google Sheets.
 
-Se utiliza únicamente para:
-- Leer las etiquetas de 6_Diseño_Curricular_Retroalimentacion.
-- Escribir la retroalimentación en las celdas correspondientes.
+Se utiliza para:
 
-Usa la misma cuenta de servicio y las mismas credenciales
-que Google Drive.
+- Leer pestañas y valores visibles de
+  5_Diseño_Curricular.
+- Leer la estructura de
+  02_Matriz observaciones estructura.
+- Escribir las observaciones generadas por IA
+  en la matriz correspondiente.
+
+Utiliza la misma cuenta de servicio y las mismas
+credenciales que Google Drive.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import httplib2
 from google.oauth2 import service_account
@@ -173,6 +178,122 @@ class GoogleSheetsService:
             )
 
         return title
+    
+    def get_sheet_titles(
+        self,
+        spreadsheet_id: str,
+    ) -> List[str]:
+        """
+        Obtener todas las pestañas del Google Sheets
+        en el orden real del libro.
+        """
+
+        service = self._get_service()
+
+        result = (
+            service.spreadsheets()
+            .get(
+                spreadsheetId=spreadsheet_id,
+                fields=(
+                    "sheets("
+                    "properties("
+                    "sheetId,"
+                    "title,"
+                    "index"
+                    ")"
+                    ")"
+                ),
+            )
+            .execute(
+                num_retries=SHEETS_API_RETRIES
+            )
+        )
+
+        sheets = result.get(
+            "sheets",
+            [],
+        )
+
+        if not sheets:
+            raise RuntimeError(
+                "El Google Sheet no contiene hojas"
+            )
+
+        ordered = sorted(
+            sheets,
+            key=lambda item: (
+                item.get(
+                    "properties",
+                    {},
+                ).get(
+                    "index",
+                    0,
+                )
+            ),
+        )
+
+        return [
+            item.get(
+                "properties",
+                {},
+            ).get(
+                "title"
+            )
+            for item in ordered
+            if item.get(
+                "properties",
+                {},
+            ).get(
+                "title"
+            )
+        ]
+
+    def get_sheet_values(
+        self,
+        spreadsheet_id: str,
+        sheet_title: str,
+    ) -> List[List[Any]]:
+        """
+        Leer los valores visibles/calculados de una pestaña.
+
+        FORMATTED_VALUE permite obtener lo que se muestra
+        actualmente en Google Sheets, incluyendo el resultado
+        visible de las fórmulas.
+        """
+
+        service = self._get_service()
+
+        escaped_title = (
+            self._escape_sheet_title(
+                sheet_title
+            )
+        )
+
+        cell_range = (
+            f"'{escaped_title}'!"
+            "A:ET"
+        )
+
+        result = (
+            service.spreadsheets()
+            .values()
+            .get(
+                spreadsheetId=spreadsheet_id,
+                range=cell_range,
+                majorDimension="ROWS",
+                valueRenderOption=(
+                    "FORMATTED_VALUE"
+                ),
+            )
+            .execute(
+                num_retries=SHEETS_API_RETRIES
+            )
+        )
+
+        return result.get(
+            "values",
+            [],
+        )
 
     def get_column_values(
         self,

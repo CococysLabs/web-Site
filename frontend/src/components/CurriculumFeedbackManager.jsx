@@ -78,8 +78,8 @@ const EXPECTED_FILES = [
         optional: false,
     },
     {
-        key: 'retroalimentacion',
-        label: '6_Diseño_Curricular_Retroalimentacion',
+        key: 'matrix',
+        label: '02_Matriz observaciones estructura',
         optional: false,
     },
 ];
@@ -745,17 +745,15 @@ const CurriculumFeedbackManager = () => {
                     year: Number(year),
 
                     /*
-                     * Esta funcionalidad genera
-                     * retroalimentación y la escribe.
-                     */
+                    * El backend escribe directamente en:
+                    *
+                    * 0_Revision_de_Material/
+                    * 02_Matriz observaciones estructura
+                    *
+                    * Columna G:
+                    * Observaciones Generales por la IA
+                    */
                     write_output: true,
-
-                    /*
-                     * La plantilla actual utiliza:
-                     * A = etiquetas
-                     * B = retroalimentación
-                     */
-                    feedback_column: 'B',
                 },
             );
 
@@ -810,7 +808,7 @@ const CurriculumFeedbackManager = () => {
     const handleGenerate = async () => {
         if (!previewIsCurrent) {
             setError(
-                'Debes comprobar nuevamente los archivos antes de generar la retroalimentación.',
+                'Debes comprobar nuevamente los archivos antes de generar las observaciones.',
             );
             return;
         }
@@ -819,7 +817,7 @@ const CurriculumFeedbackManager = () => {
             readyCourses.length === 0
         ) {
             setError(
-                'No hay cursos listos para generar retroalimentación.',
+                'No hay cursos listos para generar observaciones.',
             );
             return;
         }
@@ -884,14 +882,14 @@ const CurriculumFeedbackManager = () => {
             <div className="cfm-header">
                 <div>
                     <h2>
-                        Retroalimentación de Planeación Curricular
+                        Revisión de Planeación Curricular
                     </h2>
 
                     <p>
-                        Comprueba los archivos de cada curso,
-                        analiza el Diseño Curricular y escribe
-                        automáticamente la retroalimentación
-                        en Google Sheets.
+                        Comprueba los documentos del curso,
+                        analiza el Diseño Curricular y registra
+                        las observaciones generadas en la matriz
+                        de revisión correspondiente.
                     </p>
                 </div>
 
@@ -1223,7 +1221,7 @@ const CurriculumFeedbackManager = () => {
                             />
 
                             <Summary
-                                label="Listos"
+                                label="Listos para procesar"
                                 value={
                                     preview.summary
                                         ?.ready_for_write
@@ -1233,12 +1231,22 @@ const CurriculumFeedbackManager = () => {
                             />
 
                             <Summary
-                                label="Con análisis"
+                                label="Listos para analizar"
                                 value={
                                     preview.summary
                                         ?.ready_for_analysis
                                     || 0
                                 }
+                            />
+
+                            <Summary
+                                label="Con errores"
+                                value={
+                                    preview.summary
+                                        ?.with_errors
+                                    || 0
+                                }
+                                tone="danger"
                             />
 
                             <Summary
@@ -1286,14 +1294,15 @@ const CurriculumFeedbackManager = () => {
 
                             <div>
                                 <h3>
-                                    Generar retroalimentación
+                                    Generar observaciones
                                 </h3>
 
                                 <p>
-                                    Los cursos listos se
-                                    procesarán uno por uno y
-                                    la retroalimentación se
-                                    escribirá en la columna B.
+                                    Los cursos listos se procesarán uno por uno.
+                                    Las observaciones generadas se escribirán
+                                    automáticamente en la columna
+                                    "Observaciones Generales por la IA" de
+                                    02_Matriz observaciones estructura.
                                 </p>
                             </div>
                         </div>
@@ -1303,8 +1312,8 @@ const CurriculumFeedbackManager = () => {
                     {readyCourses.length === 0 ? (
                         <div className="cfm-blocked-message">
                             Ninguno de los cursos seleccionados
-                            está listo para escribir
-                            retroalimentación.
+                            está listo para generar y escribir
+                            las observaciones.
                         </div>
                     ) : (
                         <button
@@ -1317,8 +1326,8 @@ const CurriculumFeedbackManager = () => {
                                 ? 'Procesando cursos...'
                                 : (
                                     readyCourses.length === 1
-                                        ? 'Generar retroalimentación'
-                                        : `Generar ${readyCourses.length} retroalimentaciones`
+                                        ? 'Generar observaciones'
+                                        : `Generar observaciones de ${readyCourses.length} cursos`
                                 )}
                         </button>
                     )}
@@ -1447,7 +1456,7 @@ const PreviewCourse = ({
         stateLabel = 'Sin Diseño Curricular';
     } else if (!course.ready_for_write) {
         state = 'blocked';
-        stateLabel = 'Sin archivo de salida';
+        stateLabel = 'Sin matriz de observaciones';
     } else if (
         course.warnings?.length > 0
     ) {
@@ -1552,6 +1561,34 @@ const PreviewCourse = ({
                 </div>
             )}
 
+            {course.files?.matrix?.found && (
+                <div className="cfm-matrix-preview">
+                    <span>
+                        Matriz detectada
+                    </span>
+
+                    <strong>
+                        {
+                            course.files.matrix
+                                .targets
+                            || 0
+                        }
+                        {' '}
+                        secciones
+                    </strong>
+
+                    {course.files.matrix
+                        ?.sheet && (
+                            <small>
+                                Hoja: {
+                                    course.files.matrix
+                                        .sheet
+                                }
+                            </small>
+                        )}
+                </div>
+            )}
+
 
             {course.warnings?.length > 0 && (
                 <div className="cfm-warning-list">
@@ -1586,18 +1623,18 @@ const PreviewCourse = ({
                         </a>
                     )}
 
-                {course.files?.retroalimentacion
+                {course.files?.matrix
                     ?.webViewLink && (
                         <a
                             href={
                                 course.files
-                                    .retroalimentacion
+                                    .matrix
                                     .webViewLink
                             }
                             target="_blank"
                             rel="noreferrer"
                         >
-                            Abrir retroalimentación
+                            Abrir matriz de observaciones
                         </a>
                     )}
             </div>
@@ -1659,13 +1696,46 @@ const JobCourse = ({
         result?.result
     );
 
-    const feedback = (
-        analysisResult?.retroalimentacion
+    const observations = (
+        analysisResult?.observaciones
         || {}
+    );
+
+    const matrixTargets = (
+        result?.matrix_targets
+        || []
     );
 
     const writeResult = (
         result?.write
+    );
+
+    /*
+     * No mostramos apartados vacíos.
+     *
+     * Ejemplo:
+     * proyecto_3 = ""
+     *
+     * significa que el Tercer Proyecto no existe realmente,
+     * por lo que no debe aparecer en la interfaz.
+     */
+    const visibleTargets = (
+        matrixTargets.filter(
+            (target) => {
+                const value = (
+                    observations[
+                    target.id
+                    ]
+                );
+
+                return Boolean(
+                    String(
+                        value
+                        ?? ''
+                    ).trim()
+                );
+            },
+        )
     );
 
     const statusLabel = {
@@ -1724,9 +1794,9 @@ const JobCourse = ({
 
             {job.status === 'processing' && (
                 <p className="cfm-job-muted">
-                    Analizando documentos y generando
-                    retroalimentación. Puedes continuar
-                    utilizando el sistema.
+                    Analizando la Planeación Curricular
+                    y generando observaciones. Puedes
+                    continuar utilizando el sistema.
                 </p>
             )}
 
@@ -1754,7 +1824,19 @@ const JobCourse = ({
                     <div className="cfm-completed-info">
                         <div>
                             <span>
-                                Celdas actualizadas
+                                Observaciones generadas
+                            </span>
+
+                            <strong>
+                                {
+                                    visibleTargets.length
+                                }
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>
+                                Celdas procesadas
                             </span>
 
                             <strong>
@@ -1793,11 +1875,55 @@ const JobCourse = ({
                     </div>
 
 
+                    {result?.matrix && (
+                        <div className="cfm-matrix-result">
+                            <div>
+                                <span>
+                                    Destino
+                                </span>
+
+                                <strong>
+                                    {
+                                        result.matrix.name
+                                        || '02_Matriz observaciones estructura'
+                                    }
+                                </strong>
+
+                                <small>
+                                    Hoja {
+                                        result.matrix.sheet
+                                        || '—'
+                                    }
+                                    {' · '}
+                                    Columna {
+                                        result.matrix.column
+                                        || 'G'
+                                    }
+                                </small>
+                            </div>
+
+                            {result.matrix
+                                ?.webViewLink && (
+                                    <a
+                                        href={
+                                            result.matrix
+                                                .webViewLink
+                                        }
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        Abrir matriz
+                                    </a>
+                                )}
+                        </div>
+                    )}
+
+
                     {analysisResult
                         ?.resumen_general && (
                             <div className="cfm-general-summary">
                                 <strong>
-                                    Resumen
+                                    Resumen del análisis
                                 </strong>
 
                                 <p>
@@ -1844,51 +1970,47 @@ const JobCourse = ({
                         )}
 
 
-                    <details className="cfm-feedback-details">
-                        <summary>
-                            Ver retroalimentación generada
-                        </summary>
+                    {visibleTargets.length > 0 && (
+                        <details className="cfm-feedback-details">
+                            <summary>
+                                Ver observaciones generadas
+                                {' '}
+                                ({visibleTargets.length})
+                            </summary>
 
-                        <div className="cfm-feedback-list">
-                            {Object.entries(
-                                FEEDBACK_LABELS,
-                            ).map(
-                                ([
-                                    key,
-                                    label,
-                                ]) => (
-                                    <div
-                                        key={key}
-                                        className="cfm-feedback-item"
-                                    >
-                                        <strong>
-                                            {label}
-                                        </strong>
-
-                                        <p>
-                                            {
-                                                feedback[
-                                                key
-                                                ]
-                                                || (
-                                                    key === 'practicas'
-                                                        || key === 'tareas'
-                                                        ? 'Sin retroalimentación: apartado opcional sin contenido.'
-                                                        : 'Sin contenido.'
-                                                )
+                            <div className="cfm-feedback-list">
+                                {visibleTargets.map(
+                                    (target) => (
+                                        <div
+                                            key={
+                                                target.id
                                             }
-                                        </p>
-                                    </div>
-                                ),
-                            )}
-                        </div>
-                    </details>
+                                            className="cfm-feedback-item"
+                                        >
+                                            <strong>
+                                                {
+                                                    target.label
+                                                }
+                                            </strong>
+
+                                            <p>
+                                                {
+                                                    observations[
+                                                    target.id
+                                                    ]
+                                                }
+                                            </p>
+                                        </div>
+                                    ),
+                                )}
+                            </div>
+                        </details>
+                    )}
                 </>
             )}
         </article>
     );
 };
-
 
 const Summary = ({
     label,

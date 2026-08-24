@@ -80,6 +80,51 @@ router = APIRouter(
 )
 
 
+class CurriculumFeedbackJobRequest(
+    BaseModel
+):
+    course_code: str = Field(
+        ...,
+        min_length=1,
+        max_length=20,
+    )
+
+    area: Optional[str] = Field(
+        default=None,
+        max_length=100,
+    )
+
+    semester: str = Field(
+        ...,
+        min_length=1,
+        max_length=30,
+    )
+
+    year: int = Field(
+        ...,
+        ge=2000,
+        le=2100,
+    )
+
+    write_output: bool = True
+
+    @field_validator(
+        "course_code",
+        "area",
+        "semester",
+    )
+    @classmethod
+    def clean_text(
+        cls,
+        value,
+    ):
+        if value is None:
+            return None
+
+        return str(
+            value
+        ).strip()
+
 # ============================================================
 # REQUESTS
 # ============================================================
@@ -171,17 +216,6 @@ class CurriculumPreviewRequest(
 class CurriculumAnalyzeCourseRequest(
     BaseModel
 ):
-    """
-    Analizar solamente un curso.
-
-    write_output=False:
-        genera la retroalimentación pero NO modifica
-        6_Diseño_Curricular_Retroalimentacion.
-
-    write_output=True:
-        escribe el resultado y requiere feedback_column.
-    """
-
     course_code: str = Field(
         ...,
         min_length=1,
@@ -207,18 +241,10 @@ class CurriculumAnalyzeCourseRequest(
 
     write_output: bool = False
 
-    feedback_column: Optional[
-        str
-    ] = Field(
-        default=None,
-        max_length=3,
-    )
-
     @field_validator(
         "course_code",
         "area",
         "semester",
-        "feedback_column",
     )
     @classmethod
     def clean_text(
@@ -310,10 +336,6 @@ def curriculum_job_to_dict(
 
         "write_output": (
             job.write_output
-        ),
-
-        "feedback_column": (
-            job.feedback_column
         ),
 
         "provider": (
@@ -551,7 +573,7 @@ def provider_status(
         ],
 
         "source_strategy": (
-            "google_sheets_to_temporary_pdf_in_memory"
+            "context_pdf_and_curriculum_google_sheets_values"
         ),
 
         "xlsx_fallback": True,
@@ -651,30 +673,13 @@ def get_curriculum_feedback_job(
         current_user
     )
 
-    try:
-
-        import uuid
-
-        job_uuid = uuid.UUID(
-            job_id
-        )
-
-    except ValueError:
-
-        raise HTTPException(
-            status_code=(
-                status.HTTP_400_BAD_REQUEST
-            ),
-            detail="job_id inválido",
-        )
-
     job = (
         db.query(
             CurriculumFeedbackJob
         )
         .filter(
             CurriculumFeedbackJob.id
-            == job_uuid
+            == job_id
         )
         .first()
     )
@@ -682,16 +687,12 @@ def get_curriculum_feedback_job(
     if not job:
 
         raise HTTPException(
-            status_code=(
-                status.HTTP_404_NOT_FOUND
-            ),
+            status_code=404,
             detail=(
-                "No se encontró el job"
+                "Job no encontrado"
             ),
         )
 
-    # Un teacher únicamente puede consultar
-    # sus propios jobs.
     if (
         current_user.role
         != UserRole.ADMIN
@@ -700,9 +701,7 @@ def get_curriculum_feedback_job(
     ):
 
         raise HTTPException(
-            status_code=(
-                status.HTTP_403_FORBIDDEN
-            ),
+            status_code=403,
             detail=(
                 "No tienes permiso "
                 "para consultar este job"
@@ -711,9 +710,80 @@ def get_curriculum_feedback_job(
 
     return {
         "success": True,
-        "job": curriculum_job_to_dict(
-            job
-        ),
+
+        "job": {
+            "id": str(
+                job.id
+            ),
+
+            "status": (
+                job.status
+            ),
+
+            "progress": (
+                job.progress
+            ),
+
+            "course": {
+                "area": (
+                    job.area
+                ),
+
+                "code": (
+                    job.course_code
+                ),
+
+                "name": (
+                    job.course_name
+                ),
+            },
+
+            "semester": (
+                job.semester
+            ),
+
+            "year": (
+                job.year
+            ),
+
+            "write_output": (
+                job.write_output
+            ),
+
+            "provider": (
+                job.provider
+            ),
+
+            "model": (
+                job.model
+            ),
+
+            "error": (
+                job.error
+            ),
+
+            "created_at": (
+                job.created_at.isoformat()
+                if job.created_at
+                else None
+            ),
+
+            "started_at": (
+                job.started_at.isoformat()
+                if job.started_at
+                else None
+            ),
+
+            "finished_at": (
+                job.finished_at.isoformat()
+                if job.finished_at
+                else None
+            ),
+
+            "result": (
+                job.result
+            ),
+        },
     }
 
 # ============================================================
@@ -724,7 +794,7 @@ def get_curriculum_feedback_job(
     status_code=status.HTTP_202_ACCEPTED,
 )
 def create_curriculum_feedback_job(
-    request: CurriculumAnalyzeCourseRequest,
+    request: CurriculumFeedbackJobRequest,
 
     background_tasks: BackgroundTasks,
 
@@ -737,18 +807,10 @@ def create_curriculum_feedback_job(
     ),
 ):
     """
-    Crear un análisis en segundo plano.
+    Crear un job de retroalimentación curricular.
 
-    RESPONDE inmediatamente con HTTP 202.
-
-    El cliente NO espera:
-    - Google Drive
-    - PDF
-    - Gemini
-    - Google Sheets
-
-    Luego consulta:
-        GET /api/curriculum-feedback/jobs/{job_id}
+    La petición responde inmediatamente.
+    El análisis se ejecuta en segundo plano.
     """
 
     require_teacher_or_admin(
@@ -763,68 +825,101 @@ def create_curriculum_feedback_job(
         ],
     )
 
-    if len(courses) != 1:
+    if len(courses) > 1:
 
         raise HTTPException(
             status_code=(
                 status.HTTP_400_BAD_REQUEST
             ),
             detail=(
-                "No se pudo determinar "
-                "un único curso."
+                "El código existe en más de un área. "
+                "Indica el área del curso."
             ),
         )
 
     course = courses[0]
 
-    if (
-        request.write_output
-        and not request.feedback_column
+    # --------------------------------------------------------
+    # Comprobación previa
+    # --------------------------------------------------------
+
+    preview = (
+        curriculum_feedback_service
+        .preview_course(
+            course,
+            request.semester,
+            request.year,
+        )
+    )
+
+    if not preview.get(
+        "ready_for_analysis"
     ):
 
         raise HTTPException(
             status_code=(
                 status.HTTP_400_BAD_REQUEST
             ),
-            detail=(
-                "Para escribir el resultado "
-                "debes indicar feedback_column"
-            ),
+            detail={
+                "message": (
+                    "El curso no está listo "
+                    "para analizarse"
+                ),
+                "preview": preview,
+            },
         )
+
+    if (
+        request.write_output
+        and not preview.get(
+            "ready_for_write"
+        )
+    ):
+
+        raise HTTPException(
+            status_code=(
+                status.HTTP_400_BAD_REQUEST
+            ),
+            detail={
+                "message": (
+                    "El curso puede analizarse, "
+                    "pero no está listo para escribir "
+                    "la matriz"
+                ),
+                "preview": preview,
+            },
+        )
+
+    # --------------------------------------------------------
+    # Crear job
+    # --------------------------------------------------------
 
     job = CurriculumFeedbackJob(
         created_by=current_user.id,
-
-        area=course.area,
-
+        area=course_contacts_service.canonical_area(
+            course.area
+        ),
         course_code=str(
             course.code
         ),
-
         course_name=course.name,
-
         semester=(
             course_contacts_service
             .normalize_semester(
                 request.semester
             )
         ),
-
         year=request.year,
+        write_output=request.write_output,
 
-        write_output=(
-            request.write_output
-        ),
-
-        feedback_column=(
-            request.feedback_column.upper()
-            if request.feedback_column
-            else None
-        ),
+        # Compatibilidad con la tabla existente.
+        # Ya no controla dónde se escribe.
+        feedback_column="G",
 
         status="queued",
-
         progress=0,
+        result=None,
+        error=None,
     )
 
     db.add(
@@ -837,41 +932,61 @@ def create_curriculum_feedback_job(
         job
     )
 
-    job_id = str(
-        job.id
-    )
+    # --------------------------------------------------------
+    # Background
+    # --------------------------------------------------------
 
-    print(
-        "📨 [CURRICULUM JOB] "
-        "Job creado | "
-        f"job={job_id} | "
-        f"curso={course.code}",
-        flush=True,
-    )
-
-    # Se ejecuta DESPUÉS de devolver la respuesta.
     background_tasks.add_task(
         process_curriculum_feedback_job,
-        job_id,
+        str(
+            job.id
+        ),
     )
 
     return {
         "success": True,
 
-        "accepted": True,
+        "job_id": str(
+            job.id
+        ),
 
-        "job_id": job_id,
+        "status": (
+            job.status
+        ),
 
-        "status": "queued",
-
-        "message": (
-            "El análisis fue aceptado "
-            "y continuará en segundo plano."
+        "progress": (
+            job.progress
         ),
 
         "status_url": (
             "/api/curriculum-feedback/"
-            f"jobs/{job_id}"
+            f"jobs/{job.id}"
+        ),
+
+        "course": {
+            "area": (
+                job.area
+            ),
+
+            "code": (
+                job.course_code
+            ),
+
+            "name": (
+                job.course_name
+            ),
+        },
+
+        "semester": (
+            job.semester
+        ),
+
+        "year": (
+            job.year
+        ),
+
+        "write_output": (
+            job.write_output
         ),
     }
 
@@ -929,21 +1044,6 @@ def analyze_curriculum_course(
 
     course = courses[0]
 
-    if (
-        request.write_output
-        and not request.feedback_column
-    ):
-
-        raise HTTPException(
-            status_code=(
-                status.HTTP_400_BAD_REQUEST
-            ),
-            detail=(
-                "Para escribir el resultado debes "
-                "indicar feedback_column"
-            ),
-        )
-
     try:
 
         started_at = perf_counter()
@@ -962,9 +1062,6 @@ def analyze_curriculum_course(
                 year=request.year,
                 write_output=(
                     request.write_output
-                ),
-                feedback_column=(
-                    request.feedback_column
                 ),
             )
         )
