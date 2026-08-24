@@ -200,7 +200,7 @@ class DocumentAnalysisService:
         """Extrae texto y metadatos de un XLSX."""
         try:
             import openpyxl
-            wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=False)
             parts = []
             total_rows = 0
             sheet_summaries = []
