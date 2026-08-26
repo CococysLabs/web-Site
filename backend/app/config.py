@@ -48,12 +48,16 @@ class Settings(BaseSettings):
     
     # CORS
     FRONTEND_URL: str = "http://localhost:5173"
-    
+    CORS_ORIGINS: Optional[str] = None
+
     # Configuración de archivos
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
     UPLOAD_DIR: str = "uploads"
     ALLOWED_EXTENSIONS: list = [".pdf", ".docx", ".pptx", ".xlsx"]
-    
+
+    # Entorno de ejecución (development | production)
+    ENVIRONMENT: str = "development"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

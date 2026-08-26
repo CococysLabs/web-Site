@@ -161,6 +161,27 @@ class GoogleDriveService:
             print(f"Error listing files: {e}")
             return []
     
+    def get_parent_folder_id(self, file_id: str) -> Optional[str]:
+        """Obtener el ID de la carpeta padre directa de un archivo/carpeta."""
+        if not self.service:
+            return None
+
+        try:
+            file = (
+                self.service.files()
+                .get(
+                    fileId=file_id,
+                    fields="parents",
+                    supportsAllDrives=True,
+                )
+                .execute(num_retries=DRIVE_API_RETRIES)
+            )
+            parents = file.get("parents") or []
+            return parents[0] if parents else None
+        except Exception as e:
+            print(f"Error obteniendo carpeta padre: {e}")
+            return None
+
     def get_file_metadata(self, file_id: str) -> Optional[Dict]:
         """Obtener metadatos de un archivo"""
         if not self.service:
