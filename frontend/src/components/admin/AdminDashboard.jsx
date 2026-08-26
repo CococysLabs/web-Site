@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import DocumentAnalyzer from './DocumentAnalyzer';
 import CourseContactsManager from '../CourseContactsManager';
+import ActivityStructureValidator from './ActivityStructureValidator';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -228,7 +229,7 @@ const AdminDashboard = () => {
     drive_folder_id: '',
     drive_folder_name: '',
     is_teacher: false,
-    permissions: { can_view_drive: false, can_analyze: false, can_validate_structure: false, can_validate_content: false }
+    permissions: { can_view_drive: false, can_analyze: false, can_validate_structure: false, can_validate_content: false, can_validate_activities: false }
   });
 
   const openUserConfigModal = (u) => {
@@ -242,6 +243,7 @@ const AdminDashboard = () => {
         can_analyze: u.permissions?.can_analyze ?? false,
         can_validate_structure: u.permissions?.can_validate_structure ?? false,
         can_validate_content: u.permissions?.can_validate_content ?? false,
+        can_validate_activities: u.permissions?.can_validate_activities ?? false,
       }
     });
   };
@@ -350,6 +352,7 @@ const AdminDashboard = () => {
                 { key: 'can_analyze', label: 'Analizar documentos', desc: 'Puede usar el botón Analizar en archivos' },
                 { key: 'can_validate_structure', label: 'Validar estructura', desc: 'Puede ejecutar validación de estructura' },
                 { key: 'can_validate_content', label: 'Validar contenido (IA)', desc: 'Puede ejecutar validación de contenido con Gemini' },
+                { key: 'can_validate_activities', label: 'Validar Proyectos/Prácticas/Tareas', desc: 'Puede ejecutar la validación de estructura de Proyectos, Prácticas y Tareas. Los docentes (is_teacher) ya tienen acceso automático, este permiso es para dárselo a un estudiante puntual.' },
               ].map(({ key, label, desc }) => (
                 <label key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', marginBottom: '10px' }}>
                   <input
@@ -455,6 +458,16 @@ const AdminDashboard = () => {
             </svg>
 
             Contactos de cursos
+          </button>
+
+          <button
+            className={activeTab === 'activity-validation' ? 'active' : ''}
+            onClick={() => setActiveTab('activity-validation')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Proyectos/Prácticas/Tareas
           </button>
 
           <button
@@ -592,6 +605,10 @@ const AdminDashboard = () => {
 
         {activeTab === 'course-contacts' && (
           <CourseContactsManager />
+        )}
+
+        {activeTab === 'activity-validation' && (
+          <ActivityStructureValidator />
         )}
 
         {/* Drive Tab */}
