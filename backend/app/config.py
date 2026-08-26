@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_FILE: Optional[str] = None
     GOOGLE_DRIVE_FOLDER_ID: Optional[str] = None
     GOOGLE_DRIVE_STRUCTURE_FOLDER_ID: Optional[str] = None
+    # Carpeta raíz "Recursos Educativos" (contiene una subcarpeta por semestre).
+    # Si no se define, se usa el padre de GOOGLE_DRIVE_STRUCTURE_FOLDER_ID.
+    GOOGLE_DRIVE_RESOURCES_ROOT_FOLDER_ID: Optional[str] = None
 
     # Archivo maestro de contactos en Google Sheets
     GOOGLE_CONTACTS_SPREADSHEET_ID: Optional[str] = None
