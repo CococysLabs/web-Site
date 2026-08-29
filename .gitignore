@@ -41,3 +41,6 @@ ENV/
 backend/cococys-driv-*.json
 backend/nohup.out
 .security-incident-*.md
+
+# IA
+CLAUDE.local.md

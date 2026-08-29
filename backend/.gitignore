@@ -50,3 +50,6 @@ htmlcov/
 
 # Alembic
 alembic/versions/*.pyc
+
+# scripts de google
+scripts

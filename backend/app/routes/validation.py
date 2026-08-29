@@ -46,6 +46,25 @@ def _compliance_status(pct: float) -> str:
     return "low"
 
 
+def _get_resources_root_folder_id() -> Optional[str]:
+    """
+    ID de la carpeta raíz "Recursos Educativos" (contiene una subcarpeta por semestre).
+    Si no está configurada explícitamente, se deriva del padre de
+    GOOGLE_DRIVE_STRUCTURE_FOLDER_ID.
+    """
+    from app.config import settings
+
+    explicit = getattr(settings, "GOOGLE_DRIVE_RESOURCES_ROOT_FOLDER_ID", None)
+    if explicit:
+        return explicit
+
+    structure_root = getattr(settings, "GOOGLE_DRIVE_STRUCTURE_FOLDER_ID", None)
+    if not structure_root:
+        return None
+
+    return drive_service.get_parent_folder_id(structure_root)
+
+
 def _save_record(db: Session, **kwargs) -> ValidationRecord:
     """Guarda un ValidationRecord en BD. Silencia errores para no interrumpir flujo."""
     try:
@@ -94,6 +113,11 @@ class ValidateCourseRequest(BaseModel):
     course_name: str
     validation_type: str = "both"   # "structure" | "content" | "both"
     candidate_folder_ids: List[str] = []  # ancestros del curso para localizar la matriz
+
+
+class ValidateActivitiesRequest(BaseModel):
+    course_folder_id: str
+    course_name: Optional[str] = None
 
 
 # ─── Validate Folder (estructura) ────────────────────────────────────────────
@@ -369,6 +393,98 @@ async def validate_course_batch(
         print(f"❌ Error en validación en lote: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail=f"Error en validación de curso: {str(e)}")
+
+
+# ─── Validate Activities (Proyectos / Practicas / Tareas) ────────────────────
+
+def _check_activities_permission(current_user: User):
+    is_admin = current_user.role == UserRole.ADMIN
+    is_teacher = bool(getattr(current_user, "is_teacher", False))
+    perms = getattr(current_user, "permissions", None) or {}
+    if not is_admin and not is_teacher and not perms.get("can_validate_activities", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="No tienes permiso para validar proyectos/prácticas/tareas")
+
+
+@router.get("/activities/semesters")
+async def list_activity_semesters(
+    current_user: User = Depends(get_current_user),
+):
+    """Lista las carpetas de semestre disponibles bajo la raíz de Recursos Educativos."""
+    _check_activities_permission(current_user)
+
+    root_id = _get_resources_root_folder_id()
+    if not root_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=(
+                "No se pudo determinar la carpeta raíz de Recursos Educativos. "
+                "Configura GOOGLE_DRIVE_RESOURCES_ROOT_FOLDER_ID."
+            ),
+        )
+
+    folders = drive_service.list_folders(root_id)
+    return {
+        "root_folder_id": root_id,
+        "semesters": [{"id": f["id"], "name": f["name"]} for f in folders],
+    }
+
+
+@router.get("/activities/courses")
+async def list_activity_courses(
+    semester_folder_id: str = Query(...),
+    area: str = Query(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Lista los cursos (carpetas) de un área dentro de un semestre."""
+    _check_activities_permission(current_user)
+
+    area_folders = drive_service.list_folders(semester_folder_id)
+    area_target = _normalize(area)
+    area_folder = next(
+        (
+            f for f in area_folders
+            if _normalize(f["name"]) == area_target or area_target in _normalize(f["name"])
+        ),
+        None,
+    )
+    if not area_folder:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró la carpeta del área '{area}' en este semestre",
+        )
+
+    course_folders = drive_service.list_folders(area_folder["id"])
+    return {
+        "area_folder_id": area_folder["id"],
+        "courses": [{"id": f["id"], "name": f["name"]} for f in course_folders],
+    }
+
+
+@router.post("/validate-activities")
+async def validate_activities(
+    request: ValidateActivitiesRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Valida que los documentos de Proyectos/Practicas/Tareas de un curso
+    posean la estructura (títulos) requerida.
+    """
+    _check_activities_permission(current_user)
+
+    try:
+        from app.services.activity_structure_validation_service import (
+            activity_structure_validation_service,
+        )
+        result = activity_structure_validation_service.validate_course(
+            request.course_folder_id
+        )
+        result["course_name"] = request.course_name
+        return result
+    except Exception as e:
+        print(f"❌ Error validando actividades: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"Error al validar actividades: {str(e)}")
 
 
 # ─── History ─────────────────────────────────────────────────────────────────

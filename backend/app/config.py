@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     GOOGLE_CREDENTIALS_FILE: Optional[str] = None
     GOOGLE_DRIVE_FOLDER_ID: Optional[str] = None
     GOOGLE_DRIVE_STRUCTURE_FOLDER_ID: Optional[str] = None
+    # Carpeta raíz "Recursos Educativos" (contiene una subcarpeta por semestre).
+    # Si no se define, se usa el padre de GOOGLE_DRIVE_STRUCTURE_FOLDER_ID.
+    GOOGLE_DRIVE_RESOURCES_ROOT_FOLDER_ID: Optional[str] = None
 
     # Archivo maestro de contactos en Google Sheets
     GOOGLE_CONTACTS_SPREADSHEET_ID: Optional[str] = None
@@ -45,12 +48,16 @@ class Settings(BaseSettings):
     
     # CORS
     FRONTEND_URL: str = "http://localhost:5173"
-    
+    CORS_ORIGINS: Optional[str] = None
+
     # Configuración de archivos
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
     UPLOAD_DIR: str = "uploads"
     ALLOWED_EXTENSIONS: list = [".pdf", ".docx", ".pptx", ".xlsx"]
-    
+
+    # Entorno de ejecución (development | production)
+    ENVIRONMENT: str = "development"
+
     class Config:
         env_file = ".env"
         case_sensitive = True
