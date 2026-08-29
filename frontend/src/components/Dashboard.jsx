@@ -6,6 +6,7 @@ import DocumentAnalyzer from './admin/DocumentAnalyzer';
 import CourseFolderCreator from './CourseFolderCreator';
 import CourseContactsManager from './CourseContactsManager';
 import CurriculumFeedbackManager from './CurriculumFeedbackManager';
+import ActivityStructureValidator from './admin/ActivityStructureValidator';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -28,6 +29,7 @@ const Dashboard = () => {
   const canCreateFolders = isTeacher || isAdmin;
   const canManageCourseContacts = isTeacher || isAdmin;
   const canManageCurriculumFeedback = isTeacher || isAdmin;
+  const canValidateActivities = isTeacher || isAdmin || Boolean(user?.permissions?.can_validate_activities);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -198,6 +200,18 @@ const Dashboard = () => {
               <span>
                 Planeación Curricular
               </span>
+            </button>
+          )}
+
+          {canValidateActivities && (
+            <button
+              className={`nav-item ${activeView === 'activity-validation' ? 'active' : ''}`}
+              onClick={() => navTo('activity-validation')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Proyectos/Prácticas/Tareas</span>
             </button>
           )}
 
@@ -452,6 +466,11 @@ const Dashboard = () => {
                 && canManageCurriculumFeedback && (
                   <CurriculumFeedbackManager />
                 )}
+
+              {/* ── Proyectos/Prácticas/Tareas ── */}
+              {activeView === 'activity-validation' && canValidateActivities && (
+                <ActivityStructureValidator />
+              )}
 
               {/* ── Validaciones ── */}
               {activeView === 'validations' && (
