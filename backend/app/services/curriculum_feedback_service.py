@@ -69,13 +69,33 @@ from app.services.google_sheets_service import (
 # CONFIGURACIÓN DEL MÓDULO
 # ============================================================
 
-# Se deja en código, NO en .env.
-#
-# Actualmente corresponde a la raíz usada por la estructura
-# curricular del proyecto.
-CURRICULUM_ROOT_FOLDER_ID = (
-    "1kKtxjCV9cXxkS_BeQv95Ud5M_Q0S77aA"
-)
+def _resources_root_folder_id() -> Optional[str]:
+    """
+    ID de la carpeta raíz "Recursos Educativos" (contiene una
+    subcarpeta por período: 2026_Primer_Semestre,
+    2026_Segundo_Semestre, etc.)
+
+    Misma resolución que usa la validación de Proyectos/Practicas/
+    Tareas (ver app/routes/validation.py:_get_resources_root_folder_id):
+    primero la variable explícita, si no existe se deriva del padre
+    de GOOGLE_DRIVE_STRUCTURE_FOLDER_ID.
+    """
+
+    explicit = getattr(
+        settings, "GOOGLE_DRIVE_RESOURCES_ROOT_FOLDER_ID", None
+    )
+
+    if explicit:
+        return explicit
+
+    structure_root = getattr(
+        settings, "GOOGLE_DRIVE_STRUCTURE_FOLDER_ID", None
+    )
+
+    if not structure_root:
+        return None
+
+    return drive_service.get_parent_folder_id(structure_root)
 
 DEEPSEEK_MODEL = "deepseek-v4-flash"
 
@@ -2098,6 +2118,7 @@ class CurriculumFeedbackService:
         5_Diseño_Curricular
         5 Diseño Curricular
         5-Diseño Curricular
+        5. Diseño Curricular
         5_Diseño_Curricular.xlsx
 
         se consideran equivalentes.
@@ -2120,6 +2141,11 @@ class CurriculumFeedbackService:
 
         text = text.replace(
             "-",
+            " ",
+        )
+
+        text = text.replace(
+            ".",
             " ",
         )
 
@@ -2154,16 +2180,16 @@ class CurriculumFeedbackService:
         year: int,
     ) -> Dict[str, Any]:
         """
-        Soporta los dos casos:
+        Busca el período dentro de "Recursos Educativos"
+        (misma raíz que usa la validación de Proyectos/Practicas/
+        Tareas), que contiene una subcarpeta por período:
+        2026_Primer_Semestre, 2026_Segundo_Semestre, etc.
 
-        CASO A:
-        CURRICULUM_ROOT_FOLDER_ID ya apunta a:
-        2026_Segundo_Semestre
+        CASO A (compatibilidad):
+        la raíz resuelta ya ES la carpeta del período pedido.
 
-        CASO B:
-        CURRICULUM_ROOT_FOLDER_ID apunta a una carpeta superior
-        que contiene:
-        2026_Segundo_Semestre
+        CASO B (caso normal):
+        la raíz contiene una subcarpeta con el período pedido.
         """
         period = (
             course_contacts_service
@@ -2177,17 +2203,28 @@ class CurriculumFeedbackService:
             "folder"
         ]
 
+        root_folder_id = (
+            _resources_root_folder_id()
+        )
+
+        if not root_folder_id:
+            raise CurriculumFeedbackError(
+                "No hay una carpeta raíz de Recursos Educativos "
+                "configurada (GOOGLE_DRIVE_RESOURCES_ROOT_FOLDER_ID "
+                "o GOOGLE_DRIVE_STRUCTURE_FOLDER_ID)"
+            )
+
         root = (
             drive_service
             .get_file_metadata(
-                CURRICULUM_ROOT_FOLDER_ID
+                root_folder_id
             )
         )
 
         if not root:
             raise CurriculumFeedbackError(
                 "No se pudo acceder a la carpeta raíz "
-                "de Planeación Curricular"
+                "de Recursos Educativos"
             )
 
         root_name = root.get(
@@ -2205,14 +2242,14 @@ class CurriculumFeedbackService:
                 **root,
                 "id": (
                     root.get("id")
-                    or CURRICULUM_ROOT_FOLDER_ID
+                    or root_folder_id
                 ),
             }
 
         period_folder = (
             drive_service.find_folder(
                 expected_name,
-                CURRICULUM_ROOT_FOLDER_ID,
+                root_folder_id,
             )
         )
 
@@ -3534,12 +3571,15 @@ class CurriculumFeedbackService:
             matrix.get(
                 "mimeType"
             )
-            != GOOGLE_SHEET_MIME
+            not in (
+                GOOGLE_SHEET_MIME,
+                XLSX_MIME,
+            )
         ):
 
             raise CurriculumFeedbackError(
                 "02_Matriz observaciones estructura "
-                "debe ser un Google Sheets nativo"
+                "debe ser un Google Sheets nativo o un archivo .xlsx"
             )
 
         return matrix
