@@ -980,3 +980,104 @@
         margin-left: 0;
     }
 }
+
+
+/* ==========================================================
+   FASE 1 / FASE 2 — BADGES
+========================================================== */
+
+.cfm-phase-badge {
+    display: inline-block;
+    margin-bottom: 0.4rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: var(--color-primary);
+    color: var(--color-surface);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.cfm-phase2-header {
+    margin-top: 0.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+}
+
+
+/* ==========================================================
+   FASE 2 — DESGLOSE POR TIPO DE ACTIVIDAD
+========================================================== */
+
+.cfm-activity-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.cfm-activity-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.82rem;
+}
+
+.cfm-activity-row strong {
+    color: var(--color-text-primary);
+}
+
+.cfm-activity-row span {
+    color: var(--color-text-secondary);
+}
+
+.cfm-activity-error {
+    color: var(--color-danger, #c0392b);
+}
+
+
+/* ==========================================================
+   FASE 2 — QUÉ ANALIZAR (Proyectos/Practicas/Tareas)
+========================================================== */
+
+.cfm-activity-type-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.cfm-activity-type-picker > span {
+    color: var(--color-text-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.cfm-activity-type-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.cfm-activity-type-options label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--color-text-primary);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.cfm-activity-type-options input {
+    accent-color: var(--color-primary);
+}
+
+.cfm-activity-type-picker small {
+    color: var(--color-text-secondary);
+    font-size: 0.72rem;
+}
