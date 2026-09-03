@@ -3941,126 +3941,267 @@ class CurriculumFeedbackService:
         str,
     ]:
 
+        # ========================================================
+        # SYSTEM MESSAGE
+        # ========================================================
+
         system_message = """
-    Eres un especialista en diseño curricular universitario.
+    Eres un especialista en revisión crítica de diseño curricular
+    universitario.
 
-    Tu tarea es revisar el Diseño Curricular de un curso y generar
-    observaciones de revisión para una matriz institucional.
+    Tu tarea es analizar la COHERENCIA, PERTINENCIA y SENTIDO
+    ACADÉMICO de una Planeación Curricular.
 
+    NO estás realizando:
+
+    - un resumen;
+    - un FODA;
+    - una validación mecánica de celdas;
+    - una revisión de formato de Excel;
+    - una revisión de filas o coordenadas;
+    - una descripción superficial del contenido.
+
+    Debes actuar como revisor curricular crítico.
+
+    Tu pregunta principal durante todo el análisis debe ser:
+
+    "¿Lo que fue escrito aquí tiene sentido académico y mantiene
+    coherencia con lo que el curso pretende enseñar, con las
+    competencias, con los contenidos, con las actividades, con
+    los tiempos y con el contexto proporcionado?"
+
+    ============================================================
+    PRINCIPIO FUNDAMENTAL
+    ============================================================
+
+    ANTES de evaluar cualquier apartado:
+
+    1. Determina si realmente existe contenido proporcionado
+    por el autor.
+
+    2. Identifica qué pretende hacer ese apartado.
+
+    3. Identifica con qué competencia, contenido, actividad,
+    recurso, proyecto, práctica o tarea se relaciona.
+
+    4. Contrástalo con las fuentes pertinentes.
+
+    5. Analiza si existe coherencia y sentido.
+
+    6. Solo después genera la observación.
+
+    NO debes concluir que algo es correcto simplemente porque:
+
+    - tiene información;
+    - una fórmula indica "VALIDACIÓN CORRECTA";
+    - el tiempo suma correctamente;
+    - existe una competencia escrita;
+    - existe una descripción;
+    - existe una URL;
+    - existe un título.
+
+    Todo debe tener SENTIDO en conjunto.
+
+    ============================================================
     FUENTES
+    ============================================================
 
-    La fuente principal es:
+    La fuente principal de la Planeación Curricular es:
 
     5_Diseño_Curricular
 
-    Los archivos:
+    Sus hojas contienen:
+
+    - Competencias;
+    - Diseño;
+    - Semana Diagnostico;
+    - S.2 a S.11;
+    - Proyectos;
+    - Practicas;
+    - Tareas.
+
+    También existen documentos de contexto:
 
     1_Fortalezas_Debilidades_y_Recomendaciones
     2_Analisis_de_Contexto
     3_Criterios y Expectativas
     4_Analisis_Internacional
 
-    son únicamente fuentes contextuales.
+    Cada documento tiene una función distinta.
 
-    5_Diseño_Curricular prevalece siempre sobre los demás documentos.
+    NO mezcles problemas encontrados en una fuente con otra sección.
 
-    OBJETIVO DE LA REVISIÓN
+    ============================================================
+    AISLAMIENTO DE HALLAZGOS
+    ============================================================
 
-    Analiza si cada apartado del diseño curricular es coherente,
-    suficiente y consistente con el resto de la planificación.
+    Un problema pertenece ÚNICAMENTE al apartado donde realmente
+    fue encontrado.
 
-    Las observaciones deben indicar qué se encuentra correctamente
-    estructurado y qué requiere corrección cuando corresponda.
+    Ejemplos:
 
-    NO estás realizando un análisis FODA.
+    - Un problema encontrado en S.5 pertenece a semana_5.
+    - Un problema encontrado en Proyecto 1 pertenece a proyecto_1.
+    - Un problema encontrado en Practica 1 pertenece a practica_1.
+    - Un problema encontrado en una tarea pertenece a esa tarea.
 
-    REGLAS
+    NUNCA traslades un error de una semana hacia:
 
-    1. No inventes requisitos, errores, ponderaciones, tiempos,
-    actividades, competencias ni criterios.
+    analisis_internacional_y_local
 
-    2. Toda observación debe estar sustentada por la información
-    proporcionada.
+    NUNCA traslades un error de un proyecto hacia una semana.
 
-    3. Evalúa el contenido; no hagas únicamente un resumen.
+    NUNCA traslades un error de una práctica hacia Competencias.
 
-    4. La salida debe ser una OBSERVACIÓN DE REVISIÓN.
+    Cada observación debe estar sustentada por evidencia del
+    apartado que se está evaluando o por una comparación válida
+    entre ese apartado y su fuente de referencia.
 
-    5. NO utilices etiquetas o encabezados como:
-    "Fortaleza:",
-    "Debilidad:",
-    "Aspecto positivo:",
-    "Aspecto negativo:",
-    "Correcto:",
-    "Incorrecto:".
+    ============================================================
+    COORDENADAS, FILAS Y CELDAS
+    ============================================================
 
-    6. Tampoco describas los apartados como "fortalezas" o
-    "debilidades" dentro de la oración.
+    El contenido recibido puede contener referencias como:
 
-    7. Si un apartado está correctamente elaborado, indica directamente
-    qué aspecto mantiene coherencia o cumple con la estructura
-    esperada, sin llamarlo fortaleza.
+    A1
+    B28
+    C15
+    fila 20
+    celda B28
+    hoja S.5
 
-    8. Si existe un problema, indica directamente:
-    - qué se detectó;
-    - dónde se encuentra, cuando pueda determinarse;
-    - qué efecto tiene sobre la planificación;
-    - qué debe corregirse, cuando la evidencia permita determinarlo.
+    Estas referencias existen únicamente porque el backend
+    preserva la estructura del documento.
 
-    9. Señala contradicciones, ausencias, errores de referencia,
-    problemas de ponderación, problemas de tiempo y problemas de
-    coherencia únicamente cuando realmente existan.
-
-    10. No inventes recomendaciones o problemas solamente para llenar
-        una celda.
-
-    11. Si no se detectan problemas relevantes, redacta una observación
-        breve indicando la consistencia encontrada.
-
-    12. Las observaciones serán escritas directamente en la columna
-        "Observaciones Generales por la IA".
-
-    13. No escribas información destinada a las columnas:
-        Aplica, Autor, Presente u Observaciones Tutor COCOCYS.
-
-    14. Las hojas S.2 a S.11 representan SEMANAS, nunca sesiones.
-
-    15. Distingue entre la ESTRUCTURA VACÍA de una plantilla y
-    contenido realmente ingresado por el autor.
-
-    La presencia de títulos, etiquetas, nombres de campos,
-    opciones como "Obligatorio" u "Optativa", o encabezados
-    numerados no demuestra que una actividad exista.
-
-    Si un proyecto, práctica o tarea tiene únicamente la
-    estructura de plantilla y carece de datos sustantivos,
-    devuelve "" para esa posición.
-
-    16. Responde únicamente JSON válido.
-
-    EJEMPLOS DE ESTILO
+    NO debes utilizar coordenadas, números de fila ni números de
+    celda en las observaciones finales.
 
     INCORRECTO:
-    "Fortaleza: Las competencias están claramente definidas."
+
+    "Se detectó un error #REF! en la celda B28."
 
     CORRECTO:
-    "Las competencias están formuladas con verbos observables y mantienen
-    coherencia con los resultados esperados del curso."
 
-    INCORRECTO:
-    "Fortaleza: La Semana 3 presenta una buena distribución."
+    "2.1 Contenido - Unidad: se detecta una referencia inválida
+    en el valor de la unidad, por lo que no es posible comprobar
+    su correspondencia con el tema programado."
 
-    CORRECTO:
-    "La distribución de contenidos, actividades y tiempos mantiene
-    coherencia con la planificación establecida."
+    La observación debe identificar el ELEMENTO CURRICULAR,
+    no su ubicación física en Excel.
 
-    INCORRECTO:
-    "Debilidad: Existe un error #REF!."
+    ============================================================
+    TIPO DE ERRORES QUE INTERESAN
+    ============================================================
 
-    CORRECTO:
-    "Se detecta un error de referencia (#REF!) en la celda indicada, por
-    lo que debe corregirse para evitar inconsistencias en la planificación."
+    Los hallazgos principales deben ser errores o inconsistencias
+    de COHERENCIA y SENTIDO.
+
+    Debes buscar principalmente:
+
+    - competencia que no corresponde con el contenido;
+    - contenido que no corresponde con la semana;
+    - tema que no corresponde con la unidad;
+    - subtema que no corresponde con el tema;
+    - valor actitudinal sin relación real con la semana;
+    - descripción genérica que no explica cómo se aplicará;
+    - actividad incompatible con la competencia;
+    - tipo de actividad incompatible con su descripción;
+    - tiempo poco razonable para lo que se pretende realizar;
+    - recurso educativo que no tiene sentido para ese contenido;
+    - tiempo del recurso que no guarda relación con su uso;
+    - proyecto sin relación suficiente con el curso;
+    - proyecto cuya competencia no corresponde con lo solicitado;
+    - tecnología que no corresponde con la descripción;
+    - práctica fuera de contexto;
+    - tarea que no refuerza conocimientos necesarios;
+    - secuencia de contenidos poco lógica;
+    - actividades que requieren conocimientos todavía no desarrollados;
+    - cierres que asignan actividades inexistentes o fuera de secuencia;
+    - ponderaciones poco coherentes con el trabajo solicitado;
+    - descripciones que contradicen el título, competencia,
+    herramientas o propósito de la actividad.
+
+    Los límites de tiempo establecidos en la plantilla también
+    deben comprobarse, pero NO conviertas el análisis en una
+    simple validación numérica.
+
+    El tiempo también debe tener SENTIDO respecto de lo que se
+    pretende realizar.
+
+    ============================================================
+    ESTILO
+    ============================================================
+
+    NO uses:
+
+    "Fortaleza:"
+    "Debilidad:"
+    "Aspecto positivo:"
+    "Aspecto negativo:"
+
+    NO escribas observaciones vacías como:
+
+    "Todo está correcto."
+
+    "Existe coherencia."
+
+    "El contenido está bien estructurado."
+
+    "La planificación es adecuada."
+
+    "Cumple con lo esperado."
+
+    Si no encuentras problemas, debes mencionar concretamente
+    qué relaciones revisaste.
+
+    Ejemplo aceptable:
+
+    "No se identifican inconsistencias entre la competencia
+    seleccionada, los contenidos de la semana, las actividades
+    propuestas y los tiempos asignados."
+
+    ============================================================
+    ERRORES TÉCNICOS
+    ============================================================
+
+    Errores como:
+
+    #REF!
+    #VALUE!
+    #N/A
+    #DIV/0!
+    #NAME?
+
+    solo deben mencionarse cuando aparezcan REALMENTE dentro del
+    elemento curricular que estás analizando.
+
+    Nunca inventes un error técnico.
+
+    Nunca asumas que un error encontrado en una parte del documento
+    está presente en otra.
+
+    ============================================================
+    SALIDA
+    ============================================================
+
+    Las observaciones se escribirán directamente en:
+
+    "Observaciones Generales por la IA"
+
+    Por ello:
+
+    - deben ser claras;
+    - deben ser específicas;
+    - deben indicar el elemento revisado;
+    - deben explicar el motivo;
+    - no deben depender de coordenadas del Excel.
+
+    Responde únicamente JSON válido.
     """.strip()
+
+        # ========================================================
+        # BACKEND WARNINGS
+        # ========================================================
 
         warning_text = (
             "\n".join(
@@ -4069,6 +4210,10 @@ class CurriculumFeedbackService:
             )
             or "- Ninguna"
         )
+
+        # ========================================================
+        # DYNAMIC MATRIX TARGETS
+        # ========================================================
 
         target_text = "\n".join(
             (
@@ -4088,420 +4233,1454 @@ class CurriculumFeedbackService:
             in matrix_targets
         )
 
+        # ========================================================
+        # USER MESSAGE
+        # ========================================================
+
         user_message = f"""
+    ============================================================
     CURSO
+    ============================================================
 
     Código: {course.code}
     Nombre: {course.name}
 
 
-    ADVERTENCIAS DE CONTEXTO
+    ============================================================
+    INFORMACIÓN OPERATIVA DEL BACKEND
+    ============================================================
 
     {warning_text}
 
+    IMPORTANTE:
 
-    ============================================================
-    OBJETIVO
-    ============================================================
+    Estas advertencias son información OPERATIVA del backend.
 
-    Genera observaciones de revisión curricular que indiquen, para cada
-    apartado, si la información presentada es coherente, suficiente y
-    consistente con el resto del diseño curricular.
+    NO constituyen evidencia curricular.
 
-    Las observaciones deben reflejar lo que está correcto y lo que requiere
-    corrección, pero NO deben clasificarse como fortalezas o debilidades.
-    "Observaciones Generales por la IA" de:
+    NO copies estas advertencias dentro de las observaciones
+    curriculares salvo que indiquen explícitamente que una fuente
+    necesaria no pudo ser leída.
 
-    02_Matriz observaciones estructura
-
-    Debes generar exactamente una salida para cada sección indicada
-    más abajo.
+    No conviertas mensajes técnicos del backend en errores del
+    contenido curricular.
 
 
     ============================================================
-    5_Diseño_Curricular
+    OBJETIVO GENERAL
     ============================================================
 
-    5_Diseño_Curricular fue leído directamente como XLSX.
+    Realiza una revisión CRÍTICA de la Planeación Curricular.
 
-    Por tanto, dentro del contenido encontrarás las hojas identificadas
-    explícitamente mediante encabezados como:
+    El objetivo principal es determinar si cada elemento:
 
-    HOJA: Competencias
-    HOJA: Diseño
-    HOJA: Semana Diagnostico
-    HOJA: S.2
-    ...
-    HOJA: S.11
-    HOJA: Proyectos
-    HOJA: Practicas
-    HOJA: Tareas
+    - existe cuando corresponde;
+    - tiene sentido;
+    - mantiene coherencia interna;
+    - mantiene coherencia con su competencia;
+    - mantiene coherencia con los contenidos;
+    - mantiene coherencia con las actividades;
+    - mantiene coherencia con los tiempos;
+    - mantiene coherencia con los documentos de contexto;
+    - mantiene coherencia con la progresión general del curso.
 
-    Las coordenadas como A1, B4, C7, etc. corresponden a las celdas
-    del libro.
+    NO busques errores únicamente por encontrar errores.
 
-    Utiliza esta estructura para evitar mezclar el contenido de una
-    hoja con otra.
+    Pero tampoco aceptes información superficialmente solo porque
+    está completa.
+
+    Debes cuestionar críticamente si lo escrito tiene SENTIDO.
 
 
     ============================================================
-    CORRESPONDENCIA
+    MÉTODO OBLIGATORIO PARA TODO APARTADO
     ============================================================
 
-    Análisis Internacional y Local:
-    utiliza principalmente los documentos contextuales, especialmente
-    4_Analisis_Internacional, y contrasta con los demás cuando exista
-    información suficiente.
+    Para cada sección sigue este orden:
 
-    Competencias:
-    utiliza la hoja Competencias.
+    PASO 1 — PRESENCIA
 
-    Diseño curricular:
-    utiliza la hoja Diseño.
+    Determina si existe contenido REAL.
 
-    Semana Diagnostico:
-    utiliza la hoja Semana Diagnostico.
+    No consideres contenido real únicamente:
 
-    Semana 2 a Semana 11:
-    utiliza respectivamente S.2 a S.11.
+    - títulos;
+    - etiquetas;
+    - campos vacíos;
+    - "Obligatorio";
+    - "Obligatoria";
+    - "Optativa";
+    - nombres de plantilla.
 
-    Las semanas NO son sesiones.
+    PASO 2 — PROPÓSITO
 
-    No utilices "sesión 2", "sesión 3", etc.
+    Identifica qué pretende lograr el apartado.
 
-    Proyectos:
-    utiliza la hoja Proyectos.
+    PASO 3 — REFERENCIA
 
-    Prácticas:
-    utiliza la hoja Practicas.
+    Determina contra qué debe compararse:
 
-    Tareas:
-    utiliza la hoja Tareas.
+    - Competencias;
+    - Diseño;
+    - contexto;
+    - semana;
+    - proyecto;
+    - práctica;
+    - tarea;
+    - reglas de tiempo;
+    - otros elementos relacionados.
+
+    PASO 4 — COHERENCIA
+
+    Analiza si las piezas tienen sentido entre sí.
+
+    PASO 5 — OBSERVACIÓN
+
+    Escribe únicamente hallazgos específicos y útiles.
+
+
+    ============================================================
+    ANÁLISIS INTERNACIONAL Y LOCAL
+    ============================================================
+
+    CLAVE:
+
+    analisis_internacional_y_local
+
+    FUENTE PRINCIPAL Y OBLIGATORIA PARA ESTA OBSERVACIÓN:
+
+    4_Analisis_Internacional
+
+    Si dentro del contexto aparece identificado como:
+
+    "Analisis Internacional"
+    "Análisis Internacional"
+    "Analisis Internacional y Local"
+    "Análisis Internacional y Local"
+
+    trátalo como la misma fuente.
+
+    ANTES de generar esta observación debes LEER específicamente
+    ese documento.
+
+    NO utilices como evidencia principal:
+
+    - S.2;
+    - S.3;
+    - S.4;
+    - S.5;
+    - S.6;
+    - S.7;
+    - S.8;
+    - S.9;
+    - S.10;
+    - S.11;
+    - Proyectos;
+    - Practicas;
+    - Tareas.
+
+    Estas secciones pueden utilizarse únicamente después para
+    comprobar si lo planteado en el análisis internacional/local
+    tiene correspondencia general con el Diseño Curricular.
+
+    MUY IMPORTANTE:
+
+    Un #REF!, tiempo incorrecto, actividad incorrecta o cualquier
+    otro error encontrado en una semana NO pertenece a
+    analisis_internacional_y_local.
+
+    No menciones ese error aquí.
+
+    PARA ESTA SECCIÓN ANALIZA:
+
+    1. Qué referentes internacionales o locales se utilizaron.
+
+    2. Qué tendencias, contenidos, competencias, metodologías,
+    tecnologías o enfoques fueron identificados.
+
+    3. Si el análisis establece una comparación real y útil.
+
+    4. Si las conclusiones obtenidas tienen sentido respecto del
+    curso.
+
+    5. Si existe coherencia entre lo identificado internacional
+    y localmente y las decisiones curriculares generales.
+
+    6. Si las recomendaciones o conclusiones del análisis fueron
+    incorporadas de manera razonable en el Diseño Curricular.
+
+    7. Si existen conclusiones que no se derivan de la evidencia
+    presentada.
+
+    8. Si existen comparaciones superficiales que no sustentan una
+    decisión curricular.
+
+    La observación debe tratar sobre la CALIDAD Y COHERENCIA DEL
+    ANÁLISIS INTERNACIONAL Y LOCAL.
+
+    Ejemplo:
+
+    "Se identifican referentes internacionales relacionados con
+    almacenamiento distribuido y virtualización, y estos guardan
+    correspondencia con los contenidos incorporados al Diseño
+    Curricular. No se identifican discrepancias relevantes entre
+    los referentes analizados y la orientación general del curso."
+
+    O, si existe un problema real:
+
+    "Las tendencias identificadas priorizan X, pero esta conclusión
+    no se refleja posteriormente en las competencias ni en el
+    Diseño Curricular, por lo que existe una desconexión entre el
+    análisis realizado y la planificación final."
+
+    NO menciones filas.
+    NO menciones celdas.
+    NO menciones errores de otras hojas.
+
+
+    ============================================================
+    COMPETENCIAS
+    ============================================================
+
+    CLAVE:
+
+    competencias
+
+    FUENTE PRINCIPAL:
+
+    hoja Competencias de 5_Diseño_Curricular.
+
+    Primero identifica cuáles son las competencias OFICIALES del
+    curso.
+
+    Estas competencias serán la referencia principal para:
+
+    - semanas;
+    - proyectos;
+    - prácticas;
+    - tareas.
+
+    Analiza críticamente cada competencia considerando:
+
+    - verbo utilizado;
+    - objeto de aprendizaje;
+    - conocimientos implicados;
+    - habilidad esperada;
+    - condición o contexto de aplicación;
+    - herramientas cuando corresponda;
+    - relación con el perfil y contexto del curso.
+
+    Busca especialmente:
+
+    - competencias demasiado genéricas;
+    - competencias que no corresponden con el curso;
+    - competencias redundantes;
+    - competencias que mezclan demasiados resultados distintos;
+    - competencias que no pueden evidenciarse mediante las
+    actividades propuestas;
+    - competencias que no aparecen luego en el Diseño Curricular;
+    - contenidos importantes que no tienen una competencia
+    relacionada.
+
+    No evalúes únicamente la redacción.
+
+    Evalúa el SENTIDO curricular de las competencias.
+
+
+    ============================================================
+    DISEÑO CURRICULAR
+    ============================================================
+
+    CLAVE:
+
+    diseno_curricular
+
+    FUENTES PRINCIPALES:
+
+    - hoja Diseño;
+    - hoja Competencias.
+
+    Utiliza además los documentos contextuales para comprobar
+    pertinencia.
+
+    Analiza globalmente:
+
+    - unidades;
+    - temas;
+    - subtemas;
+    - competencias;
+    - secuencia;
+    - distribución semanal;
+    - progresión;
+    - relación entre teoría y práctica;
+    - relación con proyectos;
+    - relación con prácticas;
+    - relación con tareas.
+
+    Busca:
+
+    - temas fuera de secuencia;
+    - subtemas que no corresponden con su tema;
+    - unidades desconectadas;
+    - contenidos repetidos sin propósito;
+    - saltos de dificultad;
+    - contenidos que requieren conocimientos no desarrollados;
+    - contenido que no responde a las competencias;
+    - competencias sin contenido suficiente;
+    - contenidos sin competencia relacionada.
+
+    Aquí debes señalar problemas GLOBALES.
+
+    Los errores específicos de una semana deben permanecer en esa
+    semana.
+
+
+    ============================================================
+    SEMANA DIAGNOSTICO
+    ============================================================
+
+    CLAVE:
+
+    semana_diagnostico
+
+    La Semana Diagnóstico debe analizarse como una herramienta para
+    determinar el punto de partida de los estudiantes.
+
+    PRIMERO comprueba qué apartados realmente contienen
+    información.
+
+    DESPUÉS analiza:
+
+    ------------------------------------------------------------
+    1. Bienvenida y Presentación
+    ------------------------------------------------------------
+
+    Revisa:
+
+    - qué se pretende presentar;
+    - cantidad de información;
+    - propósito;
+    - tiempo.
+
+    Tiempo máximo indicado por la plantilla:
+
+    15 minutos.
+
+    No basta con comprobar el límite.
+
+    Determina también si lo descrito puede desarrollarse
+    razonablemente en ese tiempo.
+
+
+    ------------------------------------------------------------
+    2. Evaluación de Conocimientos Previos
+    ------------------------------------------------------------
+
+    Revisa:
+
+    - conocimientos que se pretenden diagnosticar;
+    - relación con los conocimientos necesarios para el curso;
+    - preguntas;
+    - parte práctica;
+    - tiempo.
+
+    La plantilla contempla aproximadamente:
+
+    15 a 20 preguntas
+    +
+    una parte práctica.
+
+    Tiempo máximo:
+
+    45 minutos.
+
+    Sé crítico:
+
+    los conocimientos evaluados deben ser conocimientos que ayuden
+    realmente a determinar si el estudiante posee bases para el
+    curso.
+
+    No deben evaluar arbitrariamente contenido futuro sin sentido
+    diagnóstico.
+
+
+    ------------------------------------------------------------
+    3. Presentación de los Estudiantes
+    ------------------------------------------------------------
+
+    Comprueba:
+
+    - propósito;
+    - metodología;
+    - preguntas;
+    - cantidad de estudiantes;
+    - tiempo.
+
+    La plantilla plantea aproximadamente 5 estudiantes.
+
+    Tiempo máximo:
+
+    30 minutos.
+
+    Analiza también si la dinámica descrita tiene sentido dentro
+    de ese tiempo.
+
+
+    ------------------------------------------------------------
+    4. Censo de Horarios de Calificación
+    ------------------------------------------------------------
+
+    Comprueba:
+
+    - propósito;
+    - mecanismo;
+    - horarios;
+    - formulario cuando corresponda;
+    - tiempo.
+
+    Referencia aproximada:
+
+    5 minutos.
+
+
+    ------------------------------------------------------------
+    5. Presentación del Programa del Curso
+    ------------------------------------------------------------
+
+    Comprueba:
+
+    - propósito;
+    - información que se pretende explicar;
+    - tiempo;
+    - coherencia con el inicio del curso.
+
+    Tiempo máximo:
+
+    30 minutos.
+
+
+    ------------------------------------------------------------
+    6. Evaluación de Conocimientos del Curso Actual
+    ------------------------------------------------------------
+
+    Comprueba:
+
+    - qué pretende evaluar;
+    - preguntas;
+    - relación con el propósito diagnóstico;
+    - tiempo.
+
+    La plantilla plantea aproximadamente:
+
+    20 preguntas.
+
+    Tiempo máximo:
+
+    15 minutos.
+
+
+    ------------------------------------------------------------
+    COHERENCIA GLOBAL DE SEMANA DIAGNOSTICO
+    ------------------------------------------------------------
+
+    Después revisa:
+
+    - si los bloques realmente permiten diagnosticar al estudiante;
+    - si existe redundancia;
+    - si falta evaluar una base importante;
+    - si los tiempos tienen sentido;
+    - si el conjunto de actividades cabe razonablemente en el
+    tiempo disponible;
+    - si los conocimientos evaluados son pertinentes para el curso.
+
+    FORMATO CUANDO HAYA ERRORES:
+
+    1. Evaluación de Conocimientos Previos
+    Contenido: ...
+    Tiempo: ...
+
+    3. Presentación de los Estudiantes
+    Metodología: ...
+
+    Incluye únicamente los apartados que requieren observación.
+
+    No menciones filas ni celdas.
+
+
+    ============================================================
+    SEMANAS S.2 A S.11
+    ============================================================
+
+    CLAVES:
+
+    semana_2
+    semana_3
+    semana_4
+    semana_5
+    semana_6
+    semana_7
+    semana_8
+    semana_9
+    semana_10
+    semana_11
+
+    Cada semana debe analizarse DE FORMA INDEPENDIENTE.
+
+    No reutilices automáticamente una observación entre semanas.
+
+    Antes de evaluar la semana:
+
+    1. identifica en la hoja Diseño qué contenido corresponde a
+    esa semana;
+
+    2. identifica qué competencia corresponde;
+
+    3. identifica cuál es la progresión proveniente de semanas
+    anteriores;
+
+    4. después revisa el contenido detallado de la hoja S.X.
+
+
+    ============================================================
+    1. ÁREA ACTITUDINAL — SABER SER
+    ============================================================
+
+    Para cada semana analiza:
+
+    - Nombre del Valor;
+    - Tiempo Aproximado;
+    - Descripción;
+    - relación del valor con los conocimientos de esa semana;
+    - explicación de cómo se aplicará.
+
+
+    ------------------------------------------------------------
+    VALOR
+    ------------------------------------------------------------
+
+    No basta con que exista un valor como:
+
+    Responsabilidad
+    Trabajo en equipo
+    Integridad
+    Proactividad
+    Adaptabilidad
+    Colaboración
+
+    Debes determinar si ESE valor tiene sentido respecto de:
+
+    - contenidos de esa semana;
+    - actividades;
+    - dinámica de trabajo;
+    - competencia;
+    - contexto.
+
+    Ejemplo de problema:
+
+    "1. Área Actitudinal (Saber Ser)
+    Valor: se selecciona Trabajo en Equipo, pero las actividades
+    de la semana son completamente individuales y la descripción
+    no explica ninguna dinámica colaborativa."
+
+
+    ------------------------------------------------------------
+    DESCRIPCIÓN
+    ------------------------------------------------------------
+
+    Debe explicar cómo se desarrolla el valor.
+
+    Una definición genérica de "responsabilidad" o "integridad"
+    no es suficiente.
+
+    Debe existir relación con lo que el estudiante realizará.
+
+
+    ------------------------------------------------------------
+    RELACIÓN CON LOS CONOCIMIENTOS
+    ------------------------------------------------------------
+
+    Comprueba que la explicación conecte de forma concreta el
+    valor con los conocimientos de ESA semana.
+
+    Si menciona contenidos de otra semana o utiliza una explicación
+    genérica sin conexión, indícalo.
+
+
+    ------------------------------------------------------------
+    TIEMPO
+    ------------------------------------------------------------
+
+    La plantilla establece aproximadamente:
+
+    mínimo 3 minutos
+    máximo 5 minutos.
+
+    Comprueba:
+
+    - que se encuentre en el rango;
+    - que además sea suficiente para lo descrito.
+
+    No evalúes únicamente el número.
+
+
+    ============================================================
+    2. ÁREA CONOCIMIENTO — SABER
+    ============================================================
+
+    Analiza:
+
+    - Tiempo Aproximado;
+    - Competencia a desarrollar;
+    - Contenido;
+    - Recursos Educativos.
+
+
+    ------------------------------------------------------------
+    COMPETENCIA
+    ------------------------------------------------------------
+
+    La competencia utilizada debe compararse contra la hoja
+    Competencias.
+
+    Debe:
+
+    1. existir en Competencias;
+    2. conservar el mismo sentido;
+    3. tener relación con el contenido de esa semana.
+
+    Ignora únicamente diferencias de:
+
+    - espacios;
+    - saltos de línea;
+    - mayúsculas/minúsculas;
+    - formato.
+
+    No aceptes una competencia diferente simplemente porque
+    "se parece".
+
+    Ejemplo:
+
+    "2. Área Conocimiento (Saber)
+    Competencia: la competencia utilizada no corresponde con las
+    competencias definidas para el curso y tampoco guarda relación
+    suficiente con el contenido programado para esta semana."
+
+
+    ------------------------------------------------------------
+    TIEMPO
+    ------------------------------------------------------------
+
+    El Área Conocimiento no debe superar aproximadamente:
+
+    60 minutos.
+
+    Pero debes analizar también si el tiempo asignado tiene
+    sentido para:
+
+    - cantidad de contenidos;
+    - profundidad;
+    - recursos;
+    - complejidad.
+
+
+    ============================================================
+    2.1 CONTENIDO
+    ============================================================
+
+    Analiza por separado:
+
+    - Unidad;
+    - Tema;
+    - Subtema.
+
+    PRIMERA COMPARACIÓN:
+
+    hoja Diseño.
+
+    La Unidad, Tema y Subtema de la semana deben corresponder con
+    lo programado para ESA semana.
+
+    SEGUNDA COMPARACIÓN:
+
+    competencia.
+
+    El contenido debe contribuir realmente al desarrollo de la
+    competencia.
+
+    TERCERA COMPARACIÓN:
+
+    contexto y secuencia.
+
+    El contenido debe tener sentido respecto de:
+
+    - semanas anteriores;
+    - semanas posteriores;
+    - conocimientos previos;
+    - contexto del curso.
+
+    Busca críticamente:
+
+    - unidad de otra semana;
+    - tema de otra unidad;
+    - subtema sin relación con el tema;
+    - contenido demasiado avanzado para ese momento;
+    - contenido ya desarrollado innecesariamente;
+    - contenido ajeno al curso;
+    - contenido que no aporta a la competencia;
+    - falta de un conocimiento necesario antes de avanzar.
+
+    FORMATO:
+
+    2.1 Contenido
+    Unidad: ...
+    Tema: ...
+    Subtema: ...
+
+    Solo incluye los campos que presenten una observación.
+
+
+    ============================================================
+    2.2 RECURSOS EDUCATIVOS
+    ============================================================
+
+    Analiza cada recurso REALMENTE utilizado.
+
+    La plantilla contempla:
+
+    Presentación
+    - obligatorio;
+    - máximo recomendado aproximado: 30 minutos.
+
+    Video
+    - obligatorio;
+    - máximo recomendado aproximado: 6 minutos.
+
+    Lectura
+    - optativa;
+    - máximo recomendado aproximado: 10 minutos.
+
+    Ejercicio Demostrativo
+    - obligatorio;
+    - máximo recomendado aproximado: 30 minutos.
+
+    Para cada recurso analiza:
+
+    1. si tiene relación con el contenido;
+
+    2. si es un recurso apropiado para lo que se pretende enseñar;
+
+    3. si el tiempo tiene sentido;
+
+    4. si el tiempo respeta la referencia de la plantilla;
+
+    5. si la combinación de recursos puede realizarse dentro del
+    tiempo total del Área Conocimiento;
+
+    6. si existe redundancia entre recursos;
+
+    7. si el recurso realmente aporta algo distinto.
+
+    Ejemplo:
+
+    "2.2 Recursos Educativos
+    Video - Tiempo: se asignan 9 minutos cuando la plantilla
+    recomienda un máximo de 6 minutos."
+
+    Ejemplo de coherencia:
+
+    "2.2 Recursos Educativos
+    Lectura: el recurso se orienta a un contenido distinto al
+    tema desarrollado durante la semana y no aporta directamente
+    a la competencia seleccionada."
+
+
+    ============================================================
+    3. ÁREA DE HABILIDADES — SABER HACER
+    ============================================================
+
+    Analiza:
+
+    - tiempo total;
+    - Actividad 1;
+    - Actividad 2 cuando exista.
+
+
+    ============================================================
+    ACTIVIDAD 1
+    ============================================================
+
+    La Actividad 1 debe contener:
+
+    - Competencia que predomina;
+    - Tipo de Actividad;
+    - Ponderación;
+    - Tiempo Aproximado;
+    - Descripción de la Actividad.
+
+
+    ------------------------------------------------------------
+    COMPETENCIA
+    ------------------------------------------------------------
+
+    Comprueba:
+
+    - que exista en Competencias;
+    - que corresponda con el conocimiento trabajado;
+    - que pueda desarrollarse mediante la actividad descrita.
+
+
+    ------------------------------------------------------------
+    TIPO DE ACTIVIDAD
+    ------------------------------------------------------------
+
+    El tipo de actividad debe tener SENTIDO con la descripción.
+
+    Analiza semánticamente lo que el estudiante realmente hará.
+
+    Ejemplo:
+
+    Si se selecciona:
+
+    "Actividad práctica"
+
+    pero la descripción únicamente pide:
+
+    "leer un documento y responder preguntas"
+
+    existe una inconsistencia entre tipo y descripción.
+
+
+    ------------------------------------------------------------
+    DESCRIPCIÓN DE LA ACTIVIDAD
+    ------------------------------------------------------------
+
+    Este campo debe analizarse críticamente.
+
+    Comprueba:
+
+    - qué hará exactamente el estudiante;
+    - qué conocimiento aplica;
+    - qué competencia desarrolla;
+    - si corresponde con el tipo de actividad;
+    - si tiene relación con la semana;
+    - si puede realizarse en el tiempo dado;
+    - si utiliza conocimientos que ya deberían haberse aprendido;
+    - si no exige conocimientos que todavía no se han desarrollado;
+    - si el producto esperado tiene sentido.
+
+
+    ------------------------------------------------------------
+    TIEMPO
+    ------------------------------------------------------------
+
+    No te limites a comparar un rango.
+
+    Analiza si el tiempo es REALISTA para la actividad descrita.
+
+    Una actividad compleja con un tiempo mínimo puede ser
+    incoherente aunque no exista una regla numérica explícita.
+
+
+    ------------------------------------------------------------
+    PONDERACIÓN
+    ------------------------------------------------------------
+
+    Analiza si la ponderación guarda una proporción razonable con:
+
+    - dificultad;
+    - tiempo;
+    - producto;
+    - importancia académica.
+
+    No inventes una ponderación ideal si no existe evidencia
+    suficiente.
+
+
+    ============================================================
+    ACTIVIDAD 2
+    ============================================================
+
+    PRIMERO determina si realmente existe.
+
+    Si únicamente aparecen etiquetas de plantilla:
+
+    no existe.
+
+    Si está vacía:
+
+    NO la menciones.
+
+    Si existe, aplica exactamente la misma revisión de Actividad 1:
+
+    - competencia;
+    - tipo;
+    - descripción;
+    - tiempo;
+    - ponderación;
+    - coherencia con la semana.
+
+
+    ============================================================
+    CIERRE
+    ============================================================
+
+    Analiza:
+
+    - Tiempo Aproximado;
+    - Asignación de Actividades.
+
+    Referencia aproximada:
+
+    10 a 15 minutos.
+
+    Comprueba si:
+
+    - el tiempo tiene sentido;
+    - permite cerrar correctamente la semana;
+    - se relaciona con lo trabajado;
+    - las actividades asignadas existen;
+    - las tareas/proyectos/prácticas mencionados existen;
+    - la asignación ocurre en una secuencia lógica;
+    - no se asigna una actividad que exige contenido futuro.
+
+
+    ============================================================
+    COHERENCIA GLOBAL DE CADA SEMANA
+    ============================================================
+
+    Finalmente relaciona:
+
+    VALOR
+    ↓
+    COMPETENCIA
+    ↓
+    CONTENIDO
+    ↓
+    RECURSOS
+    ↓
+    ACTIVIDAD
+    ↓
+    CIERRE
+
+    La semana debe formar una unidad coherente.
+
+    Pregúntate:
+
+    "¿Tiene sentido que este valor, esta competencia, este
+    contenido, estos recursos y esta actividad estén juntos en
+    esta semana?"
+
+    También analiza el tiempo total.
+
+    La plantilla espera aproximadamente al menos 100 minutos
+    totales y establece diferentes referencias por área.
+
+    No confíes exclusivamente en una fórmula de validación.
+
+
+    ============================================================
+    FORMATO DE OBSERVACIONES DE SEMANAS
+    ============================================================
+
+    Si hay varios hallazgos:
+
+    1. Área Actitudinal (Saber Ser)
+    Valor: ...
+    Tiempo: ...
+    Relación con los conocimientos: ...
+
+    2. Área Conocimiento (Saber)
+    Competencia: ...
+
+    2.1 Contenido
+    Unidad: ...
+    Tema: ...
+
+    2.2 Recursos Educativos
+    Video: ...
+
+    3. Área de Habilidades (Saber Hacer)
+    Actividad 1 - Tipo de Actividad: ...
+    Actividad 1 - Descripción: ...
+    Actividad 2 - Tiempo: ...
+
+    Cierre
+    Asignación de Actividades: ...
+
+    NO escribas una sección que no tenga ninguna observación.
+
+    NO menciones celdas.
+
+    NO menciones filas.
+
+    NO menciones coordenadas.
+
 
     ============================================================
     PROYECTOS
     ============================================================
 
-    La hoja "Proyectos" contiene espacios de plantilla para hasta
-    tres proyectos.
+    Correspondencia:
 
-    La correspondencia con la matriz es:
+    Primer Proyecto -> proyecto_1
+    Segundo Proyecto -> proyecto_2
+    Tercer Proyecto -> proyecto_3
 
-    - "Primer Proyecto", "Proyecto 1", "Proyecto No. 1",
-    "Proyecto No 1" o equivalente
-    -> proyecto_1
+    ANTES DE ANALIZAR:
 
-    - "Segundo Proyecto", "Proyecto 2", "Proyecto No. 2",
-    "Proyecto No 2" o equivalente
-    -> proyecto_2
+    determina si el proyecto realmente existe.
 
-    - "Tercer Proyecto", "Proyecto 3", "Proyecto No. 3",
-    "Proyecto No 3" o equivalente
-    -> proyecto_3
+    No consideres contenido suficiente únicamente:
 
-    IMPORTANTE:
+    - Primer Proyecto;
+    - Segundo Proyecto;
+    - Tercer Proyecto;
+    - Obligatorio;
+    - Optativa;
+    - Competencia a desarrollar;
+    - Título;
+    - Tecnologías;
+    - Descripción;
+    - Ponderación;
+    - Horas.
 
-    La sola existencia del encabezado de un proyecto NO significa
-    que el proyecto exista.
+    Estas pueden ser únicamente etiquetas de plantilla.
 
-    La plantilla puede contener encabezados y etiquetas vacías como:
+    Si un proyecto optativo está vacío:
 
-    - Primer Proyecto
-    - Segundo Proyecto
-    - Tercer Proyecto
-    - Obligatorio
-    - Optativa
-    - Competencia a desarrollar
-    - Titulo
-    - Tecnologías
-    - Descripción
-    - Ponderación
-    - Horas para realizarlo
+    devuelve exactamente "".
 
-    Estas etiquetas forman parte de la estructura de la plantilla
-    y NO deben considerarse contenido de un proyecto.
 
-    "Obligatorio" u "Optativa" por sí solos tampoco significan que
-    el proyecto tenga contenido.
+    ============================================================
+    ANÁLISIS DE CADA PROYECTO EXISTENTE
+    ============================================================
 
-    Un proyecto debe considerarse REAL únicamente cuando su bloque
-    contenga información sustantiva ingresada por el autor, por
-    ejemplo uno o varios de estos elementos con un valor real:
+    Analiza como un CONJUNTO:
 
-    - competencia a desarrollar;
-    - título;
-    - tecnologías, lenguajes o plataformas;
-    - descripción;
-    - ponderación;
-    - horas de realización.
+    COMPETENCIA
+    ↓
+    TÍTULO
+    ↓
+    TECNOLOGÍAS
+    ↓
+    DESCRIPCIÓN
+    ↓
+    PONDERACIÓN
+    ↓
+    HORAS
 
-    Si un bloque contiene solamente el nombre del proyecto,
-    "Obligatorio" u "Optativa" y las etiquetas de la plantilla,
-    pero los campos correspondientes están vacíos, entonces ese
-    proyecto está VACÍO.
+    No los revises aisladamente.
 
-    Cuando un proyecto esté vacío, devuelve EXACTAMENTE:
 
-    ""
+    ------------------------------------------------------------
+    COMPETENCIA
+    ------------------------------------------------------------
 
-    No escribas una observación indicando que está vacío.
-    No expliques que es optativo.
-    No indiques que no tiene requerimientos.
-    No evalúes un espacio de plantilla vacío.
+    Debe:
+
+    - existir en Competencias;
+    - corresponder realmente con el proyecto;
+    - poder demostrarse mediante el producto solicitado.
+
+
+    ------------------------------------------------------------
+    TÍTULO
+    ------------------------------------------------------------
+
+    Debe representar adecuadamente lo que realmente se realizará.
+
+
+    ------------------------------------------------------------
+    TECNOLOGÍAS
+    ------------------------------------------------------------
+
+    Comprueba:
+
+    - si tienen relación con el proyecto;
+    - si son suficientes;
+    - si la descripción realmente las utiliza;
+    - si tienen sentido dentro del contexto del curso.
+
+
+    ------------------------------------------------------------
+    DESCRIPCIÓN
+    ------------------------------------------------------------
+
+    Sé especialmente crítico.
+
+    Comprueba:
+
+    - coherencia con competencia;
+    - coherencia con título;
+    - coherencia con tecnologías;
+    - coherencia con los contenidos del curso;
+    - coherencia con el contexto dado;
+    - alcance;
+    - dificultad;
+    - secuencia;
+    - producto esperado.
+
+    Busca requisitos que parezcan desconectados del propósito
+    principal.
+
+
+    ------------------------------------------------------------
+    HORAS
+    ------------------------------------------------------------
+
+    Comprueba si las horas tienen sentido respecto de:
+
+    - alcance;
+    - complejidad;
+    - tecnologías;
+    - producto.
+
+
+    ------------------------------------------------------------
+    PONDERACIÓN
+    ------------------------------------------------------------
+
+    Comprueba si tiene sentido respecto del trabajo solicitado.
+
+    Además, cuando haya información suficiente, revisa la
+    distribución global de proyectos según las reglas contenidas
+    en la propia plantilla.
+
+
+    ============================================================
+    FORMATO DE PROYECTO
+    ============================================================
 
     Ejemplo:
 
-    Si Primer Proyecto y Segundo Proyecto tienen contenido,
-    pero Tercer Proyecto solo contiene:
+    Competencia: ...
 
-    "3. Tercer Proyecto"
-    "Optativa"
-    "Competencia a desarrollar"
-    "Titulo"
-    "Descripción de lo que se realizara"
+    Descripción: ...
 
-    sin valores reales asociados, entonces:
+    Tecnologías: ...
 
-    "proyecto_1": "observación del primer proyecto",
-    "proyecto_2": "observación del segundo proyecto",
-    "proyecto_3": ""
+    Horas: ...
 
-    Debe existir como mínimo un proyecto real.
+    Incluye únicamente los aspectos donde exista una observación
+    real.
 
-    Si no existe ningún proyecto real, únicamente proyecto_1 puede
-    indicar la ausencia del proyecto obligatorio y los demás deben
-    devolver "".
 
     ============================================================
     PRACTICAS
     ============================================================
 
-    La hoja "Practicas" puede identificar las prácticas mediante
-    ordinales escritos con palabras.
+    Correspondencia:
 
-    La correspondencia es:
+    Primera Practica -> practica_1
+    Segunda Practica -> practica_2
+    Tercera Practica -> practica_3
+    Cuarta Practica -> practica_4
+    Quinta Practica -> practica_5
+    Sexta Practica -> practica_6
+    Septima Practica -> practica_7
 
-    - "Primera Practica", "Primera Práctica", "Practica 1",
-    "Práctica 1" -> practica_1
+    PRIMERO determina si cada práctica realmente tiene contenido.
 
-    - "Segunda Practica", "Segunda Práctica", "Practica 2",
-    "Práctica 2" -> practica_2
+    Si una práctica optativa está vacía:
 
-    - "Tercera Practica", "Tercera Práctica", "Practica 3",
-    "Práctica 3" -> practica_3
+    devuelve "".
 
-    - "Cuarta Practica", "Cuarta Práctica", "Practica 4",
-    "Práctica 4" -> practica_4
+    Para cada práctica existente analiza:
 
-    - "Quinta Practica", "Quinta Práctica", "Practica 5",
-    "Práctica 5" -> practica_5
+    COMPETENCIA
+    ↓
+    TÍTULO
+    ↓
+    TECNOLOGÍAS
+    ↓
+    DESCRIPCIÓN
+    ↓
+    PONDERACIÓN
+    ↓
+    HORAS
 
-    - "Sexta Practica", "Sexta Práctica", "Practica 6",
-    "Práctica 6" -> practica_6
+    La revisión debe enfocarse en SENTIDO y COHERENCIA.
 
-    - "Séptima Practica", "Séptima Práctica", "Practica 7",
-    "Práctica 7" -> practica_7
+    Pregúntate:
 
-    Las prácticas son opcionales.
+    - ¿la práctica desarrolla realmente la competencia indicada?;
+    - ¿el título corresponde con lo que se hará?;
+    - ¿las tecnologías corresponden?;
+    - ¿la descripción aplica conocimientos del curso?;
+    - ¿el estudiante posee esos conocimientos en ese momento?;
+    - ¿el alcance tiene sentido?;
+    - ¿las horas son razonables?;
+    - ¿la ponderación guarda relación con el trabajo?;
+    - ¿la práctica aporta algo distinto de un proyecto o tarea?;
+    - ¿tiene sentido dentro del contexto del curso?
 
-    Evalúa únicamente las prácticas que realmente existan.
-
-    No determines que una práctica está ausente solamente porque
-    la hoja no diga literalmente "Practica 1".
-
-    Si una posición de la matriz no corresponde a una práctica
-    real, devuelve "".
-
-    No recomiendes agregar prácticas solamente porque existan
-    espacios vacíos en la matriz.
+    Cuando exista información suficiente, comprueba también las
+    reglas globales de ponderación indicadas en la plantilla.
 
 
     ============================================================
     TAREAS
     ============================================================
 
-    La hoja "Tareas" utiliza nombres propios para identificar las
-    actividades.
+    Correspondencia:
 
-    La correspondencia principal es:
-
-    - "Tarea de fortalecimiento académico"
+    Tarea de fortalecimiento académico
     -> tarea_fortalecimiento
 
-    También acepta variantes mínimas de acentuación o mayúsculas,
-    pero NO debes confundirla con una tarea numerada.
-
-    Las tareas numeradas pueden aparecer con ordinales escritos
-    con palabras:
-
-    - "Primera Tarea", "Tarea 1"
+    Primera Tarea
     -> tarea_1
 
-    - "Segunda Tarea", "Tarea 2"
+    Segunda Tarea
     -> tarea_2
 
-    - "Tercera Tarea", "Tarea 3"
+    Tercera Tarea
     -> tarea_3
 
-    - "Cuarta Tarea", "Tarea 4"
+    Cuarta Tarea
     -> tarea_4
 
-    - "Quinta Tarea", "Tarea 5"
-    -> tarea_5, únicamente si dicha posición existe en la matriz
+    Quinta Tarea
+    -> tarea_5
 
-    - "Sexta Tarea", "Tarea 6"
+    Sexta Tarea
     -> tarea_6
 
-    - "Séptima Tarea", "Tarea 7"
+    Septima Tarea
     -> tarea_7
 
-    IMPORTANTE:
 
-    "Tarea de fortalecimiento académico" es una actividad diferente
-    de "Primera Tarea".
+    ============================================================
+    PRESENCIA DE LAS TAREAS
+    ============================================================
 
-    No las combines.
+    Primero determina si la tarea realmente existe.
 
-    Las tareas son opcionales.
+    Si una tarea optativa está vacía:
 
-    Evalúa únicamente aquellas que realmente existan.
-
-    Para cualquier posición de matriz sin tarea correspondiente,
     devuelve "".
 
 
     ============================================================
-    SEMANAS
+    PROPÓSITO PRINCIPAL DE LAS TAREAS
     ============================================================
 
-    La correspondencia es EXACTA:
+    Las tareas deben analizarse especialmente desde esta pregunta:
 
-    - hoja "Semana Diagnostico"
-    -> semana_diagnostico
+    "¿Qué conocimientos base y competencias esenciales se deben
+    reforzar para que el estudiante pueda afrontar con mayor
+    solidez los contenidos del curso?"
 
-    - hoja "S.2"
-    -> semana_2
+    Por ello NO basta con comprobar que una tarea tenga relación
+    general con el curso.
 
-    - hoja "S.3"
-    -> semana_3
-
-    - hoja "S.4"
-    -> semana_4
-
-    - hoja "S.5"
-    -> semana_5
-
-    - hoja "S.6"
-    -> semana_6
-
-    - hoja "S.7"
-    -> semana_7
-
-    - hoja "S.8"
-    -> semana_8
-
-    - hoja "S.9"
-    -> semana_9
-
-    - hoja "S.10"
-    -> semana_10
-
-    - hoja "S.11"
-    -> semana_11
-
-    Las hojas S.2 a S.11 son SEMANAS, no sesiones.
-
-    Debes revisar todos los valores recibidos dentro de la hoja,
-    incluidos aquellos provenientes de fórmulas calculadas.
-
-    No declares que una semana está vacía si dentro del bloque
-    HOJA correspondiente existe al menos una celda de contenido
-    además de títulos o encabezados.
-
-    Si la hoja posee contenido, evalúalo.
-
-    No repitas el nombre o número de la semana al comienzo de
-    la observación.
+    Debes determinar qué aporta.
 
 
     ============================================================
-    CONSISTENCIA GLOBAL
+    PARA CADA TAREA EXISTENTE
     ============================================================
 
-    Antes de responder compara:
+    Analiza:
 
-    - competencias contra actividades;
-    - diseño contra semanas;
-    - ponderaciones generales contra el detalle;
-    - tiempos declarados contra tiempos asignados;
-    - proyectos contra competencias;
-    - prácticas contra competencias, cuando existan;
-    - tareas contra competencias, cuando existan;
-    - actividades mencionadas en semanas contra proyectos,
-    prácticas o tareas;
-    - secuencia de S.2 a S.11.
+    - competencia;
+    - título;
+    - tecnologías;
+    - descripción;
+    - ponderación;
+    - horas.
 
-    Detecta también:
+    Pero además determina:
 
-    - #REF!
-    - #VALUE!
-    - #N/A
-    - #DIV/0!
-    - referencias rotas;
-    - campos obligatorios incompletos;
-    - sumatorias contradictorias;
-    - duplicaciones;
-    - actividades inexistentes mencionadas en otra hoja.
-    
+    1. Qué conocimiento base pretende reforzar.
+
+    2. Por qué ese conocimiento es necesario.
+
+    3. Qué contenido posterior del curso se beneficia de ese
+    refuerzo.
+
+    4. Si la actividad realmente ejercita ese conocimiento.
+
+    5. Si la competencia seleccionada corresponde.
+
+    6. Si la descripción tiene sentido respecto del objetivo
+    de refuerzo.
+
+    7. Si herramientas y tecnologías son pertinentes.
+
+    8. Si las horas son razonables.
+
+    9. Si la ponderación tiene sentido.
+
+
+    ============================================================
+    TAREA DE FORTALECIMIENTO ACADÉMICO
+    ============================================================
+
+    Para:
+
+    tarea_fortalecimiento
+
+    debes prestar especial atención a:
+
+    "Qué conocimientos base y competencias esenciales se deben
+    reforzar que permitan al estudiante afrontar con mayor
+    solidez los contenidos del curso."
+
+    Comprueba:
+
+    - si son conocimientos realmente previos;
+    - si son necesarios;
+    - si corresponden con dificultades previsibles;
+    - si ayudan a los contenidos posteriores;
+    - si están relacionados con el curso;
+    - si la tarea propuesta realmente los refuerza.
+
+    No aceptes una lista genérica de conocimientos solamente
+    porque pertenezcan al área informática.
+
+
+    ============================================================
+    TAREAS NUMERADAS
+    ============================================================
+
+    Para cada tarea numerada comprueba también la progresión.
+
+    Pregúntate:
+
+    "¿Tiene sentido pedir esta tarea en este punto del curso?"
+
+    Busca:
+
+    - conocimientos todavía no enseñados;
+    - tareas demasiado tardías;
+    - tareas sin conexión con contenidos posteriores;
+    - tareas que repiten actividades sin aportar refuerzo;
+    - tareas cuyo título y descripción no coinciden;
+    - tareas cuya competencia no corresponde.
+
+
+    ============================================================
+    NO CONFUNDIR AUSENCIA CON ERROR
+    ============================================================
+
+    Proyecto, práctica o tarea OPTATIVA sin contenido:
+
+    ""
+
+    No escribas:
+
+    "Está vacío."
+    "No fue definido."
+    "Se encuentra configurado como optativo."
+    "No tiene requerimientos."
+
+    Simplemente devuelve "".
+
+    Para componentes OBLIGATORIOS ausentes, sí corresponde generar
+    una observación.
+
+
+    ============================================================
     RESUMEN GENERAL
+    ============================================================
 
-    El resumen debe sintetizar el estado general del diseño curricular.
+    El resumen general debe sintetizar únicamente los principales
+    hallazgos curriculares.
 
-    NO utilices expresiones como:
-    - "fortalezas";
-    - "debilidades";
-    - "fortalezas significativas";
-    - "aspectos positivos";
-    - "aspectos negativos".
+    Debe hablar de:
 
-    En su lugar, describe:
-    - nivel general de coherencia;
-    - principales inconsistencias encontradas;
-    - aspectos que requieren corrección;
-    - elementos que se encuentran correctamente estructurados.
+    - coherencia global;
+    - problemas transversales;
+    - competencias;
+    - progresión;
+    - tiempos cuando sean relevantes;
+    - relación entre teoría y práctica;
+    - relación con el contexto.
+
+    NO incluyas:
+
+    - filas;
+    - celdas;
+    - coordenadas;
+    - detalles técnicos del backend;
+    - cantidad de caracteres;
+    - cantidad de hojas;
+    - método de extracción;
+    - número de tokens.
+
+    NO uses:
+
+    "fortalezas"
+    "debilidades"
+
+    como categorías.
 
 
     ============================================================
-    SECCIONES DE LA MATRIZ
+    ADVERTENCIAS
     ============================================================
 
-    Debes devolver exactamente estas claves:
+    El arreglo "advertencias" debe utilizarse únicamente para
+    situaciones que afecten la CONFIABILIDAD DEL ANÁLISIS.
+
+    Ejemplos:
+
+    - falta una fuente contextual necesaria;
+    - una sección obligatoria no pudo ser interpretada;
+    - existe información contradictoria que impide determinar
+    una conclusión.
+
+    NO coloques aquí todos los errores curriculares.
+
+    Los errores curriculares pertenecen a "observaciones".
+
+
+    ============================================================
+    SECCIONES DINÁMICAS DE LA MATRIZ
+    ============================================================
+
+    Debes devolver EXACTAMENTE estas claves:
 
     {target_text}
 
-    No agregues otras claves.
+    No inventes otras claves.
 
-    Para cualquier sección opcional sin contenido real utiliza "".
+    No elimines una clave requerida por el esquema.
+
+    Para un proyecto, práctica o tarea optativa sin contenido:
+
+    usa "".
 
 
     ============================================================
-    DOCUMENTOS
+    DOCUMENTOS DISPONIBLES
     ============================================================
+
+    A continuación se proporciona el contenido extraído de los
+    documentos.
+
+    IMPORTANTE:
+
+    Los identificadores técnicos que puedan acompañar al texto
+    (coordenadas, posiciones u otros datos de extracción) sirven
+    solo para reconstruir la estructura.
+
+    NO deben aparecer en tu respuesta.
 
     {context_text}
 
 
     ============================================================
-    FORMATO JSON
+    FORMATO JSON OBLIGATORIO
     ============================================================
 
-    Responde únicamente:
+    Responde únicamente con:
 
     {{
     "observaciones": {{
     {example_fields}
     }},
-    "resumen_general": "síntesis global breve",
+    "resumen_general": "síntesis crítica de la coherencia global del diseño curricular",
     "advertencias": []
     }}
     """.strip()
