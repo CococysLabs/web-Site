@@ -16,9 +16,11 @@ Este servicio hace algo distinto y complementario:
      "Proyectos" / "Practicas" / "Tareas" de
      0_Revision_de_Material / 02_Matriz observaciones estructura.
   4. Escribe Aplica=Si, Autor=IA, Presente y Observaciones en la
-     matriz — ÚNICAMENTE para los ítems que sí tienen contenido
-     real en la planeación curricular. Si un ítem no existe en la
-     planeación, sus filas no se tocan.
+     matriz — para los ítems que tienen contenido real en la
+     planeación curricular, o que no lo tienen pero sí tienen un
+     documento real entregado identificable (ítems optativos usados
+     sin planeación formal). Si un ítem no tiene ni planeación ni
+     documento real, sus filas no se tocan.
 """
 from __future__ import annotations
 
@@ -354,25 +356,41 @@ observaciones.
 REGLAS CRÍTICAS
 ============================================================
 
-1. La plantilla de planeación puede contener espacios vacíos para {label}
-   que el curso NO utilizó (solo etiquetas de la plantilla, sin contenido
-   real). Un ítem SOLO existe si la planeación tiene información real y
-   sustantiva para él (título, descripción, competencias, tecnologías,
-   alcance, etc. con valores reales — no solo el nombre del espacio de la
-   plantilla).
+1. Un ítem se considera "en uso" (debe evaluarse) si se cumple AL MENOS UNA
+   de estas dos condiciones:
+   a) La planeación curricular tiene información real y sustantiva para él
+      (título, descripción, competencias, tecnologías, alcance, etc. con
+      valores reales — no solo la etiqueta vacía de la plantilla), o
+   b) Existe al menos un documento real entregado (sección "DOCUMENTOS
+      REALES ENTREGADOS") que corresponda claramente a este ítem específico
+      por título, número de orden o contenido — aunque la planeación para
+      ese ítem esté vacía (típico de ítems optativos que el curso usó sin
+      llenar la plantilla de planeación).
+   Si NINGUNA de las dos se cumple (ni planeación ni documento identificable
+   para ese ítem), el ítem no se usó y debe omitirse.
 
 2. Para cada ítem listado abajo, determina primero "existe_en_planeacion":
-   true si el ítem tiene contenido real en la planeación curricular,
-   false si el espacio está vacío o no aparece en absoluto.
+   true si se cumple la condición (a) y/o (b) del punto 1, false si no se
+   cumple ninguna.
 
 3. Si "existe_en_planeacion" es false: para cada uno de sus campos responde
    {{"presente": "No", "observacion": ""}} — estos campos no se escribirán
    en la matriz, solo se piden para completar el JSON correctamente.
 
-4. Si "existe_en_planeacion" es true: evalúa COHERENCIA. El documento real
-   entregado, ¿corresponde a lo planeado (mismo tema, competencias,
-   alcance)? Si el documento real no existe o no corresponde a lo
-   planeado, indícalo explícitamente en las observaciones de sus campos.
+4. Si "existe_en_planeacion" es true POR TENER PLANEACIÓN (condición a):
+   evalúa COHERENCIA. El documento real entregado, ¿corresponde a lo
+   planeado (mismo tema, competencias, alcance)? Si el documento real no
+   existe o no corresponde a lo planeado, indícalo explícitamente en las
+   observaciones de sus campos.
+
+   Si "existe_en_planeacion" es true SOLO POR TENER DOCUMENTO REAL
+   (condición b, sin planeación de respaldo): no hay nada con qué comparar
+   coherencia. Evalúa cada campo únicamente con base en lo que demuestra el
+   documento real, y antepón a la observación de cada campo evaluado una
+   nota indicando que el ítem no está definido en la planeación curricular,
+   ej.: "No definido en la planeación curricular (5_Diseño_Curricular);
+   evaluado solo con base en el documento entregado. <resto de la
+   observación normal>".
 
 5. Para cada campo de la matriz determina "presente": "Si" si el campo
    aparece de forma clara en el documento real (explícita o
