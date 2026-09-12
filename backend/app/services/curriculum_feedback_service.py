@@ -1151,6 +1151,30 @@ class CurriculumFeedbackService:
             workbook_info,
         )
     
+    def call_ai(
+        self,
+        system_message: str,
+        user_message: str,
+        response_schema=None,
+    ):
+        """
+        Interfaz pública reutilizable para módulos que necesitan
+        la misma cadena de proveedores de IA:
+
+        1. Gemini
+        2. DeepSeek
+        3. Groq
+
+        Evita que otros servicios dependan directamente del método
+        privado _call_ai().
+        """
+
+        return self._call_ai(
+            system_message=system_message,
+            user_message=user_message,
+            response_schema=response_schema,
+        )
+    
     def _call_ai(
         self,
         system_message: str,

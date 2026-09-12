@@ -17,6 +17,7 @@ from app.routes import (
     course_contacts,
     curriculum_feedback,
     activity_content_analysis,
+    week_content_analysis,
 )
 
 app = FastAPI(
@@ -172,6 +173,10 @@ app.include_router(
 app.include_router(
     activity_content_analysis.router,
     tags=["Análisis de Contenido de Actividades"],
+)
+app.include_router(
+    week_content_analysis.router,
+    tags=["Análisis de Contenido Semanal"]
 )
 
 app = CORSMiddleware(
