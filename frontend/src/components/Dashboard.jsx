@@ -6,7 +6,7 @@ import DocumentAnalyzer from './admin/DocumentAnalyzer';
 import CourseFolderCreator from './CourseFolderCreator';
 import CourseContactsManager from './CourseContactsManager';
 import CurriculumFeedbackManager from './CurriculumFeedbackManager';
-import ActivityStructureValidator from './admin/ActivityStructureValidator';
+import MaterialReviewManager from './MaterialReviewManager';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -29,7 +29,6 @@ const Dashboard = () => {
   const canCreateFolders = isTeacher || isAdmin;
   const canManageCourseContacts = isTeacher || isAdmin;
   const canManageCurriculumFeedback = isTeacher || isAdmin;
-  const canValidateActivities = isTeacher || isAdmin || Boolean(user?.permissions?.can_validate_activities);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -203,15 +202,41 @@ const Dashboard = () => {
             </button>
           )}
 
-          {canValidateActivities && (
+          {canManageCurriculumFeedback && (
             <button
-              className={`nav-item ${activeView === 'activity-validation' ? 'active' : ''}`}
-              onClick={() => navTo('activity-validation')}
+              className={
+                `nav-item ${activeView === 'material-review'
+                  ? 'active'
+                  : ''
+                }`
+              }
+              onClick={() => {
+                navTo('material-review');
+              }}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 17l3 3 3-3m-3-3v6"
+                />
+
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 13V7a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2h6"
+                />
               </svg>
-              <span>Proyectos/Prácticas/Tareas</span>
+
+              <span>
+                Revisión de material
+              </span>
             </button>
           )}
 
@@ -467,10 +492,11 @@ const Dashboard = () => {
                   <CurriculumFeedbackManager />
                 )}
 
-              {/* ── Proyectos/Prácticas/Tareas ── */}
-              {activeView === 'activity-validation' && canValidateActivities && (
-                <ActivityStructureValidator />
-              )}
+              {/* ── Revisión de material (Fase 2: Proyectos/Practicas/Tareas) ── */}
+              {activeView === 'material-review'
+                && canManageCurriculumFeedback && (
+                  <MaterialReviewManager />
+                )}
 
               {/* ── Validaciones ── */}
               {activeView === 'validations' && (
