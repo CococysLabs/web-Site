@@ -17,8 +17,6 @@ const Dashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState('overview');
 
-  const [curriculumMenuOpen, setCurriculumMenuOpen] = useState(false);
-
   const [validationSummary, setValidationSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [expandedCourse, setExpandedCourse] = useState(null);
@@ -34,11 +32,6 @@ const Dashboard = () => {
   const canManageCourseContacts = isTeacher || isAdmin;
   const canManageCurriculumFeedback = isTeacher || isAdmin;
 
-  const curriculumSectionActive = (
-    activeView === 'curriculum-feedback'
-    || activeView === 'curriculum-weeks'
-  );
-
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     if (user?.is_approved) {
@@ -47,12 +40,6 @@ const Dashboard = () => {
     }
     return () => clearInterval(timer);
   }, [isTeacher, user?.is_approved]);
-
-  useEffect(() => {
-    if (curriculumSectionActive) {
-      setCurriculumMenuOpen(true);
-    }
-  }, [curriculumSectionActive]);
 
   const loadTeacherSummary = async () => {
     try {
@@ -173,126 +160,81 @@ const Dashboard = () => {
           )}
 
           {canManageCurriculumFeedback && (
-            <div className="nav-dropdown">
-              <button
-                type="button"
-                className={
-                  `nav-item nav-dropdown-toggle ${curriculumSectionActive
-                    ? 'active'
-                    : ''
-                  }`
-                }
-                onClick={() => {
-                  setCurriculumMenuOpen(
-                    (current) => !current,
-                  );
-                }}
-                aria-expanded={curriculumMenuOpen}
+            <button
+              type="button"
+              className={
+                `nav-item ${activeView === 'curriculum-feedback'
+                  ? 'active'
+                  : ''
+                }`
+              }
+              onClick={() => {
+                navTo('curriculum-feedback');
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4"
-                  />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4"
+                />
 
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"
-                  />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z"
+                />
 
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 7h6"
-                  />
-                </svg>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 7h6"
+                />
+              </svg>
 
-                <span>
-                  Planeación Curricular
-                </span>
+              <span>
+                Planeación Curricular
+              </span>
+            </button>
+          )}
 
-                <svg
-                  className={
-                    `nav-dropdown-chevron ${curriculumMenuOpen
-                      ? 'open'
-                      : ''
-                    }`
-                  }
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 9l6 6 6-6"
-                  />
-                </svg>
-              </button>
-
-
-              <div
-                className={
-                  `nav-dropdown-menu ${curriculumMenuOpen
-                    ? 'open'
-                    : ''
-                  }`
-                }
+          {canManageCurriculumFeedback && (
+            <button
+              type="button"
+              className={
+                `nav-item ${activeView === 'curriculum-weeks'
+                  ? 'active'
+                  : ''
+                }`
+              }
+              onClick={() => {
+                navTo('curriculum-weeks');
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
               >
-                <div className="nav-dropdown-menu-inner">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
 
-                  <button
-                    type="button"
-                    className={
-                      `nav-subitem ${activeView === 'curriculum-feedback'
-                        ? 'active'
-                        : ''
-                      }`
-                    }
-                    onClick={() => {
-                      navTo('curriculum-feedback');
-                    }}
-                  >
-                    <span className="nav-subitem-dot" />
-
-                    <span>
-                      Todos
-                    </span>
-                  </button>
-
-
-                  <button
-                    type="button"
-                    className={
-                      `nav-subitem ${activeView === 'curriculum-weeks'
-                        ? 'active'
-                        : ''
-                      }`
-                    }
-                    onClick={() => {
-                      navTo('curriculum-weeks');
-                    }}
-                  >
-                    <span className="nav-subitem-dot" />
-
-                    <span>
-                      Fase 2 - Semanas
-                    </span>
-                  </button>
-
-                </div>
-              </div>
-            </div>
+              <span>
+                Análisis semanal
+              </span>
+            </button>
           )}
 
           {canManageCurriculumFeedback && (
