@@ -14,15 +14,17 @@ petición. El frontend llama a este endpoint una vez por curso
 seleccionado, en secuencia.
 
 POST /api/activity-content-analysis/preview
+GET  /api/activity-content-analysis/files
 POST /api/activity-content-analysis/analyze-course
 """
 
-from typing import List
+from typing import Dict, List
 
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
     status,
 )
 
@@ -33,10 +35,16 @@ from app.models.user import User
 from app.routes.curriculum_feedback import require_teacher_or_admin
 
 from app.services.activity_content_analysis_service import (
+    ACTIVITY_TYPES,
     ActivityContentAnalysisError,
     activity_content_analysis_service,
 )
 from app.utils.auth import get_current_active_user
+
+
+ACTIVITY_ALIASES_BY_KEY = {
+    spec["key"]: spec["folder_aliases"] for spec in ACTIVITY_TYPES
+}
 
 
 router = APIRouter(
@@ -75,6 +83,10 @@ class ActivityAnalyzeCourseRequest(BaseModel):
     # Si se indica, limita el análisis a esos tipos (reduce la
     # duración de la petición y la carga sobre la IA).
     activity_types: List[str] = Field(default_factory=list)
+
+    # Por tipo, IDs de Drive específicos a analizar dentro de su carpeta
+    # real. Un tipo ausente o con lista vacía analiza la carpeta completa.
+    selected_file_ids: Dict[str, List[str]] = Field(default_factory=dict)
 
     @field_validator("course_folder_id", "course_name", "area")
     @classmethod
@@ -138,6 +150,46 @@ def preview_activity_content_analysis(
 
 
 # ============================================================
+# LISTAR ARCHIVOS DE UNA CARPETA REAL (Proyectos/Practicas/Tareas)
+# ============================================================
+
+@router.get("/files")
+def list_activity_content_files(
+    course_folder_id: str = Query(..., min_length=1),
+    activity_type: str = Query(..., min_length=1),
+    current_user: User = Depends(get_current_active_user),
+):
+    require_teacher_or_admin(current_user)
+
+    aliases = ACTIVITY_ALIASES_BY_KEY.get(activity_type.strip().lower())
+
+    if not aliases:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "activity_type inválido — usa 'proyectos', 'practicas' "
+                "o 'tareas'"
+            ),
+        )
+
+    try:
+        files = activity_content_analysis_service.list_activity_files(
+            course_folder_id.strip(), aliases
+        )
+
+        return {"success": True, "files": files}
+
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error inesperado listando archivos: {exc}",
+        ) from exc
+
+
+# ============================================================
 # ANALIZAR UN CURSO (síncrono, sin tabla de jobs)
 # ============================================================
 
@@ -187,6 +239,7 @@ def analyze_activity_content_course(
             area=request.area,
             write_output=request.write_output,
             activity_keys=request.activity_types or None,
+            selected_file_ids=request.selected_file_ids or None,
         )
 
     except ActivityContentAnalysisError as exc:

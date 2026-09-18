@@ -829,6 +829,76 @@
     font-size: 0.78rem;
 }
 
+.cfm-activity-file-picker {
+    margin-top: 1rem;
+    padding: 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+}
+
+.cfm-activity-file-picker-course {
+    display: block;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.6rem;
+}
+
+.cfm-activity-file-group {
+    margin-top: 0.6rem;
+}
+
+.cfm-activity-file-group h4 {
+    margin: 0;
+    font-size: 0.8rem;
+}
+
+.cfm-activity-file-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.5rem;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+}
+
+.cfm-activity-file-option {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.78rem;
+}
+
+.cfm-activity-file-option span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cfm-activity-file-option.selected {
+    border-color: var(--color-primary);
+    background: rgba(59, 130, 246, 0.07);
+}
+
+.cfm-activity-file-option.unsupported {
+    opacity: 0.55;
+}
+
+.cfm-activity-file-option input {
+    accent-color: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.cfm-activity-file-option small {
+    color: var(--color-text-secondary);
+    font-size: 0.68rem;
+    flex-shrink: 0;
+}
+
 
 /* ==========================================================
    RESPONSIVE

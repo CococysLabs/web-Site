@@ -276,10 +276,42 @@ class ActivityContentAnalysisService:
     # Documentos reales entregados (6_Proyectos / 7_Practicas / 8_Tareas)
     # ──────────────────────────────────────────────────────────────────────
 
+    def list_activity_files(
+        self,
+        course_folder_id: str,
+        aliases: List[str],
+    ) -> List[Dict[str, Any]]:
+        """
+        Lista los archivos de la carpeta real de un tipo de actividad
+        (6_Proyectos / 7_Practicas / 8_Tareas) para que el usuario elija
+        cuáles analizar, en vez de analizar la carpeta completa siempre.
+        """
+        folder = activity_structure_validation_service._find_activity_folder(
+            course_folder_id, aliases
+        )
+
+        if not folder:
+            return []
+
+        candidates = activity_structure_validation_service._collect_candidate_files(
+            folder["id"]
+        )
+
+        return [
+            {
+                "id": f["id"],
+                "name": f.get("name", ""),
+                "mimeType": f.get("mimeType", ""),
+                "supported": f.get("mimeType", "") in SUPPORTED_MIMES,
+            }
+            for f in candidates
+        ]
+
     def _collect_real_documents_text(
         self,
         course_folder_id: str,
         aliases: List[str],
+        allowed_ids: Optional[List[str]] = None,
     ) -> Tuple[str, int, Optional[str]]:
         folder = activity_structure_validation_service._find_activity_folder(
             course_folder_id, aliases
@@ -291,6 +323,10 @@ class ActivityContentAnalysisService:
         candidates = activity_structure_validation_service._collect_candidate_files(
             folder["id"]
         )
+
+        if allowed_ids:
+            allowed_set = set(allowed_ids)
+            candidates = [f for f in candidates if f["id"] in allowed_set]
 
         parts: List[str] = []
         count = 0
@@ -607,11 +643,16 @@ en la sección "ÍTEMS Y CAMPOS A EVALUAR"."""
         area: str,
         write_output: bool = True,
         activity_keys: Optional[List[str]] = None,
+        selected_file_ids: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
         """
         activity_keys: si se indica, limita el análisis a esos tipos
         ("proyectos", "practicas", "tareas") en vez de los tres —
         reduce la duración de la petición y la carga sobre la IA.
+
+        selected_file_ids: por tipo, IDs de Drive específicos a analizar
+        dentro de su carpeta real. Si un tipo no aparece o su lista viene
+        vacía, se analiza la carpeta completa (comportamiento anterior).
         """
         types_to_process = [
             spec
@@ -700,7 +741,9 @@ en la sección "ÍTEMS Y CAMPOS A EVALUAR"."""
             )[:MAX_PLANNING_CHARS]
 
             real_docs_text, doc_count, _ = self._collect_real_documents_text(
-                course_folder_id, spec["folder_aliases"]
+                course_folder_id,
+                spec["folder_aliases"],
+                allowed_ids=(selected_file_ids or {}).get(spec["key"]),
             )
 
             if not planning_block and doc_count == 0:
