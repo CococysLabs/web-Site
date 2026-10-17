@@ -467,32 +467,21 @@ const WeekContentAnalysisManager = () => {
     // ========================================================
 
     useEffect(() => {
-        let cancelled = false;
-
-
-        if (
-            !selectedSemesterId
-        ) {
+        if (!selectedSemesterId) {
             setAreas([]);
             setSelectedAreaId('');
-
             setCourses([]);
             setSelectedCourseIds([]);
 
             return undefined;
         }
 
+        const controller = new AbortController();
 
         const loadAreas = async () => {
             try {
-                setLoadingAreas(
-                    true,
-                );
-
-                setError(
-                    null,
-                );
-
+                setLoadingAreas(true);
+                setError(null);
 
                 setAreas([]);
                 setSelectedAreaId('');
@@ -508,58 +497,50 @@ const WeekContentAnalysisManager = () => {
 
                 setJobs({});
 
-
-                const response = (
-                    await api.get(
-                        '/api/week-content-analysis/areas',
-                        {
-                            params: {
-                                semester_folder_id: (
-                                    selectedSemesterId
-                                ),
-                            },
+                const response = await api.get(
+                    '/api/week-content-analysis/areas',
+                    {
+                        params: {
+                            semester_folder_id: (
+                                selectedSemesterId
+                            ),
                         },
-                    )
+                        signal: controller.signal,
+                    },
                 );
 
-
                 if (
-                    cancelled
+                    controller.signal.aborted
                     || !mountedRef.current
                 ) {
                     return;
                 }
-
 
                 const areaList = (
                     response.data?.areas
                     || []
                 );
 
+                setAreas(areaList);
 
-                setAreas(
-                    areaList,
-                );
-
-
-                if (
-                    areaList.length > 0
-                ) {
+                if (areaList.length > 0) {
                     setSelectedAreaId(
                         areaList[0].id,
                     );
                 }
 
-            } catch (
-            requestError
-            ) {
+            } catch (requestError) {
                 if (
-                    cancelled
-                    || !mountedRef.current
+                    requestError?.code === 'ERR_CANCELED'
+                    || requestError?.name === 'CanceledError'
+                    || controller.signal.aborted
                 ) {
                     return;
                 }
 
+                if (!mountedRef.current) {
+                    return;
+                }
 
                 setError(
                     getErrorMessage(
@@ -570,22 +551,18 @@ const WeekContentAnalysisManager = () => {
 
             } finally {
                 if (
-                    !cancelled
+                    !controller.signal.aborted
                     && mountedRef.current
                 ) {
-                    setLoadingAreas(
-                        false,
-                    );
+                    setLoadingAreas(false);
                 }
             }
         };
 
-
         loadAreas();
 
-
         return () => {
-            cancelled = true;
+            controller.abort();
         };
 
     }, [
@@ -598,9 +575,6 @@ const WeekContentAnalysisManager = () => {
     // ========================================================
 
     useEffect(() => {
-        let cancelled = false;
-
-
         if (
             !selectedSemesterId
             || !selectedAreaId
@@ -611,17 +585,12 @@ const WeekContentAnalysisManager = () => {
             return undefined;
         }
 
+        const controller = new AbortController();
 
         const loadCourses = async () => {
             try {
-                setLoadingCourses(
-                    true,
-                );
-
-                setError(
-                    null,
-                );
-
+                setLoadingCourses(true);
+                setError(null);
 
                 setCourses([]);
                 setSelectedCourseIds([]);
@@ -634,60 +603,55 @@ const WeekContentAnalysisManager = () => {
 
                 setJobs({});
 
-
-                const response = (
-                    await api.get(
-                        '/api/week-content-analysis/courses',
-                        {
-                            params: {
-                                semester_folder_id: (
-                                    selectedSemesterId
-                                ),
-
-                                area_folder_id: (
-                                    selectedAreaId
-                                ),
-                            },
+                const response = await api.get(
+                    '/api/week-content-analysis/courses',
+                    {
+                        params: {
+                            semester_folder_id: (
+                                selectedSemesterId
+                            ),
+                            area_folder_id: (
+                                selectedAreaId
+                            ),
                         },
-                    )
+                        signal: controller.signal,
+                    },
                 );
 
-
                 if (
-                    cancelled
+                    controller.signal.aborted
                     || !mountedRef.current
                 ) {
                     return;
                 }
-
 
                 setCourses(
                     response.data?.courses
                     || [],
                 );
 
-
                 setInvalidCourses(
                     response.data?.invalid_courses
                     || [],
                 );
-
 
                 setIgnoredFolders(
                     response.data?.ignored_folders
                     || [],
                 );
 
-            } catch (
-            requestError
-            ) {
+            } catch (requestError) {
                 if (
-                    cancelled
-                    || !mountedRef.current
+                    requestError?.code === 'ERR_CANCELED'
+                    || requestError?.name === 'CanceledError'
+                    || controller.signal.aborted
                 ) {
                     return;
                 }
 
+                if (!mountedRef.current) {
+                    return;
+                }
 
                 setError(
                     getErrorMessage(
@@ -698,29 +662,24 @@ const WeekContentAnalysisManager = () => {
 
             } finally {
                 if (
-                    !cancelled
+                    !controller.signal.aborted
                     && mountedRef.current
                 ) {
-                    setLoadingCourses(
-                        false,
-                    );
+                    setLoadingCourses(false);
                 }
             }
         };
 
-
         loadCourses();
 
-
         return () => {
-            cancelled = true;
+            controller.abort();
         };
 
     }, [
         selectedSemesterId,
         selectedAreaId,
     ]);
-
 
     // ========================================================
     // CAMBIAR SEMESTRE

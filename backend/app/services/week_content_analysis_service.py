@@ -1933,9 +1933,7 @@ class WeekContentAnalysisService:
     def expected_names(
         code: str,
         target_period: str,
-        week: Optional[
-            int
-        ] = None,
+        week: Optional[int] = None,
     ) -> Dict[str, str]:
 
         # ----------------------------------------------------
@@ -1943,13 +1941,11 @@ class WeekContentAnalysisService:
         # ----------------------------------------------------
 
         if week is None:
-
             return {
                 "diagnostico": (
                     f"{code}_Diagnostico_"
                     f"{target_period}"
                 ),
-
                 "t_fortalecimiento": (
                     f"{code}_TFortalecimiento_"
                     f"{target_period}"
@@ -1963,27 +1959,23 @@ class WeekContentAnalysisService:
         return {
             "presentacion": (
                 f"{code}_Presentacion_"
-                f"{week}_{target_period}"
+                f"S{week}_{target_period}"
             ),
-
             "lectura": (
                 f"{code}_Lectura_"
-                f"{week}_{target_period}"
+                f"S{week}_{target_period}"
             ),
-
             "ejemplo": (
                 f"{code}_Ejemplo_"
-                f"{week}_{target_period}"
+                f"S{week}_{target_period}"
             ),
-
             "video": (
                 f"{code}_Video_"
-                f"{week}_{target_period}"
+                f"S{week}_{target_period}"
             ),
-
             "actividad_practica": (
                 f"{code}_ActividadPractica_"
-                f"{week}_{target_period}"
+                f"S{week}_{target_period}"
             ),
         }
 

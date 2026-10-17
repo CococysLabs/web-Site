@@ -7,6 +7,7 @@ import json
 import traceback
 from time import perf_counter
 from typing import Dict, List, Optional, Tuple
+import threading
 
 import httplib2
 from google.oauth2 import service_account
@@ -25,17 +26,105 @@ class GoogleDriveService:
     """Servicio para interactuar con Google Drive API"""
     
     def __init__(self):
-        """Inicializar servicio de Drive"""
-        self.scopes = ['https://www.googleapis.com/auth/drive']
-        self.service = None
+        """
+        Inicializar servicio de Drive.
+
+        Cada thread obtiene su propio cliente HTTP/Drive.
+        httplib2.Http no debe compartirse entre múltiples
+        threads concurrentes.
+        """
+        self.scopes = [
+            'https://www.googleapis.com/auth/drive'
+        ]
+
+        self._thread_local = threading.local()
+        self._credentials_file = None
+        self._service_available = False
+        self._service_generation = 0
+
         self._initialize_service()
-    
+
+
+    def _build_service(self):
+        """
+        Crear una instancia nueva de Google Drive API.
+
+        IMPORTANTE:
+        esta instancia pertenece únicamente al thread
+        que la solicita.
+        """
+        if not self._credentials_file:
+            return None
+
+        credentials = (
+            service_account.Credentials
+            .from_service_account_file(
+                self._credentials_file,
+                scopes=self.scopes,
+            )
+        )
+
+        http = httplib2.Http(
+            timeout=DRIVE_HTTP_TIMEOUT_SECONDS,
+        )
+
+        authorized_http = AuthorizedHttp(
+            credentials,
+            http=http,
+        )
+
+        return build(
+            "drive",
+            "v3",
+            http=authorized_http,
+            cache_discovery=False,
+        )
+
+
+    @property
+    def service(self):
+        """
+        Obtener el cliente de Drive correspondiente
+        al thread actual.
+        """
+        if (
+            not self._service_available
+            or not self._credentials_file
+        ):
+            return None
+
+        service = getattr(
+            self._thread_local,
+            "service",
+            None,
+        )
+
+        generation = getattr(
+            self._thread_local,
+            "generation",
+            None,
+        )
+
+        if (
+            service is None
+            or generation != self._service_generation
+        ):
+            service = self._build_service()
+
+            self._thread_local.service = service
+            self._thread_local.generation = (
+                self._service_generation
+            )
+
+        return service
+
+
     def _initialize_service(self):
         """
-        Inicializar Google Drive API con un timeout explícito.
+        Validar configuración de Google Drive.
 
-        google-api-python-client usa 60 segundos por defecto.
-        Para exportar Google Sheets grandes usamos 120 segundos.
+        El cliente HTTP real se crea de forma independiente
+        para cada thread.
         """
         try:
             credentials_file = getattr(
@@ -49,7 +138,10 @@ class GoogleDriveService:
                     "⚠️ GOOGLE_CREDENTIALS_FILE no está configurado",
                     flush=True,
                 )
-                self.service = None
+
+                self._credentials_file = None
+                self._service_available = False
+                self._service_generation += 1
                 return
 
             if not os.path.exists(credentials_file):
@@ -58,36 +150,29 @@ class GoogleDriveService:
                     f"{credentials_file}",
                     flush=True,
                 )
-                self.service = None
+
+                self._credentials_file = None
+                self._service_available = False
+                self._service_generation += 1
                 return
 
-            credentials = (
-                service_account.Credentials
-                .from_service_account_file(
-                    credentials_file,
-                    scopes=self.scopes,
-                )
-            )
+            self._credentials_file = credentials_file
+            self._service_available = True
+            self._service_generation += 1
 
-            http = httplib2.Http(
-                timeout=DRIVE_HTTP_TIMEOUT_SECONDS,
-            )
+            # Crear también el cliente del thread actual
+            # para comprobar inmediatamente las credenciales.
+            service = self._build_service()
 
-            authorized_http = AuthorizedHttp(
-                credentials,
-                http=http,
-            )
-
-            self.service = build(
-                "drive",
-                "v3",
-                http=authorized_http,
-                cache_discovery=False,
+            self._thread_local.service = service
+            self._thread_local.generation = (
+                self._service_generation
             )
 
             print(
                 "✅ Google Drive inicializado | "
-                f"timeout={DRIVE_HTTP_TIMEOUT_SECONDS}s",
+                f"timeout={DRIVE_HTTP_TIMEOUT_SECONDS}s | "
+                "cliente_por_thread=True",
                 flush=True,
             )
 
@@ -100,111 +185,227 @@ class GoogleDriveService:
             )
 
             traceback.print_exc()
-            self.service = None
-    
-    def list_folders(self, parent_folder_id: Optional[str] = None) -> List[Dict]:
-        """Listar carpetas en Drive"""
-        if not self.service:
-            return []
-        
-        try:
-            query = "mimeType='application/vnd.google-apps.folder'"
-            if parent_folder_id:
-                query += f" and '{parent_folder_id}' in parents"
-            
-            query += " and trashed=false"
-            
-            results = self.service.files().list(
-                q=query,
-                fields="files(id, name, webViewLink, createdTime, modifiedTime)",
-                orderBy="name",
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-            ).execute()
 
-            return results.get('files', [])
+            self._credentials_file = None
+            self._service_available = False
+            self._service_generation += 1
+    
+    def list_folders(
+        self,
+        parent_folder_id: Optional[str] = None,
+    ) -> List[Dict]:
+        """Listar carpetas en Drive"""
+
+        service = self.service
+
+        if not service:
+            return []
+
+        try:
+            query = (
+                "mimeType='application/vnd.google-apps.folder'"
+            )
+
+            if parent_folder_id:
+                query += (
+                    f" and '{parent_folder_id}' in parents"
+                )
+
+            query += " and trashed=false"
+
+            results = (
+                service.files()
+                .list(
+                    q=query,
+                    fields=(
+                        "files("
+                        "id,name,webViewLink,"
+                        "createdTime,modifiedTime"
+                        ")"
+                    ),
+                    orderBy="name",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute(
+                    num_retries=DRIVE_API_RETRIES,
+                )
+            )
+
+            return results.get(
+                'files',
+                [],
+            )
+
         except Exception as e:
-            print(f"Error listing folders: {e}")
+            print(
+                "❌ Error listing folders | "
+                f"tipo={type(e).__name__} | "
+                f"mensaje={e}",
+                flush=True,
+            )
+
             return []
     
-    def list_files(self, folder_id: str, file_types: Optional[List[str]] = None) -> List[Dict]:
+    def list_files(
+        self,
+        folder_id: str,
+        file_types: Optional[List[str]] = None,
+    ) -> List[Dict]:
         """Listar archivos en una carpeta"""
-        if not self.service:
+
+        service = self.service
+
+        if not service:
             return []
-        
+
         try:
-            query = f"'{folder_id}' in parents and trashed=false"
-            
-            # Filtrar por tipo de archivo
+            query = (
+                f"'{folder_id}' in parents "
+                "and trashed=false"
+            )
+
             if file_types:
                 mime_types = []
+
                 for file_type in file_types:
                     if file_type.lower() == 'pdf':
-                        mime_types.append("mimeType='application/pdf'")
-                    elif file_type.lower() == 'excel':
-                        mime_types.append("mimeType='application/vnd.ms-excel'")
-                        mime_types.append("mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'")
-                
-                if mime_types:
-                    query += " and (" + " or ".join(mime_types) + ")"
-            
-            results = self.service.files().list(
-                q=query,
-                fields="files(id, name, mimeType, size, webViewLink, createdTime, modifiedTime, owners)",
-                orderBy="name",
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-            ).execute()
+                        mime_types.append(
+                            "mimeType='application/pdf'"
+                        )
 
-            return results.get('files', [])
+                    elif file_type.lower() == 'excel':
+                        mime_types.append(
+                            "mimeType='application/vnd.ms-excel'"
+                        )
+
+                        mime_types.append(
+                            "mimeType='application/vnd.openxmlformats-"
+                            "officedocument.spreadsheetml.sheet'"
+                        )
+
+                if mime_types:
+                    query += (
+                        " and ("
+                        + " or ".join(mime_types)
+                        + ")"
+                    )
+
+            results = (
+                service.files()
+                .list(
+                    q=query,
+                    fields=(
+                        "files("
+                        "id,name,mimeType,size,"
+                        "webViewLink,createdTime,"
+                        "modifiedTime,owners"
+                        ")"
+                    ),
+                    orderBy="name",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                )
+                .execute(
+                    num_retries=DRIVE_API_RETRIES,
+                )
+            )
+
+            return results.get(
+                'files',
+                [],
+            )
+
         except Exception as e:
-            print(f"Error listing files: {e}")
+            print(
+                "❌ Error listing files | "
+                f"tipo={type(e).__name__} | "
+                f"mensaje={e}",
+                flush=True,
+            )
+
             return []
     
-    def get_parent_folder_id(self, file_id: str) -> Optional[str]:
-        """Obtener el ID de la carpeta padre directa de un archivo/carpeta."""
-        if not self.service:
+    def get_parent_folder_id(
+        self,
+        file_id: str,
+    ) -> Optional[str]:
+        """Obtener el ID de la carpeta padre directa."""
+
+        service = self.service
+
+        if not service:
             return None
 
         try:
             file = (
-                self.service.files()
+                service.files()
                 .get(
                     fileId=file_id,
                     fields="parents",
                     supportsAllDrives=True,
                 )
-                .execute(num_retries=DRIVE_API_RETRIES)
+                .execute(
+                    num_retries=DRIVE_API_RETRIES,
+                )
             )
+
             parents = file.get("parents") or []
-            return parents[0] if parents else None
+
+            return (
+                parents[0]
+                if parents
+                else None
+            )
+
         except Exception as e:
-            print(f"Error obteniendo carpeta padre: {e}")
+            print(
+                "❌ Error obteniendo carpeta padre | "
+                f"tipo={type(e).__name__} | "
+                f"mensaje={e}",
+                flush=True,
+            )
+
             return None
 
-    def get_file_metadata(self, file_id: str) -> Optional[Dict]:
-        """Obtener metadatos de un archivo"""
-        if not self.service:
+    def get_file_metadata(
+        self,
+        file_id: str,
+    ) -> Optional[Dict]:
+        """Obtener metadatos de un archivo."""
+
+        service = self.service
+
+        if not service:
             return None
-        
+
         try:
             file = (
-                    self.service.files()
-                    .get(
-                        fileId=file_id,
-                        fields=(
-                            "id,name,mimeType,size,webViewLink,"
-                            "createdTime,modifiedTime,owners"
-                        ),
-                        supportsAllDrives=True,
-                    )
-                    .execute(
-                        num_retries=DRIVE_API_RETRIES,
-                    )
+                service.files()
+                .get(
+                    fileId=file_id,
+                    fields=(
+                        "id,name,mimeType,size,"
+                        "webViewLink,createdTime,"
+                        "modifiedTime,owners"
+                    ),
+                    supportsAllDrives=True,
                 )
+                .execute(
+                    num_retries=DRIVE_API_RETRIES,
+                )
+            )
+
             return file
+
         except Exception as e:
-            print(f"Error getting file metadata: {e}")
+            print(
+                "❌ Error getting file metadata | "
+                f"tipo={type(e).__name__} | "
+                f"mensaje={e}",
+                flush=True,
+            )
+
             return None
     
     # MIME types de Google Workspace → formato de exportación
@@ -230,7 +431,9 @@ class GoogleDriveService:
         - Google Sheets -> XLSX
         - Google Slides -> PPTX
         """
-        if not self.service:
+        service = self.service
+        
+        if not service:
             print(
                 "❌ [DRIVE] Servicio no inicializado",
                 flush=True,
@@ -249,7 +452,7 @@ class GoogleDriveService:
             metadata_started_at = perf_counter()
 
             metadata = (
-                self.service.files()
+                service.files()
                 .get(
                     fileId=file_id,
                     fields="id,name,mimeType,size",
@@ -284,7 +487,7 @@ class GoogleDriveService:
                 )
 
                 request = (
-                    self.service.files()
+                    service.files()
                     .export_media(
                         fileId=file_id,
                         mimeType=export_mime,
@@ -298,7 +501,7 @@ class GoogleDriveService:
                 )
 
                 request = (
-                    self.service.files()
+                    service.files()
                     .get_media(
                         fileId=file_id,
                         supportsAllDrives=True,
@@ -383,7 +586,9 @@ class GoogleDriveService:
         - NO crea ningún PDF en Google Drive.
         - NO modifica el archivo original.
         """
-        if not self.service:
+        service = self.service
+        
+        if not service:
             raise RuntimeError(
                 "El servicio de Google Drive no está inicializado"
             )
@@ -392,7 +597,7 @@ class GoogleDriveService:
 
         try:
             metadata = (
-                self.service.files()
+                service.files()
                 .get(
                     fileId=file_id,
                     fields="id,name,mimeType",
@@ -428,7 +633,7 @@ class GoogleDriveService:
                 flush=True,
             )
 
-            request = self.service.files().export_media(
+            request = service.files().export_media(
                 fileId=file_id,
                 mimeType=export_mime,
             )
